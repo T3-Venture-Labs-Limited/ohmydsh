@@ -1,106 +1,79 @@
 # Parallel Search for DeepSeek Harness
 
-`@parallel-web/dsh-web-search-parallel` is a search-only provider bundle for
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). It keeps
-the harness's native `web_search` tool and routes that tool through
-[Parallel Search](https://docs.parallel.ai/search/search-quickstart).
+This plugin makes DeepSeek Harness's built-in `web_search` tool use
+[Parallel Search](https://docs.parallel.ai/search/search-quickstart). It does
+not add a new tool or provide `web_fetch`.
 
-This release targets `@deepseek-ai/dsh@0.1.0-rc.6` on Node.js
-`^22.19.0 || >=24.0.0`. DeepSeek Harness is a developer preview, so other DSH
-versions are not covered by this compatibility claim.
+It currently supports `@deepseek-ai/dsh@0.1.0-rc.6` on Node.js `^22.19.0 ||
+>=24.0.0`. DeepSeek Harness is still a developer preview, so later versions may
+need a plugin update.
 
-## Prerequisites
+## Before you start
 
-- Node.js `22.19.0` or newer in the supported ranges above.
-- DeepSeek Harness `0.1.0-rc.6`. The commands below run its CLI through
-  `npx`, so a global `dsh` installation is not required.
-- pnpm 10 or newer on `PATH`; `dsh plugin` delegates installation to pnpm.
-- A [Parallel API key](https://platform.parallel.ai/).
-- A separately configured DSH model provider. This package supplies web search,
-  not the model that decides when to call `web_search` or writes the answer.
+You will need:
 
-Confirm the two local tool versions before installation:
+- pnpm 10 or newer;
+- a [Parallel API key](https://platform.parallel.ai/); and
+- a model provider already configured in DeepSeek Harness.
 
-```sh
-npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- dsh --version
-pnpm --version
-```
+You do not need to install `dsh` globally. The commands below run the supported
+version through `npx`.
 
 ## Install
 
-Set the key in the environment that launches DSH:
+First, make your Parallel API key available in the terminal where you will run
+Harness:
 
 ```sh
 export PARALLEL_API_KEY="your-key"
 ```
 
-This plugin is installed directly from its Git repository. Replace
-`COMMIT_SHA` with the full commit SHA you want to install and keep the package
-spec quoted:
+Then install the plugin into the `web` profile:
 
 ```sh
-npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
-  dsh plugin --profile web add \
+npx --yes @deepseek-ai/dsh@0.1.0-rc.6 \
+  plugin --profile web add \
   --allow-build=@parallel-web/dsh-web-search-parallel \
-  "github:parallel-web/dsh-web-search-parallel#COMMIT_SHA"
+  "github:parallel-web/dsh-web-search-parallel#main"
 ```
 
-Then restart the profile:
+The `--allow-build` flag lets pnpm build this plugin and nothing else. For a
+reproducible install, replace `main` with a full commit SHA.
+
+Stop any running Harness process, then start it again:
 
 ```sh
-npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- dsh --profile web
+npx --yes @deepseek-ai/dsh@0.1.0-rc.6 web
 ```
 
-Git installs must run the package's `prepare` build. The package-scoped
-`--allow-build` flag permits that script for this plugin only. Do not replace it
-with a blanket build-script approval. The local tarball workflow below is
-preferable when an already-built artifact is required.
+## Check that it worked
 
-### Install a local review tarball
-
-From a checkout of this repository:
+Inspect the profile:
 
 ```sh
-corepack enable
-corepack prepare pnpm@11.7.0 --activate
-pnpm install --frozen-lockfile
-pnpm run check
-PACK_DIR="$(mktemp -d)"
-pnpm pack --pack-destination "$PACK_DIR"
+npx --yes @deepseek-ai/dsh@0.1.0-rc.6 \
+  --profile web --dump-config | \
+  grep -E 'searchProvider: parallel|web-search-parallel'
 ```
 
-Install the single `.tgz` created in `$PACK_DIR` into a disposable DSH home so
-the review does not modify an existing profile:
+You should see `searchProvider: parallel` and a `web-search-parallel` entry.
+Seeing the built-in `web-search-deepseek` plugin as well is normal—the
+`searchProvider` setting decides which provider handles searches.
+
+For direct request evidence, start Harness with information-level Parallel
+logging:
 
 ```sh
-REVIEW_DSH_HOME="$(mktemp -d)"
-DSH_HOME="$REVIEW_DSH_HOME" npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
-  dsh --profile web --dump-config > "$REVIEW_DSH_HOME/before.yml"
-DSH_HOME="$REVIEW_DSH_HOME" npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
-  dsh plugin --profile web add \
-  "$PACK_DIR/parallel-web-dsh-web-search-parallel-0.1.0.tgz"
-DSH_HOME="$REVIEW_DSH_HOME" npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
-  dsh --profile web --dump-config > "$REVIEW_DSH_HOME/after.yml"
+PARALLEL_LOG=info npx --yes @deepseek-ai/dsh@0.1.0-rc.6 web
 ```
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for the repository's exact packed
-artifact and install/remove verification commands.
+After a `web_search` call, the terminal should show a successful request to
+`https://api.parallel.ai/v1/search`. Review logs before sharing them.
 
-## Configure
+## Optional settings
 
-Environment configuration is recommended because DSH configuration dumps are
-readable text. The plugin accepts these bundle fields:
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `apiKey` | string | `PARALLEL_API_KEY` | Parallel API key. An explicit empty string disables the provider. |
-| `mode` | `turbo`, `basic`, or `advanced` | omitted | Parallel Search mode. Omission uses the API's `advanced` default. |
-| `maxCharsTotal` | positive integer | `25000` | Maximum excerpt characters across the search response. |
-| `maxCharsPerResult` | positive integer | omitted | Optional excerpt-character limit for each result. |
-
-For non-secret overrides, edit the profile's user patch at
-`$DSH_HOME/profiles/web/cordis.patch.yml` (normally
-`~/.dsh/profiles/web/cordis.patch.yml`):
+The defaults work without extra configuration. If you want to tune the search,
+edit `~/.dsh/profiles/web/cordis.patch.yml`:
 
 ```yaml
 - id: web-search-parallel
@@ -110,128 +83,44 @@ For non-secret overrides, edit the profile's user patch at
     maxCharsPerResult: 2000
 ```
 
-Do not put `apiKey` in this file unless you accept that it will appear in plain
-text and in configuration dumps.
+| Setting | Default | What it controls |
+| --- | --- | --- |
+| `mode` | Parallel's `advanced` default | `turbo`, `basic`, or `advanced` search |
+| `maxCharsTotal` | `25000` | Total excerpt characters returned to Harness |
+| `maxCharsPerResult` | no limit | Excerpt characters kept for each result |
 
-The plugin intentionally has no endpoint, retry, result-count, fetch, answer,
-session, location, freshness, source-policy, or model option. DSH supplies the
-result count and owns final source truncation.
+Keep `PARALLEL_API_KEY` in the environment rather than putting it in this file,
+which is stored as readable text.
 
-## Verify
+## If something goes wrong
 
-First inspect the effective profile without booting it:
-
-```sh
-npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
-  dsh --profile web --dump-config
-```
-
-The dump should contain:
-
-- one `web` row with `searchProvider: parallel`;
-- the existing `tool-web` row; and
-- one `web-search-parallel` row naming this package.
-
-This proves bundle selection, not that a request reached Parallel. For a
-runtime transport check, launch DSH with the SDK's information-level logging:
-
-```sh
-PARALLEL_LOG=info npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
-  dsh --profile web
-```
-
-Trigger the existing `web_search` tool. A successful SDK log line identifies
-`POST https://api.parallel.ai/v1/search` and its HTTP status, which is direct
-evidence that the request used Parallel. Do not use `PARALLEL_LOG=debug` for
-routine verification: debug mode emits substantially more request and response
-metadata. Never paste logs without reviewing them for sensitive data.
-
-## Troubleshooting
-
-### The effective provider is still `deepseek-official`
-
-Restart DSH after installation and rerun `--dump-config`. DSH applies the
-profile's user patch after bundle patches, so inspect
-`$DSH_HOME/profiles/web/cordis.patch.yml` for a later `web` override that
-selects another provider.
-
-### The provider is unavailable
-
-Make sure `PARALLEL_API_KEY` is exported in the same shell or service
-environment that starts DSH. An explicit `apiKey: ""` in profile configuration
-intentionally suppresses the environment fallback.
-
-### pnpm reports peer dependency warnings
-
-This plugin deliberately uses DSH-owned Cordis, web, and launch-environment
-peers so the profile has one shared runtime. DSH `0.1.0-rc.6` exposes those
-packages through its profile-level parent fallback; the plugin does not install
-private copies. Confirm the DSH version command in Prerequisites reports exactly
-`0.1.0-rc.6`. Warnings that name different or missing peer versions indicate an
-unsupported installation, not something to bypass with forced installs.
-
-### DSH answers without searching
-
-The configuration dump only proves which provider will handle `web_search`.
-Your separately configured model still decides whether to call that tool. Use
-a prompt that clearly needs current web information, then confirm the tool call
-and the `PARALLEL_LOG=info` transport line.
-
-### The request returns an HTTP or connection error
-
-Check that the key is active, the machine can reach `https://api.parallel.ai`,
-and the account can run Search. Retries are intentionally disabled, so one DSH
-tool invocation corresponds to one SDK request attempt.
-
-## Security and behavior
-
-- Credential-bearing requests are fixed to `https://api.parallel.ai/v1/search`.
-- `PARALLEL_BASE_URL` is ignored and redirects are rejected.
-- SDK retries are disabled; DSH cancellation is forwarded to the request.
-- The provider returns ordered citation sources with URLs, optional titles,
-  joined excerpts, and optional publication dates. It returns no generated
-  answer or full-page content.
-- A missing key makes the selected provider unavailable without a network call.
-
-This package does not provide `web_fetch` and does not call Parallel Extract.
-Report security concerns according to [SECURITY.md](./SECURITY.md).
+- **`dsh` is not found:** use the `npx @deepseek-ai/dsh` commands above.
+- **Port 3080 is already in use:** stop the older Harness process before
+  starting another one.
+- **The provider is still `deepseek-official`:** restart Harness and check
+  whether your `cordis.patch.yml` contains a later `searchProvider` override.
+- **pnpm reports missing DSH peer dependencies:** this warning is expected for
+  this Git install. Harness supplies those packages from the profile runtime.
+- **Harness answers without searching:** the configured model decides when to
+  call `web_search`. Try a prompt that clearly requires current information.
+- **The provider is unavailable:** confirm `PARALLEL_API_KEY` is set in the same
+  terminal that starts Harness.
 
 ## Remove
 
 ```sh
-npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
-  dsh plugin --profile web remove @parallel-web/dsh-web-search-parallel
+npx --yes @deepseek-ai/dsh@0.1.0-rc.6 \
+  plugin --profile web remove @parallel-web/dsh-web-search-parallel
 ```
 
-Restart the profile and rerun `--dump-config`. The base
-`deepseek-official` search selection should be restored unless a user patch
-selects something else.
+Restart Harness after removing the plugin.
 
-## Development
+## Development and security
 
-The full keyless check is:
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for local development, tests, and the
+packed-artifact review workflow. Report vulnerabilities according to
+[SECURITY.md](./SECURITY.md).
 
-```sh
-pnpm install --frozen-lockfile
-pnpm run check
-pnpm audit --prod
-```
+For help, contact [support@parallel.ai](mailto:support@parallel.ai).
 
-The credentialed end-to-end test is deliberately separate and makes a real
-Parallel Search request. Export `PARALLEL_API_KEY` in the shell first, then run:
-
-```sh
-pnpm run test:e2e
-```
-
-Run it only when you intend to spend a live request. Contributor setup,
-artifact verification, scope, and secret-handling rules are in
-[CONTRIBUTING.md](./CONTRIBUTING.md).
-
-## Support
-
-For support, contact [support@parallel.ai](mailto:support@parallel.ai).
-
-## License
-
-MIT
+MIT licensed.

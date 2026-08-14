@@ -12,7 +12,8 @@ versions are not covered by this compatibility claim.
 ## Prerequisites
 
 - Node.js `22.19.0` or newer in the supported ranges above.
-- DeepSeek Harness `0.1.0-rc.6`.
+- DeepSeek Harness `0.1.0-rc.6`. The commands below run its CLI through
+  `npx`, so a global `dsh` installation is not required.
 - pnpm 10 or newer on `PATH`; `dsh plugin` delegates installation to pnpm.
 - A [Parallel API key](https://platform.parallel.ai/).
 - A separately configured DSH model provider. This package supplies web search,
@@ -21,7 +22,7 @@ versions are not covered by this compatibility claim.
 Confirm the two local tool versions before installation:
 
 ```sh
-dsh --version
+npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- dsh --version
 pnpm --version
 ```
 
@@ -33,32 +34,27 @@ Set the key in the environment that launches DSH:
 export PARALLEL_API_KEY="your-key"
 ```
 
-After version `0.1.0` is published to npm, install it into the `web` profile:
+This plugin is installed directly from its Git repository. Replace
+`COMMIT_SHA` with the full commit SHA you want to install and keep the package
+spec quoted:
 
 ```sh
-dsh plugin --profile web add @parallel-web/dsh-web-search-parallel@0.1.0
+npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
+  dsh plugin --profile web add \
+  --allow-build=@parallel-web/dsh-web-search-parallel \
+  "github:parallel-web/dsh-web-search-parallel#COMMIT_SHA"
 ```
 
 Then restart the profile:
 
 ```sh
-dsh --profile web
+npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- dsh --profile web
 ```
 
-### Install a pinned Git revision
-
-For a repository revision that has not been published, replace `COMMIT_SHA`
-with a full commit SHA and keep the package spec quoted:
-
-```sh
-dsh plugin --profile web add "github:parallel-web/dsh-web-search-parallel#COMMIT_SHA"
-```
-
-Git installs must run the package's `prepare` build. If pnpm reports that the
-build script was blocked, review the prompt with `dsh plugin --profile web
-approve-builds`, approve only this package, and repeat the add command. A
-release tarball or the local reviewer workflow below is preferable when a
-non-interactive, already-built artifact is required.
+Git installs must run the package's `prepare` build. The package-scoped
+`--allow-build` flag permits that script for this plugin only. Do not replace it
+with a blanket build-script approval. The local tarball workflow below is
+preferable when an already-built artifact is required.
 
 ### Install a local review tarball
 
@@ -78,9 +74,13 @@ the review does not modify an existing profile:
 
 ```sh
 REVIEW_DSH_HOME="$(mktemp -d)"
-DSH_HOME="$REVIEW_DSH_HOME" dsh --profile web --dump-config > "$REVIEW_DSH_HOME/before.yml"
-DSH_HOME="$REVIEW_DSH_HOME" dsh plugin --profile web add "$PACK_DIR/parallel-web-dsh-web-search-parallel-0.1.0.tgz"
-DSH_HOME="$REVIEW_DSH_HOME" dsh --profile web --dump-config > "$REVIEW_DSH_HOME/after.yml"
+DSH_HOME="$REVIEW_DSH_HOME" npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
+  dsh --profile web --dump-config > "$REVIEW_DSH_HOME/before.yml"
+DSH_HOME="$REVIEW_DSH_HOME" npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
+  dsh plugin --profile web add \
+  "$PACK_DIR/parallel-web-dsh-web-search-parallel-0.1.0.tgz"
+DSH_HOME="$REVIEW_DSH_HOME" npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
+  dsh --profile web --dump-config > "$REVIEW_DSH_HOME/after.yml"
 ```
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for the repository's exact packed
@@ -122,7 +122,8 @@ result count and owns final source truncation.
 First inspect the effective profile without booting it:
 
 ```sh
-dsh --profile web --dump-config
+npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
+  dsh --profile web --dump-config
 ```
 
 The dump should contain:
@@ -135,7 +136,8 @@ This proves bundle selection, not that a request reached Parallel. For a
 runtime transport check, launch DSH with the SDK's information-level logging:
 
 ```sh
-PARALLEL_LOG=info dsh --profile web
+PARALLEL_LOG=info npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
+  dsh --profile web
 ```
 
 Trigger the existing `web_search` tool. A successful SDK log line identifies
@@ -164,9 +166,9 @@ intentionally suppresses the environment fallback.
 This plugin deliberately uses DSH-owned Cordis, web, and launch-environment
 peers so the profile has one shared runtime. DSH `0.1.0-rc.6` exposes those
 packages through its profile-level parent fallback; the plugin does not install
-private copies. Confirm `dsh --version` is exactly `0.1.0-rc.6`. Warnings that
-name different or missing peer versions indicate an unsupported installation,
-not something to bypass with forced installs.
+private copies. Confirm the DSH version command in Prerequisites reports exactly
+`0.1.0-rc.6`. Warnings that name different or missing peer versions indicate an
+unsupported installation, not something to bypass with forced installs.
 
 ### DSH answers without searching
 
@@ -197,7 +199,8 @@ Report security concerns according to [SECURITY.md](./SECURITY.md).
 ## Remove
 
 ```sh
-dsh plugin --profile web remove @parallel-web/dsh-web-search-parallel
+npx --yes --package=@deepseek-ai/dsh@0.1.0-rc.6 -- \
+  dsh plugin --profile web remove @parallel-web/dsh-web-search-parallel
 ```
 
 Restart the profile and rerun `--dump-config`. The base

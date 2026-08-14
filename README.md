@@ -4,8 +4,8 @@ This plugin makes DeepSeek Harness's built-in `web_search` tool use
 [Parallel Search](https://docs.parallel.ai/search/search-quickstart). It does
 not add a new tool or provide `web_fetch`.
 
-It currently supports `@deepseek-ai/dsh@0.1.0-rc.6` on Node.js `^22.19.0 ||
->=24.0.0`. DeepSeek Harness is still a developer preview, so later versions may
+It currently supports `@deepseek-ai/dsh@0.1.0-rc.6` on Node.js `^22.19.0 || >=24.0.0`.
+DeepSeek Harness is still a developer preview, so later versions may
 need a plugin update.
 
 ## Before you start

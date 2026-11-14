@@ -1,0 +1,294 @@
+// Theme controller: the whole runtime behaviour, free of React and the kit so it stays on the (tiny) boot path.
+//
+//   choice 'stock'     nothing applied
+//   choice 'omarchy'   palette streamed from the Host (Omarchy colors.toml)
+//   choice <palette>   a bundled community palette (data generator, src/artwork/palettes.ts)
+//
+// Applying = one token layer via ctx.theme.overrideTokens (source 'dsh-theme') + a registered shell theme
+// (omarchy-dark / omarchy-light) selected with setTheme. Custom theme ids are never persisted by DSH, so the user's
+// own light/dark/system preference stays intact. Everything is undone by one disposer.
+import { isHex } from '../shared/color.ts'
+import { PALETTE_KEYS } from '../shared/omarchy.ts'
+import type { Colors, Mode, OmarchyPalette } from '../shared/omarchy.ts'
+import { paletteTokens, shellThemeId, toLayer } from '../shared/tokens.ts'
+import type { TokenOptions } from '../shared/tokens.ts'
+import { paletteById, PALETTES } from '../artwork/palettes.ts'
+import { subscribePush } from '../kit/push/client.ts'
+
+export const SOURCE = 'dsh-theme'
+export const SNAPSHOT_URL = '/api/dsh-theme/omarchy'
+/** Registry key: one shared live stream per page, however many times the plugin is mounted. */
+export const STREAM_ID = 'dsh-theme:omarchy'
+/** While the live stream cannot be opened the page re-reads the snapshot at this period (never faster than 15 s). */
+export const FALLBACK_POLL_MS = 15_000
+const KEY_CHOICE = 'dsh-theme.choice'
+const KEY_SEMANTIC = 'dsh-theme.semantic'
+
+export type Choice = string // 'stock' | 'omarchy' | palette id
+export type Status = 'idle' | 'connecting' | 'live' | 'unavailable'
+
+export interface OmarchyWire {
+  available: boolean
+  generation?: string
+  name?: string
+  mode?: Mode
+  colors?: Colors
+}
+
+export interface ControllerState {
+  choice: Choice
+  semanticColors: TokenOptions['semanticColors']
+  status: Status
+  /** Omarchy theme currently followed (name/mode), when known. */
+  omarchy: { name: string; mode: Mode; generation: string; colors: Colors } | undefined
+  /** True after a manual Appearance change stopped following. */
+  paused: boolean
+  /** Colours of the palette currently applied, for the preview swatches. */
+  applied: { mode: Mode; colors: Colors } | undefined
+}
+
+/** The slice of ctx.theme used here (matches ThemeRuntime). */
+export interface ThemeFace {
+  getTheme(): { preference: string }
+  setTheme(id: string): void
+  register(def: { id: string; colorScheme: Mode; tokens: Record<string, string> }): () => void
+  overrideTokens(source: string, tokens: Record<string, { light: string; dark: string }>): () => void
+}
+
+export interface ControllerDeps {
+  /** Test seam: whether the current preference change comes from user input. Defaults to checking the dispatching DOM event. */
+  userInitiated?: (() => boolean) | undefined
+  theme: ThemeFace
+  /** Subscribe to `theme/change`; returns a disposer. */
+  onThemeChange(listener: (snapshot: { preference: string }) => void): () => void
+  storage?: Pick<Storage, 'getItem' | 'setItem'> | undefined
+  /** Open the live stream (items are wire snapshots); it must end when the signal aborts. Omit to fall back to snapshot fetches. */
+  open?: ((signal: AbortSignal) => AsyncIterable<unknown>) | undefined
+  /** Test seam for the shared stream registry host and timers. */
+  push?: { host?: object | undefined; setTimeout?: typeof setTimeout; clearTimeout?: typeof clearTimeout } | undefined
+  fetchImpl?: typeof fetch | undefined
+  /** Document used for visibility/focus re-sync; omit in tests. */
+  doc?: Pick<Document, 'addEventListener' | 'removeEventListener' | 'visibilityState'> | undefined
+}
+
+export function validWire(wire: unknown): wire is Required<OmarchyWire> & { available: true } {
+  if (typeof wire !== 'object' || wire === null) return false
+  const w = wire as OmarchyWire
+  if (w.available !== true || (w.mode !== 'light' && w.mode !== 'dark') || typeof w.generation !== 'string') return false
+  const colors = w.colors as Record<string, unknown> | undefined
+  return colors !== undefined && PALETTE_KEYS.every((k) => isHex(colors[k]))
+}
+
+export class ThemeController {
+  private state: ControllerState
+  private readonly listeners = new Set<() => void>()
+  private readonly offs: (() => void)[] = []
+  private shells: (() => void)[] = []
+  private offLayer: (() => void) | undefined
+  private unsubscribe: (() => void) | undefined
+  private engaged = false
+  private expect = ''
+  private baseline = ''
+  private disposed = false
+  /** True while we write the layer / shell theme ourselves, so our own theme/change events are not read as user input. */
+  private writing = false
+
+  constructor(private readonly deps: ControllerDeps) {
+    const stored = read(deps.storage, KEY_CHOICE)
+    const choice = stored !== undefined && (stored === 'stock' || stored === 'omarchy' || paletteById(stored) !== undefined) ? stored : 'omarchy'
+    this.state = {
+      choice,
+      semanticColors: read(deps.storage, KEY_SEMANTIC) === 'omarchy' ? 'omarchy' : 'dsh',
+      status: 'idle', omarchy: undefined, paused: false, applied: undefined,
+    }
+  }
+
+  /** Bundled palettes, handed to the (lazy) settings page so it never imports the data itself. */
+  readonly palettes: readonly { id: string; name: string }[] = PALETTES.map((p) => ({ id: p.id, name: p.name }))
+
+  // ---- store (useSyncExternalStore) ----
+  subscribe = (listener: () => void): (() => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
+  getSnapshot = (): ControllerState => this.state
+  private set(patch: Partial<ControllerState>): void {
+    this.state = { ...this.state, ...patch }
+    for (const l of [...this.listeners]) l()
+  }
+
+  // ---- lifecycle ----
+  start(): () => void {
+    this.shells = [
+      this.deps.theme.register({ id: 'omarchy-dark', colorScheme: 'dark', tokens: {} }),
+      this.deps.theme.register({ id: 'omarchy-light', colorScheme: 'light', tokens: {} }),
+    ]
+    this.offs.push(this.deps.onThemeChange((s) => { this.onPreference(s.preference) }))
+    const doc = this.deps.doc
+    if (doc !== undefined) {
+      const resync = (): void => { if (doc.visibilityState !== 'hidden') void this.refetch() }
+      doc.addEventListener('visibilitychange', resync)
+      this.offs.push(() => { doc.removeEventListener('visibilitychange', resync) })
+    }
+    this.connect()
+    this.sync()
+    return () => { this.dispose() }
+  }
+
+  dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    this.closeStream()
+    this.disengage(true)
+    for (const off of this.offs.splice(0)) off()
+    // Disposing an active shell theme would reset the preference, so shells go last (after the restore above).
+    for (const off of this.shells.splice(0)) off()
+    this.listeners.clear()
+  }
+
+  // ---- user intents ----
+  setChoice(choice: Choice): void {
+    if (choice !== 'stock' && choice !== 'omarchy' && paletteById(choice) === undefined) return
+    write(this.deps.storage, KEY_CHOICE, choice)
+    this.set({ choice, paused: false })
+    this.connect()
+    this.sync()
+  }
+
+  setSemanticColors(value: TokenOptions['semanticColors']): void {
+    write(this.deps.storage, KEY_SEMANTIC, value)
+    this.set({ semanticColors: value })
+    this.sync()
+  }
+
+  // ---- internals ----
+  private sync(): void {
+    if (this.disposed) return
+    const palette = this.resolve()
+    if (palette === undefined) { this.disengage(true); this.set({ applied: undefined }); return }
+    this.engage(palette)
+  }
+
+  /** Open or close the Host stream to match the current choice. Never called from sync(), so a failed fetch cannot loop. */
+  private connect(): void {
+    if (this.state.choice === 'omarchy') this.openStream()
+    else this.closeStream()
+  }
+
+  private resolve(): OmarchyPalette | undefined {
+    const { choice, omarchy } = this.state
+    if (choice === 'stock') return undefined
+    if (choice === 'omarchy') return omarchy === undefined ? undefined : { mode: omarchy.mode, colors: omarchy.colors }
+    const p = paletteById(choice)
+    return p === undefined ? undefined : { mode: p.mode, colors: p.colors }
+  }
+
+  private engage(palette: OmarchyPalette): void {
+    const theme = this.deps.theme
+    if (!this.engaged) {
+      const current = theme.getTheme().preference
+      this.baseline = current === 'omarchy-dark' || current === 'omarchy-light' ? (this.baseline || 'system') : current
+      this.engaged = true
+    }
+    this.writing = true
+    try {
+      this.offLayer?.()
+      this.offLayer = theme.overrideTokens(SOURCE, toLayer(paletteTokens(palette, { semanticColors: this.state.semanticColors })))
+      this.expect = shellThemeId(palette.mode)
+      theme.setTheme(this.expect)
+    } finally { this.writing = false }
+    this.set({ applied: palette })
+  }
+
+  /** Remove the layer; restore the user's own preference unless they already changed it. */
+  private disengage(restore: boolean): void {
+    if (!this.engaged) return
+    this.engaged = false
+    this.writing = true
+    try {
+      this.offLayer?.()
+      this.offLayer = undefined
+      const theme = this.deps.theme
+      if (restore && (theme.getTheme().preference === 'omarchy-dark' || theme.getTheme().preference === 'omarchy-light')) {
+        try { theme.setTheme(this.baseline || 'system') } catch { /* baseline theme vanished: system default applies */ }
+      }
+    } finally { this.writing = false }
+    this.expect = ''
+  }
+
+  private onPreference(preference: string): void {
+    if (!this.engaged || this.writing || preference === this.expect) return
+    if (preference === this.baseline && !(this.deps.userInitiated ?? userInitiated)()) {
+      // DSH re-adopted the persisted preference after an unrelated settings write (no user input on the stack); take it back.
+      queueMicrotask(() => { if (this.engaged && !this.disposed) this.deps.theme.setTheme(this.expect) })
+      return
+    }
+    // The user picked a different Appearance: pause following and hand the whole look back.
+    write(this.deps.storage, KEY_CHOICE, 'stock')
+    this.disengage(false)
+    this.closeStream()
+    this.set({ choice: 'stock', paused: true, applied: undefined })
+  }
+
+  /**
+   * Follow the shared live stream. It is open only while this page is visible; hidden, it is closed (no connection held)
+   * and the visibilitychange handler re-reads the snapshot when the page comes back. While the stream cannot be opened a
+   * slow snapshot poll keeps the palette fresh.
+   */
+  private openStream(): void {
+    if (this.unsubscribe !== undefined || this.disposed) return
+    const open = this.deps.open
+    if (open === undefined) { void this.refetch(); return }
+    this.set({ status: 'connecting' })
+    this.unsubscribe = subscribePush<unknown>({
+      id: STREAM_ID,
+      open,
+      poll: () => this.refetch(),
+      pollMs: FALLBACK_POLL_MS,
+    }, (wire) => { this.receive(wire) }, { doc: this.deps.doc as Document | undefined, ...this.deps.push })
+  }
+
+  private closeStream(): void {
+    this.unsubscribe?.()
+    this.unsubscribe = undefined
+    if (this.state.status !== 'idle') this.set({ status: 'idle' })
+  }
+
+  private async refetch(): Promise<void> {
+    if (this.state.choice !== 'omarchy' || this.disposed) return
+    const f = this.deps.fetchImpl ?? (typeof fetch === 'undefined' ? undefined : fetch.bind(globalThis))
+    if (f === undefined) return
+    try {
+      const response = await f(SNAPSHOT_URL, { credentials: 'same-origin', cache: 'no-store' })
+      if (!response.ok) { this.receive(undefined); return }
+      this.receive(parse(await response.text()))
+    } catch { this.receive(undefined) }
+  }
+
+  private receive(wire: unknown): void {
+    if (this.disposed || this.state.choice !== 'omarchy') return
+    if (!validWire(wire)) {
+      this.set({ omarchy: undefined, status: 'unavailable' })
+      this.sync()
+      return
+    }
+    const prev = this.state.omarchy
+    if (prev !== undefined && prev.generation === wire.generation && this.state.status === 'live') return
+    this.set({ omarchy: { name: wire.name, mode: wire.mode, generation: wire.generation, colors: wire.colors }, status: 'live' })
+    this.sync()
+  }
+}
+
+/** True while a trusted user input event (the Appearance click) is being dispatched, as opposed to a Host settings echo. */
+function userInitiated(): boolean {
+  const event = (globalThis as { event?: { isTrusted?: boolean } }).event
+  return event?.isTrusted === true
+}
+
+function parse(text: string): unknown {
+  try { return JSON.parse(text) } catch { return undefined }
+}
+function read(storage: ControllerDeps['storage'], key: string): string | undefined {
+  try { return storage?.getItem(key) ?? undefined } catch { return undefined }
+}
+function write(storage: ControllerDeps['storage'], key: string, value: string): void {
+  try { storage?.setItem(key, value) } catch { /* private mode: choice lasts for this page only */ }
+}
+

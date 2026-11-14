@@ -1,0 +1,26 @@
+dsh-theme
+Copyright (c) 2026 Superdao (deestax)
+
+This product includes ideas and palette data derived from dsh-codex-ui
+(https://github.com/MichengAI/dsh-codex-ui), Copyright MichengAI, licensed under
+the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
+
+What was taken: the idea of a bundled palette registry and the community palette
+choices (Catppuccin, Dracula, Gruvbox, Solarized, Nord, Tokyo Night, Rosé Pine).
+The palettes are the published colour values of those schemes, re-expressed as
+about 20 colours each (src/artwork/palettes.ts) instead of ~380 hand-expanded tokens.
+
+What was changed: no code is copied. The implementation is new and applies themes
+through ctx.theme.overrideTokens (one reversible token layer) instead of writing
+inline variables, has no !important rules, no polling and no host-class selectors.
+The Codex/Claude brand themes, glass, composer, sidebar, session-title,
+settings-skin and desktop-menu modules were not taken.
+
+The Catppuccin, Dracula, Gruvbox, Solarized, Nord, Tokyo Night and Rosé Pine
+palettes remain the property of their respective authors (all MIT-licensed).
+
+UI controls (src/kit/) are adapted, via dsh-kit (https://github.com/deestax/dsh-kit), from
+@deepseek-ai/dsh-client-ui-primitives (https://github.com/deepseek-ai/deepseek-harness, packages/client/ui-primitives),
+MIT License, Copyright (c) 2026 DeepSeek: markup, sizes and behaviour of Button, Switch, SegmentedControl, Input, Modal
+and Tooltip, and the modal-layer and tooltip-placement helpers. The MIT permission notice is identical to the one in
+this repository's LICENSE file and applies to those portions as well.

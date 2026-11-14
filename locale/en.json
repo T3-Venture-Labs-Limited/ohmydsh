@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Notebook",
+    "description": "Jupyter notebooks (.ipynb) in the sidebar that you and the agent work in together: one real ipykernel per notebook, live updates in both directions, approval-aware execution, rich outputs and a uv-friendly Python environment picker.",
+    "detail": "docs/DETAIL.md"
+  }
+}

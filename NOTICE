@@ -1,0 +1,53 @@
+dsh-notebook
+Copyright 2026 Superdao (deestax)
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product is a modified version of dsh-jupyter and also contains code ported from dsh-notebook by beihzb. Both are
+credited here as their licences require.
+
+1. dsh-jupyter, by kikulmj - Apache License 2.0
+   https://github.com/kikulmj/dsh-jupyter
+   dsh-notebook began as a fork of this repository (git remote "upstream"). The sidebar-tab architecture, the
+   session-scoped file handling pattern, the compact markdown renderer (src/client/markdown.ts) and the overall
+   notebook-in-the-right-sidebar design come from it. Files derived from it keep their upstream history in this
+   repository's git log. The upstream project ships no separate NOTICE file; its LICENSE is the unmodified Apache text.
+   Changes (Apache-2.0 Section 4(b)): new host-owned kernel and document layer, no-nbformat .ipynb reader/writer,
+   eight agent tools with approval gate and output fencing, interpreter discovery, push (SSE) updates, CodeMirror 6 and
+   KaTeX lazy chunks, English-only UI behind a typed dictionary, and the dsh-kit controls.
+
+2. dsh-notebook, by beihzb - MIT License
+   https://github.com/beihzb/dsh-notebook
+   The ipykernel driver (python/kernel_driver.py: kernel start/stop, process-tree kill, parent watchdog, R and
+   named-kernelspec support, bounded variable introspection) and the idea of reading and writing .ipynb without nbformat
+   (src/core/ipynb.ts re-implements it in TypeScript) are derived from this project. Upstream licence text:
+
+   MIT License
+
+   Copyright (c) 2025-present beihzb
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+3. UI controls (src/kit/) are adapted, via dsh-kit (https://github.com/deestax/dsh-kit), from
+   @deepseek-ai/dsh-client-ui-primitives (https://github.com/deepseek-ai/deepseek-harness, packages/client/ui-primitives),
+   MIT License, Copyright (c) 2026 DeepSeek: markup, sizes and behaviour of Button, Switch, SegmentedControl, Input, Modal
+   and Tooltip, and the modal-layer and tooltip-placement helpers. The MIT licence text is reproduced in
+   THIRD_PARTY_NOTICES.md.
+
+4. Bundled runtime libraries (CodeMirror 6, Lezer, KaTeX and helpers, all MIT) are listed in THIRD_PARTY_NOTICES.md.

@@ -1,69 +1,85 @@
-/**
- * Shared wire types for the dsh-jupyter plugin (host <-> browser).
- * @module dsh-jupyter/core/types
- */
+/** Wire and document types shared by the host and the browser half. */
 
-/** One notebook cell in the panel's normalized view (nbformat 4 shape). */
-export interface NbCell {
+export type JsonObject = Record<string, unknown>
+
+/** One notebook cell as the UI and the agent see it (nbformat 4 shape with joined strings). */
+export interface WireCell {
   id: string
   cell_type: 'code' | 'markdown' | 'raw'
   source: string
   execution_count: number | null
-  outputs: NbOutput[]
-  metadata: Record<string, unknown>
-  /** The notebook's path relative to the session workspace root. */
-  path: string
+  outputs: JsonObject[]
+  metadata: JsonObject
+  /** Bumped on every host-side change to this cell. */
+  rev: number
+  /** `queued` or `running` while the kernel owns the cell. */
+  run?: 'queued' | 'running'
+  /** Markdown cell attachments (name -> mime bundle), for rendering `attachment:` images. */
+  attachments?: JsonObject
 }
 
-/** A notebook output in nbformat 4 shape (subset the renderer understands). */
-export type NbOutput =
-  | { output_type: 'stream'; name: string; text: string }
-  | { output_type: 'execute_result' | 'display_data'; execution_count: number | null; data: Record<string, unknown>; metadata: Record<string, unknown> }
-  | { output_type: 'error'; ename: string; evalue: string; traceback: string[] }
+export type KernelStatus = 'none' | 'starting' | 'idle' | 'busy' | 'dead' | 'error'
 
-/** The panel's view of a loaded notebook. */
-export interface NotebookView {
-  /** Path relative to the session workspace root. */
-  path: string
-  /** Parsed cells (normalized: source joined to a string). */
-  cells: NbCell[]
-  /** Notebook-level metadata (kernelspec etc.), kept as-is on save. */
-  metadata: Record<string, unknown>
-  /** Opaque filesystem version at load, for the guarded save. */
-  version: string
+export interface KernelInfo {
+  status: KernelStatus
+  python?: string
+  language?: string
+  version?: string
+  message?: string
+  /** Cells run on this kernel since it (re)started; 0 means a fresh kernel. */
+  runs?: number
 }
 
-/** One Python interpreter the notebook kernel can run on. */
-export interface InterpreterOption {
-  /** Stable id (`bundled` or `conda:<path>`). */
-  id: string
-  /** Display label for the toolbar picker. */
-  label: string
-  /** Absolute path to the interpreter executable. */
+/** Full notebook snapshot sent when a view connects. */
+export interface WireNotebook {
+  path: string
+  /** Document revision; every push event carries the new one. */
+  rev: number
+  cells: WireCell[]
+  metadata: JsonObject
+  kernel: KernelInfo
+  /** Edits not yet written to disk. */
+  dirty: boolean
+  /** The file changed on disk while the document had unsaved edits. */
+  conflict: boolean
+  /** Read-only view (the session policy forbids writes). */
+  readOnly: boolean
+  /** Python chosen for this notebook (empty = discovered default). */
   python: string
 }
 
-/** The panel's view of a plain text file. */
-export interface TextFileView {
-  /** Path relative to the session workspace root. */
-  path: string
-  text: string
-  /** Opaque filesystem version at load, for the guarded save. */
-  version: string
+/** Server-sent events pushed to every connected view of one notebook. */
+export type NotebookEvent =
+  | { t: 'snap'; nb: WireNotebook }
+  | { t: 'cell'; rev: number; index: number; cell: WireCell; by?: string }
+  | { t: 'order'; rev: number; ids: string[]; by?: string }
+  /** `append` merges `output.text` into the cell's last stream output of the same name. */
+  | { t: 'out'; rev: number; id: string; output: JsonObject; append?: boolean }
+  | { t: 'clear'; rev: number; id: string }
+  | { t: 'run'; rev: number; id: string; run: 'queued' | 'running' | null; execution_count?: number | null }
+  | { t: 'kernel'; kernel: KernelInfo }
+  | { t: 'meta'; rev: number; metadata: JsonObject; python: string }
+  | { t: 'save'; dirty: boolean; conflict: boolean }
+
+export interface InterpreterOption {
+  python: string
+  label: string
+  kind: 'project' | 'env' | 'config' | 'venv' | 'conda' | 'system' | 'uv'
+  /** Has ipykernel + jupyter_client installed (checked passively from the filesystem; undefined = unknown). */
+  ready?: boolean
+  /** May the plugin start it without asking? False for anything inside the workspace until the user picks it. */
+  trusted?: boolean
+  /** Lives inside the session workspace. */
+  workspace?: boolean
 }
 
-/** One JSON envelope over the /dsh-jupyter routes. */
-export type JupyterEnvelope<T> = { ok: true; value: T } | { ok: false; error: JupyterError }
+export type Envelope<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string } }
 
-/** Stable error codes for the wire. */
-export interface JupyterError {
-  code: 'workspace-unknown' | 'path-outside-root' | 'not-found' | 'not-notebook' | 'not-text'
-    | 'write-conflict' | 'write-failed' | 'kernel-unavailable' | 'kernel-busy' | 'internal'
-  message: string
-}
-
-/** Streaming execute event (one per NDJSON line). */
-export type ExecuteEvent =
-  | { kind: 'output'; cellId: string; output: NbOutput }
-  | { kind: 'done'; cellId: string; executionCount: number | null; status: 'ok' | 'error' }
-  | { kind: 'error'; message: string }
+/** Edit operations accepted by the host (UI and agent share them). */
+export type EditOp =
+  | { op: 'insert'; after?: string | number; cell_type?: 'code' | 'markdown' | 'raw'; source?: string; id?: string }
+  | { op: 'source'; id: string; source: string }
+  | { op: 'type'; id: string; cell_type: 'code' | 'markdown' | 'raw' }
+  | { op: 'delete'; id: string }
+  | { op: 'move'; id: string; to: number }
+  | { op: 'clear'; id?: string }

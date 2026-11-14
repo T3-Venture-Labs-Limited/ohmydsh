@@ -1,137 +1,82 @@
 /**
- * Code editor: a transparent textarea over a highlighted `<pre>`.
- * Editing, selection, IME and the caret stay native; the overlay only paints
- * tokens. Tab indents, Shift+Tab dedents, Enter keeps indentation.
- * @module dsh-jupyter/client/code-editor
+ * CodeMirror 6 cell editor. This module is only reached through a dynamic import, so it lands in a lazy chunk and
+ * the CodeMirror modules stay off the boot path. Colours come from CSS (styles.css) and theme tokens.
  */
-
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { markdown } from '@codemirror/lang-markdown'
+import { python } from '@codemirror/lang-python'
+import { bracketMatching, defaultHighlightStyle, indentOnInput, syntaxHighlighting } from '@codemirror/language'
+import { Compartment, EditorState } from '@codemirror/state'
+import { EditorView, drawSelection, keymap, lineNumbers } from '@codemirror/view'
+import { classHighlighter } from '@lezer/highlight'
+import { useEffect, useRef } from 'react'
 import type { JSX } from 'react'
-import { highlightCode, type CodeLanguage } from './highlight.ts'
 
-/** Props for {@link CodeEditor}. */
-export function CodeEditor({
-  value,
-  autoFocus,
-  language = 'python',
-  onChange,
-  onKeyDown,
-}: {
+export interface CodeEditorProps {
   value: string
+  language: 'python' | 'markdown' | 'plain'
+  readOnly: boolean
   autoFocus?: boolean
-  language?: CodeLanguage
-  onChange: (source: string) => void
-  onKeyDown?: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
-}): JSX.Element {
-  const taRef = useRef<HTMLTextAreaElement>(null)
-  const preRef = useRef<HTMLPreElement>(null)
-  const pendingSelection = useRef<[number, number] | null>(null)
-  const [composing, setComposing] = useState(false)
-  const highlighted = useMemo(() => highlightCode(value, language), [value, language])
-  const unit = language === 'python' || language === 'c' || language === 'shell' || language === 'sql' || language === 'generic'
-    ? '    '
-    : '  '
+  lineNumbers?: boolean
+  onChange: (value: string) => void
+  /** Shift-Enter. */
+  onRun: () => void
+  /** Ctrl/Cmd-Enter. */
+  onRunStay: () => void
+  onFocus?: () => void
+}
 
-  useLayoutEffect(() => {
-    const el = taRef.current
-    if (el === null) return
-    const resize = (): void => {
-      el.style.height = 'auto'
-      el.style.height = `${el.scrollHeight}px`
-    }
-    resize()
-    const observer = new ResizeObserver(resize)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [value])
+export default function CodeEditor(props: CodeEditorProps): JSX.Element {
+  const host = useRef<HTMLDivElement>(null)
+  const view = useRef<EditorView | null>(null)
+  const latest = useRef(props)
+  latest.current = props
+  const editable = useRef(new Compartment())
 
-  useLayoutEffect(() => {
-    const el = taRef.current
-    if (el === null || pendingSelection.current === null) return
-    const [start, end] = pendingSelection.current
-    pendingSelection.current = null
-    el.setSelectionRange(start, end)
-  }, [value])
+  useEffect(() => {
+    if (host.current === null) return
+    const run = (stay: boolean) => () => { (stay ? latest.current.onRunStay : latest.current.onRun)(); return true }
+    const state = EditorState.create({
+      doc: props.value,
+      extensions: [
+        props.lineNumbers === false ? [] : lineNumbers(),
+        history(),
+        drawSelection(),
+        indentOnInput(),
+        bracketMatching(),
+        EditorView.lineWrapping,
+        props.language === 'python' ? python() : props.language === 'markdown' ? markdown() : [],
+        syntaxHighlighting(classHighlighter),
+        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        keymap.of([{ key: 'Shift-Enter', run: run(false) }, { key: 'Mod-Enter', run: run(true) }, indentWithTab, ...defaultKeymap, ...historyKeymap]),
+        editable.current.of([EditorView.editable.of(!props.readOnly), EditorState.readOnly.of(props.readOnly)]),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) latest.current.onChange(update.state.doc.toString())
+          if (update.focusChanged && update.view.hasFocus) latest.current.onFocus?.()
+        }),
+      ],
+    })
+    const editor = new EditorView({ state, parent: host.current })
+    view.current = editor
+    if (props.autoFocus === true) editor.focus()
+    return () => { editor.destroy(); view.current = null }
+    // The editor is created once per mount; later prop changes are applied below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  const apply = (next: string, start: number, end = start): void => {
-    pendingSelection.current = [start, end]
-    onChange(next)
-  }
+  // Remote edits (the agent, another view): replace the document without losing the caret more than necessary.
+  useEffect(() => {
+    const editor = view.current
+    if (editor === null) return
+    const current = editor.state.doc.toString()
+    if (current === props.value) return
+    const head = Math.min(editor.state.selection.main.head, props.value.length)
+    editor.dispatch({ changes: { from: 0, to: current.length, insert: props.value }, selection: { anchor: head } })
+  }, [props.value])
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (event.nativeEvent.isComposing) return
-    if (event.key === 'Enter' && event.shiftKey) {
-      onKeyDown?.(event)
-      return
-    }
-    const el = event.currentTarget
-    if (event.key === 'Tab') {
-      event.preventDefault()
-      const start = el.selectionStart
-      const end = el.selectionEnd
-      const lineStart = el.value.lastIndexOf('\n', start - 1) + 1
-      const lineEnd = el.value.indexOf('\n', end)
-      const blockEnd = lineEnd === -1 ? el.value.length : lineEnd
-      if (start !== end || event.shiftKey) {
-        const lines = el.value.slice(lineStart, blockEnd).split('\n')
-        const changed = event.shiftKey
-          ? lines.map((line) => line.replace(/^( {1,4}|\t)/, ''))
-          : lines.map((line) => `${unit}${line}`)
-        const replacement = changed.join('\n')
-        apply(el.value.slice(0, lineStart) + replacement + el.value.slice(blockEnd), lineStart, lineStart + replacement.length)
-      } else {
-        apply(`${el.value.slice(0, start)}${unit}${el.value.slice(end)}`, start + unit.length)
-      }
-      return
-    }
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      const start = el.selectionStart
-      const end = el.selectionEnd
-      const lineStart = el.value.lastIndexOf('\n', start - 1) + 1
-      const line = el.value.slice(lineStart, start)
-      const indent = /^[ \t]*/.exec(line)?.[0] ?? ''
-      const trimmed = line.trimEnd()
-      const opens = language === 'python'
-        ? trimmed.endsWith(':')
-        : language === 'yaml'
-          ? trimmed.endsWith(':')
-          : /[{[(]$/.test(trimmed)
-      const insertion = `\n${indent}${opens ? unit : ''}`
-      apply(el.value.slice(0, start) + insertion + el.value.slice(end), start + insertion.length)
-      return
-    }
-    onKeyDown?.(event)
-  }
+  useEffect(() => {
+    view.current?.dispatch({ effects: editable.current.reconfigure([EditorView.editable.of(!props.readOnly), EditorState.readOnly.of(props.readOnly)]) })
+  }, [props.readOnly])
 
-  return (
-    <div className="dshj-code-wrap">
-      <pre
-        ref={preRef}
-        className="dshj-highlight"
-        aria-hidden="true"
-        dangerouslySetInnerHTML={{ __html: `${highlighted}\n` }}
-      />
-      <textarea
-        ref={taRef}
-        className={composing ? 'dshj-source dshj-source-overlay composing' : 'dshj-source dshj-source-overlay'}
-        value={value}
-        spellCheck={false}
-        rows={1}
-        autoFocus={autoFocus}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={handleKeyDown}
-        onCompositionStart={() => setComposing(true)}
-        onCompositionEnd={() => setComposing(false)}
-        onScroll={() => {
-          const pre = preRef.current
-          const ta = taRef.current
-          if (pre !== null && ta !== null) {
-            pre.scrollTop = ta.scrollTop
-            pre.scrollLeft = ta.scrollLeft
-          }
-        }}
-      />
-    </div>
-  )
+  return <div ref={host} className="nb-editor" />
 }

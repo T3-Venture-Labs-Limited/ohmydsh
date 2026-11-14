@@ -1,269 +1,186 @@
 /**
- * /dsh-jupyter/* route layer: JSON envelope (ok/error with stable codes) for
- * notebook read/write and kernel control, a raw GET for images referenced by
- * markdown cells, and an NDJSON stream for cell execution.
- * @module dsh-jupyter/host/routes
+ * HTTP surface for the sidebar view: one JSON RPC endpoint for actions (the live channel is a Typert stream, see ./push.ts), and a raw file route for images beside a notebook. Every request passes the connection service's
+ * Host/Origin and login-cookie gate first and fails closed.
  */
-
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
-import type { ExecuteEvent, JupyterEnvelope, JupyterError } from '../core/types.ts'
-import type { NotebookService } from './notebook-service.ts'
-import type { KernelSessionManager } from './kernel.ts'
-import { isKnownInterpreter, listInterpreters } from './python.ts'
-import { resolveScope, type NotebookScope } from './scope.ts'
+import type { EditOp, Envelope } from '../core/types.ts'
+import { NotebookError } from './document.ts'
+import type { NotebookDocument } from './document.ts'
+import { annotate, createNotebookEnv, discoverInterpreters, findUv } from './python.ts'
+import { resolveNotebookPath, scopeOfSession } from './scope.ts'
+import type { NotebookService } from './service.ts'
+import type { Settings } from './settings.ts'
+import { dirname } from 'node:path'
 
-const OK = (value: unknown): JupyterEnvelope<unknown> => ({ ok: true, value })
-const FAIL = (error: JupyterError): JupyterEnvelope<never> => ({ ok: false, error })
+export const BASE = '/dsh-notebook'
 
-/** Structural request failure. */
-const BAD_REQUEST: JupyterError = { code: 'internal', message: 'malformed request' }
+interface ConnectionFace { requestRejection(request: { readonly headers: IncomingMessage['headers'] }): 401 | 403 | undefined }
+const connectionOf = (ctx: Context): ConnectionFace | undefined => Reflect.get(ctx, 'connection') as ConnectionFace | undefined
 
-/** Loopback trust fence: a loopback socket AND a loopback Host header. */
-function isLoopbackRequest(request: IncomingMessage): boolean {
-  const address = request.socket.remoteAddress
-  if (address !== '127.0.0.1' && address !== '::1' && address !== '::ffff:127.0.0.1') return false
-  const host = request.headers.host
-  if (typeof host !== 'string') return false
-  let hostUrl: URL
-  try {
-    hostUrl = new URL(`http://${host}`)
-  } catch {
-    return false
-  }
-  if (hostUrl.hostname !== '127.0.0.1' && hostUrl.hostname !== 'localhost' && hostUrl.hostname !== '[::1]') return false
-  if (request.headers['sec-fetch-site'] === 'cross-site') return false
-  const origin = request.headers.origin
-  if (origin === undefined) return true
-  try {
-    return new URL(origin).host === hostUrl.host
-  } catch {
-    return false
-  }
+const MAX_BODY = 8 << 20
+
+const ok = <T>(value: T): Envelope<T> => ({ ok: true, value })
+const fail = (code: string, message: string): Envelope<never> => ({ ok: false, error: { code, message } })
+
+function json(res: ServerResponse, body: unknown, status = 200): void {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
+  res.end(JSON.stringify(body))
 }
 
-/** Write the shared non-loopback rejection. */
-function forbidden(res: ServerResponse): void {
-  res.writeHead(403, { 'content-type': 'application/json; charset=utf-8' })
-  res.end(JSON.stringify({ error: 'forbidden: loopback-only' }))
-}
-
-/** Read a JSON request body into an unknown value; null when unparseable/too big. */
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+async function readBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
   let total = 0
   for await (const chunk of req) {
     const buffer = chunk as Buffer
-    chunks.push(buffer)
     total += buffer.length
-    if (total > 8 << 20) return null
+    if (total > MAX_BODY) throw new NotebookError('too-large', 'Request body is too large.')
+    chunks.push(buffer)
   }
-  const text = Buffer.concat(chunks).toString('utf8')
-  if (text === '') return null
-  try {
-    return JSON.parse(text) as unknown
-  } catch {
-    return null
+  const raw = Buffer.concat(chunks).toString('utf8')
+  if (raw === '') return {}
+  try { return JSON.parse(raw) as unknown } catch { throw new NotebookError('bad-request', 'Malformed JSON.') }
+}
+
+/** Mutations additionally need a same-origin browser context (defense in depth beside requestRejection). */
+function sameOrigin(req: IncomingMessage): boolean {
+  if (req.headers['sec-fetch-site'] === 'cross-site') return false
+  const origin = req.headers.origin
+  if (origin === undefined) return true
+  try { return new URL(origin).host === req.headers.host } catch { return false }
+}
+
+const str = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined)
+
+const MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp' }
+
+export function registerRoutes(ctx: Context, service: NotebookService, settings: Settings): () => void {
+  async function withDoc<T>(payload: Record<string, unknown>, fn: (doc: NotebookDocument, scope: Awaited<ReturnType<typeof scopeOfSession>>) => Promise<T>, options: { create?: boolean } = {}): Promise<T> {
+    const sessionId = str(payload.sessionId)
+    const path = str(payload.path)
+    if (sessionId === undefined || path === undefined) throw new NotebookError('bad-request', 'sessionId and path are required.')
+    const scope = await scopeOfSession(ctx, sessionId)
+    const doc = await service.open(scope, path, options)
+    return await fn(doc, scope)
   }
-}
 
-/** Extract the required string field from a JSON object payload. */
-function strField(payload: unknown, key: string): string | null {
-  if (typeof payload !== 'object' || payload === null) return null
-  const value = (payload as Record<string, unknown>)[key]
-  return typeof value === 'string' && value !== '' ? value : null
-}
-
-/** Optional string field. */
-function optionalStr(payload: unknown, key: string): string | undefined {
-  if (typeof payload !== 'object' || payload === null) return undefined
-  const value = (payload as Record<string, unknown>)[key]
-  return typeof value === 'string' && value !== '' ? value : undefined
-}
-
-/** Write one JSON envelope response. */
-function json(res: ServerResponse, envelope: JupyterEnvelope<unknown>, status = 200): void {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
-  res.end(JSON.stringify(envelope))
-}
-
-/** Write one NDJSON event line. */
-function ndjson(res: ServerResponse, event: ExecuteEvent): void {
-  if (res.writableEnded) return
-  res.write(JSON.stringify(event) + '\n')
-}
-
-/** Resolve the Session scope for a request payload, or answer and return undefined. */
-async function scopeOf(ctx: Context, res: ServerResponse, sessionId: string | null): Promise<NotebookScope | undefined> {
-  if (sessionId === null) {
-    json(res, FAIL(BAD_REQUEST))
-    return undefined
-  }
-  const scope = await resolveScope(ctx, sessionId)
-  if (!scope.ok) {
-    json(res, FAIL(scope.error))
-    return undefined
-  }
-  return scope.scope
-}
-
-/**
- * Register the /dsh-jupyter routes.
- * @param ctx - context carrying webServer, fs, and sessions.
- * @param notebooks - the notebook file service.
- * @param kernels - the kernel session registry.
- * @returns the route disposer.
- */
-export function registerJupyterRoutes(ctx: Context, notebooks: NotebookService, kernels: KernelSessionManager): () => void {
-  const handler = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    if (!isLoopbackRequest(req)) {
-      forbidden(res)
-      return
-    }
-    if (req.method === 'GET') {
-      const url = new URL(req.url ?? '/', 'http://x')
-      if (url.pathname === '/dsh-jupyter/interpreters') {
-        json(res, OK(await listInterpreters(ctx)))
-        return
-      }
-      if (url.pathname === '/dsh-jupyter/raw') {
-        const scope = await scopeOf(ctx, res, url.searchParams.get('sessionId'))
-        if (scope === undefined) return
-        const path = url.searchParams.get('path')
-        if (path === null || path === '') {
-          json(res, FAIL(BAD_REQUEST), 400)
-          return
-        }
-        const result = await notebooks.readRaw(scope, path)
-        if (!('data' in result)) {
-          json(res, FAIL(result), result.code === 'path-outside-root' ? 403 : 404)
-          return
-        }
-        res.writeHead(200, {
-          'content-type': result.mime,
-          'content-length': result.data.byteLength,
-          'cache-control': 'no-cache',
-          'x-content-type-options': 'nosniff',
+  async function rpc(method: string, p: Record<string, unknown>): Promise<unknown> {
+    switch (method) {
+      case 'snapshot':
+        return await withDoc(p, async (doc, scope) => doc.snapshot(scope))
+      case 'edit':
+        return await withDoc(p, async (doc, scope) => {
+          doc.assertWritable(scope)
+          const ops = Array.isArray(p.ops) ? p.ops as EditOp[] : []
+          for (const op of ops) {
+            if ('id' in op && typeof op.id === 'string' && doc.isRunning(op.id) && (op.op === 'source' || op.op === 'delete' || op.op === 'type')) throw new NotebookError('cell-running', 'That cell is running; interrupt it first.')
+            doc.edit(op, 'user')
+          }
+          return { rev: doc.rev }
         })
-        res.end(result.data)
-        return
-      }
-      res.writeHead(405)
-      res.end()
-      return
-    }
-    if (req.method !== 'POST') {
-      res.writeHead(405)
-      res.end()
-      return
-    }
-    const contentType = req.headers['content-type'] ?? ''
-    if (!contentType.toLowerCase().startsWith('application/json')) {
-      json(res, FAIL(BAD_REQUEST), 415)
-      return
-    }
-    const pathname = new URL(req.url ?? '/', 'http://x').pathname
-    const payload = await readJsonBody(req)
-    if (payload === null) {
-      json(res, FAIL(BAD_REQUEST))
-      return
-    }
-    const sessionId = strField(payload, 'sessionId')
-    const scope = await scopeOf(ctx, res, sessionId)
-    if (scope === undefined) return
-    const path = strField(payload, 'path')
-    if (path === null) {
-      json(res, FAIL(BAD_REQUEST))
-      return
-    }
-
-    switch (pathname) {
-      case '/dsh-jupyter/read': {
-        const result = await notebooks.read(scope, path)
-        json(res, 'cells' in result ? OK(result) : FAIL(result))
-        return
-      }
-      case '/dsh-jupyter/create': {
-        const overwrite = (payload as Record<string, unknown>).overwrite === true
-        const result = await notebooks.create(scope, path, overwrite)
-        json(res, 'cells' in result ? OK(result) : FAIL(result))
-        return
-      }
-      case '/dsh-jupyter/write': {
-        const rawNotebook = (payload as Record<string, unknown>).notebook
-        if (rawNotebook === undefined) {
-          json(res, FAIL(BAD_REQUEST))
-          return
-        }
-        const result = await notebooks.write(scope, path, rawNotebook, optionalStr(payload, 'baseVersion'))
-        json(res, 'version' in result ? OK(result) : FAIL(result))
-        return
-      }
-      case '/dsh-jupyter/execute': {
-        const code = strField(payload, 'code')
-        const cellId = strField(payload, 'cellId')
-        if (code === null || cellId === null) {
-          json(res, FAIL(BAD_REQUEST))
-          return
-        }
-        const python = optionalStr(payload, 'python')
-        if (!(await isKnownInterpreter(ctx, python))) {
-          json(res, FAIL({ code: 'kernel-unavailable', message: `unknown Python interpreter: ${python ?? ''}` }))
-          return
-        }
-        res.writeHead(200, {
-          'content-type': 'application/x-ndjson; charset=utf-8',
-          'cache-control': 'no-cache',
-          connection: 'keep-alive',
-        })
-        const session = kernels.session(scope, path, python)
-        try {
-          const result = await session.execute(code, (output) => {
-            ndjson(res, { kind: 'output', cellId, output })
+      case 'run':
+        return await withDoc(p, async (doc, scope) => {
+          doc.assertWritable(scope)
+          const ids = Array.isArray(p.cells) ? p.cells.filter((c): c is string => typeof c === 'string') : []
+          void doc.run(ids, { timeoutS: 0, stopOnError: p.stopOnError !== false }).catch((error: unknown) => {
+            doc.kernel.fail(error instanceof Error ? error.message : String(error))
           })
-          ndjson(res, { kind: 'done', cellId, executionCount: result.executionCount, status: result.status })
-        } catch (error) {
-          ndjson(res, { kind: 'error', message: error instanceof Error ? error.message : String(error) })
-        }
-        res.end()
-        return
-      }
-      case '/dsh-jupyter/text-read': {
-        const result = await notebooks.readTextFile(scope, path)
-        json(res, 'text' in result ? OK(result) : FAIL(result))
-        return
-      }
-      case '/dsh-jupyter/text-write': {
-        const text = (payload as Record<string, unknown>).text
-        if (typeof text !== 'string') {
-          json(res, FAIL(BAD_REQUEST))
-          return
-        }
-        const result = await notebooks.writeTextFile(scope, path, text, optionalStr(payload, 'baseVersion'))
-        json(res, 'version' in result ? OK(result) : FAIL(result))
-        return
-      }
-      case '/dsh-jupyter/interrupt': {
-        kernels.existingSession(scope, path)?.interrupt()
-        json(res, OK({ ok: true }))
-        return
-      }
-      case '/dsh-jupyter/restart': {
-        kernels.existingSession(scope, path)?.restart()
-        json(res, OK({ ok: true }))
-        return
-      }
-      case '/dsh-jupyter/dispose-session': {
-        kernels.disposeSession(scope, path)
-        json(res, OK({ ok: true }))
-        return
-      }
+          return { queued: ids.length }
+        })
+      case 'interrupt':
+        return await withDoc(p, async (doc) => { doc.interrupt(); return {} })
+      case 'restart':
+        return await withDoc(p, async (doc, scope) => { doc.assertWritable(scope); await doc.restartKernel(); return {} })
+      case 'stop':
+        return await withDoc(p, async (doc) => { await doc.stopKernel(); return {} })
+      case 'save':
+        return await withDoc(p, async (doc, scope) => { doc.assertWritable(scope); await doc.save(scope, p.force === true); return {} })
+      case 'reload':
+        return await withDoc(p, async (doc) => { await doc.reloadFromDisk(); return {} })
+      case 'python':
+        return await withDoc(p, async (doc, scope) => {
+          doc.assertWritable(scope)
+          await doc.setPython(typeof p.python === 'string' ? p.python : '', true)
+          return {}
+        })
+      case 'interpreters':
+        return await withDoc(p, async (doc, scope) => annotate(await discoverInterpreters({
+          workspaceRoot: scope.root,
+          notebookDir: dirname(ctx.fs.processPath(doc.target)),
+          pinned: doc.chosenPython === '' ? undefined : doc.chosenPython,
+          configured: settings.python,
+          resolveExecutable: async (name) => { try { return await ctx.subprocess.resolveExecutable(name) } catch { return undefined } },
+        })))
+      case 'createEnv':
+        return await withDoc(p, async (doc, scope) => {
+          doc.assertWritable(scope)
+          const uv = await findUv(async (name) => { try { return await ctx.subprocess.resolveExecutable(name) } catch { return undefined } })
+          if (uv === undefined) throw new NotebookError('no-uv', 'uv was not found. Install uv (https://docs.astral.sh/uv/) and try again.')
+          const extras = Array.isArray(p.packages) ? p.packages.filter((x): x is string => typeof x === 'string') : []
+          const made = await createNotebookEnv(uv, dirname(ctx.fs.processPath(doc.target)), extras)
+          if (!made.ok || made.python === undefined) throw new NotebookError('env-failed', made.message)
+          await doc.setPython(made.python, true)
+          return { python: made.python, message: made.message }
+        })
       default:
-        res.writeHead(404)
-        res.end()
+        throw new NotebookError('bad-request', `Unknown method "${method}".`)
     }
   }
 
-  return ctx.webServer.register({ kind: 'prefix', path: '/dsh-jupyter', handler })
+  async function raw(res: ServerResponse, url: URL): Promise<void> {
+    try {
+      const scope = await scopeOfSession(ctx, url.searchParams.get('sessionId') ?? '')
+      const target = await resolveNotebookPath(ctx, scope, url.searchParams.get('path') ?? '')
+      const ext = (url.searchParams.get('path') ?? '').split('.').pop()?.toLowerCase() ?? ''
+      const mime = MIME[ext]
+      if (mime === undefined) { json(res, fail('bad-type', 'Only images can be served here.'), 415); return }
+      const data = await ctx.fs.readBytes(target, undefined, 16 << 20)
+      res.writeHead(200, { 'content-type': mime, 'content-length': data.byteLength, 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff', 'content-security-policy': "sandbox; default-src 'none'" })
+      res.end(data)
+    } catch (error) {
+      const e = error instanceof NotebookError ? error : new NotebookError('not-found', 'Cannot read that file.')
+      json(res, fail(e.code, e.message), e.code === 'outside-workspace' ? 403 : 404)
+    }
+  }
+
+  const handler = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    // Fail closed: without the connection service no request is admitted.
+    const connection = connectionOf(ctx)
+    const rejection = connection === undefined ? 403 : connection.requestRejection(req)
+    if (rejection !== undefined) {
+      res.statusCode = rejection
+      res.end()
+      return
+    }
+    const url = new URL(req.url ?? '/', 'http://x')
+    if (req.method === 'GET') {
+      if (url.pathname === `${BASE}/raw`) return await raw(res, url)
+      res.statusCode = 404
+      res.end()
+      return
+    }
+    if (req.method !== 'POST' || url.pathname !== `${BASE}/rpc`) {
+      res.statusCode = 405
+      res.setHeader('allow', 'GET, POST')
+      res.end()
+      return
+    }
+    if (!sameOrigin(req) || !(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
+      json(res, fail('forbidden', 'Cross-origin or non-JSON request refused.'), 403)
+      return
+    }
+    try {
+      const body = await readBody(req)
+      const payload = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>
+      const method = str(payload.method)
+      if (method === undefined) throw new NotebookError('bad-request', 'method is required.')
+      json(res, ok(await rpc(method, payload)))
+    } catch (error) {
+      const e = error instanceof NotebookError ? error : new NotebookError('internal', error instanceof Error ? error.message : String(error))
+      json(res, fail(e.code, e.message), e.code === 'internal' ? 500 : e.code === 'outside-workspace' || e.code === 'read-only' || e.code === 'write-denied' ? 403 : 400)
+    }
+  }
+
+  return ctx.webServer.register({ kind: 'prefix', path: BASE, handler })
 }

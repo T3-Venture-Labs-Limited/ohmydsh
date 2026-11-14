@@ -1,11 +1,8 @@
 /**
- * Compact markdown renderer for the notebook panel — the same implementation
- * the dsh right-panel preview (dsh-aionui-panel, Apache-2.0) uses, so
- * markdown cells render identically to the built-in preview. Headings,
- * paragraphs, fenced + inline code, bold/italic, links/images, lists,
- * blockquotes, hr, and tables. All HTML is escaped before transformation —
- * the output only ever contains the renderer's own tags.
- * @module dsh-jupyter/client/markdown
+ * Compact markdown renderer (from kikulmj/dsh-jupyter, Apache-2.0). Headings, paragraphs, fenced + inline code,
+ * bold/italic/strikethrough, links/images, lists, blockquotes, hr and tables, plus inline `$math$` placeholders
+ * that the view upgrades with KaTeX. All HTML is escaped before transformation: the output only ever contains
+ * the renderer's own tags. Link and image targets pass `safeUrl` (http, https, mailto, #fragment, relative only).
  */
 
 /** Escape HTML special characters. */
@@ -102,13 +99,23 @@ export interface MarkdownRenderOptions {
  * are rejected so the value never reaches dangerouslySetInnerHTML.
  */
 export function safeUrl(raw: string): string | null {
-  const trimmed = raw.trim()
-  if (trimmed === '') return null
-  if (trimmed.startsWith('#')) return trimmed
-  const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(trimmed)
-  if (scheme === null) return trimmed
-  const name = scheme[1].toLowerCase()
-  return name === 'http' || name === 'https' || name === 'mailto' ? trimmed : null
+  // Browsers drop tab/CR/LF anywhere in a URL and ignore leading C0/space, so `java\tscript:` is `javascript:`.
+  // Strip every control/format/whitespace character before looking at the scheme, then parse like a browser would.
+  // eslint-disable-next-line no-control-regex
+  const cleaned = raw.replace(/[\u0000-\u0020\u007f-\u00a0\u1680\u180e\u2000-\u200f\u2028-\u202f\u205f-\u206f\u3000\ufeff]/g, '')
+  if (cleaned === '') return null
+  if (cleaned.startsWith('#')) return cleaned
+  let parsed: URL
+  try {
+    parsed = new URL(cleaned, 'http://relative.invalid/')
+  } catch {
+    return null
+  }
+  if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+    // A bare relative reference resolved against the dummy base: keep it as written (minus stripped characters).
+    return cleaned
+  }
+  return parsed.protocol === 'mailto:' ? cleaned : null
 }
 
 /** Inline pass: code spans, bold, italic, images, links. */
@@ -117,12 +124,21 @@ export function renderInline(text: string, options?: MarkdownRenderOptions): str
   let i = 0
   const n = text.length
   while (i < n) {
-    const char = text[i]
+    const char = text[i] ?? ''
     // Fenced inline code first.
     if (char === '`') {
       const end = text.indexOf('`', i + 1)
       if (end !== -1) {
         out += `<code>${escapeHtml(text.slice(i + 1, end))}</code>`
+        i = end + 1
+        continue
+      }
+    }
+    // Inline math $...$ (not $$ and not a lone dollar followed by a space/digit run like prices)
+    if (char === '$' && text[i + 1] !== '$' && text[i + 1] !== ' ') {
+      const end = text.indexOf('$', i + 1)
+      if (end !== -1 && end > i + 1 && text[end - 1] !== ' ' && !/\d/.test(text[end + 1] ?? '')) {
+        out += `<span class="nb-math" data-tex="${escapeHtml(text.slice(i + 1, end))}">${escapeHtml(text.slice(i, end + 1))}</span>`
         i = end + 1
         continue
       }
@@ -222,7 +238,23 @@ export function renderMarkdown(source: string, options?: MarkdownRenderOptions):
 
   let paragraph: string[] = []
   while (i < n) {
-    const line = lines[i]
+    const line = (lines[i] ?? '')
+
+    // Display math: $$ ... $$ on its own lines (or one line).
+    const displayOne = /^\s*\$\$(.+)\$\$\s*$/.exec(line)
+    if (displayOne !== null || /^\s*\$\$\s*$/.test(line)) {
+      flushParagraph(paragraph)
+      let tex = displayOne?.[1] ?? ''
+      i += 1
+      if (displayOne === null) {
+        const body: string[] = []
+        while (i < n && !/^\s*\$\$\s*$/.test(lines[i] ?? '')) { body.push(lines[i] ?? ''); i += 1 }
+        i += 1
+        tex = body.join('\n')
+      }
+      out.push(`<div class="nb-math nb-math-display" data-tex="${escapeHtml(tex)}">${escapeHtml(`$$${tex}$$`)}</div>`)
+      continue
+    }
 
     // Fenced code block.
     const fence = /^```([\w+-]*)\s*$/.exec(line)
@@ -231,8 +263,8 @@ export function renderMarkdown(source: string, options?: MarkdownRenderOptions):
       const lang = fence[1] ?? ''
       i += 1
       const code: string[] = []
-      while (i < n && !/^```\s*$/.test(lines[i])) {
-        code.push(lines[i])
+      while (i < n && !/^```\s*$/.test((lines[i] ?? ''))) {
+        code.push((lines[i] ?? ''))
         i += 1
       }
       i += 1 // closing fence
@@ -245,7 +277,7 @@ export function renderMarkdown(source: string, options?: MarkdownRenderOptions):
     const heading = /^(#{1,6})\s+(.*)$/.exec(line)
     if (heading !== null) {
       flushParagraph(paragraph)
-      const level = heading[1].length
+      const level = (heading[1] ?? '#').length
       out.push(`<h${level}>${renderInline(heading[2] ?? '', options)}</h${level}>`)
       i += 1
       continue
@@ -260,13 +292,13 @@ export function renderMarkdown(source: string, options?: MarkdownRenderOptions):
     }
 
     // Table: header row then separator row.
-    if (line.includes('|') && i + 1 < n && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes('-')) {
+    if (line.includes('|') && i + 1 < n && /^\s*\|?[\s:|-]+\|?\s*$/.test((lines[i + 1] ?? '')) && (lines[i + 1] ?? '').includes('-')) {
       flushParagraph(paragraph)
       const headerCells = splitTableRow(line)
       i += 2
       const rows: string[][] = []
-      while (i < n && lines[i].includes('|')) {
-        rows.push(splitTableRow(lines[i]))
+      while (i < n && (lines[i] ?? '').includes('|')) {
+        rows.push(splitTableRow((lines[i] ?? '')))
         i += 1
       }
       out.push('<table>')
@@ -284,7 +316,7 @@ export function renderMarkdown(source: string, options?: MarkdownRenderOptions):
       flushParagraph(paragraph)
       const body: string[] = []
       while (i < n) {
-        const q = /^>\s?(.*)$/.exec(lines[i])
+        const q = /^>\s?(.*)$/.exec((lines[i] ?? ''))
         if (q === null) break
         body.push(q[1] ?? '')
         i += 1
@@ -299,7 +331,7 @@ export function renderMarkdown(source: string, options?: MarkdownRenderOptions):
       flushParagraph(paragraph)
       const items: string[] = []
       while (i < n) {
-        const item = /^\s*([-*+])\s+(.*)$/.exec(lines[i])
+        const item = /^\s*([-*+])\s+(.*)$/.exec((lines[i] ?? ''))
         if (item === null) break
         items.push(`<li>${renderInline(item[2] ?? '', options)}</li>`)
         i += 1
@@ -314,7 +346,7 @@ export function renderMarkdown(source: string, options?: MarkdownRenderOptions):
       flushParagraph(paragraph)
       const items: string[] = []
       while (i < n) {
-        const item = /^\s*\d+[.)]\s+(.*)$/.exec(lines[i])
+        const item = /^\s*\d+[.)]\s+(.*)$/.exec((lines[i] ?? ''))
         if (item === null) break
         items.push(`<li>${renderInline(item[1] ?? '', options)}</li>`)
         i += 1

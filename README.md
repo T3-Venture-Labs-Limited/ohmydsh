@@ -1,115 +1,58 @@
-# dsh-jupyter
+# dsh-notebook
 
-English | [中文](README.zh.md)
+Jupyter notebooks in the DeepSeek Harness sidebar that **you and the agent work in together**.
 
-A Jupyter notebook (`.ipynb`) plugin for dsh: open, edit and run notebooks in the Web/Desktop GUI's right sidebar. Rebuilt for the dsh 0.2.x plugin model — plain JavaScript plus one Python script, with no native dependencies and no terminal.
+Click any `.ipynb` file in the Files tree and it opens as a real notebook in the right sidebar. The agent opens the *same* notebook with `nb_*` tools and runs cells on the *same* kernel, so variables, outputs and edits stay in sync, and everything it does appears in your view as it happens.
 
-## Demo
+- **One host-owned ipykernel per notebook**, shared by the sidebar and the agent. Interrupt kills a runaway cell; a timeout interrupts instead of leaving the kernel busy; the whole process tree is killed on stop, and a watchdog cleans up if dsh dies.
+- **Push, not polling.** Every edit, run state and output chunk is pushed to open views over one Typert stream per notebook (`dshNotebook/events`) on DSH's single multiplexed WebSocket, open only while the page is visible (no HTTP stream, so open notebooks never use up the browser's 6 connections per host). The client has no timers that hit the server.
+- **Eight compact agent tools** (`nb_open`, `nb_read`, `nb_edit`, `nb_run`, `nb_output`, `nb_kernel`, `nb_vars`, `nb_env`). Output is capped, ANSI is stripped, plots come back as **image attachments** (never base64 in text), and the full result stays in the notebook. A bundled `notebook` skill teaches the workflow.
+- **Approval-aware execution.** Cell code runs outside the shell sandbox, so a model-driven run goes through `tools/pre-execute` → `ask` unless the session is in full-access mode. Your own Run clicks are never gated. Paths are confined to the session workspace; read-only sessions can view but not edit or run.
+- **Faithful `.ipynb`.** Read and written without nbformat, byte-compatible with Jupyter (sorted keys, indent 1, text as lines). Markdown `attachments`, widget state and unknown keys survive; untouched cells are written back exactly as read.
+- **Safe rich outputs.** Images, LaTeX (KaTeX → MathML), JSON, ANSI tracebacks; HTML, SVG and JavaScript run in an opaque-origin sandboxed iframe with a no-network CSP. Plotly and ipywidgets are preserved in the file but not drawn.
+- **Stale-output hint.** When a notebook opens with outputs saved by an earlier kernel and nothing has run on the current one, a banner offers **Re-run all** (dismissible; it returns after a restart).
+- **Python environments that fit uv.** Finds the notebook's pinned interpreter, `DSH_NOTEBOOK_PYTHON`, the `python` setting, a project `.venv` / `venv` (searched from the notebook's folder up to the workspace), `$VIRTUAL_ENV`, `~/.venvs`, conda environments, then `python3`/`python` on PATH, preferring one that already has `ipykernel`. **Create notebook environment** makes `<folder>/.venv` with `uv` and installs `ipykernel`.
 
-<img src="docs/demo.webp" width="960" alt="The dsh-jupyter notebook tab: a conda: binxing kernel, highlighted Python code, and an inline matplotlib plot">
-
-## Features
-
-- **Native right-sidebar tab**: clicking a `.ipynb` in the file tree opens it in the same tab system as the text preview. The tab strip, dragging, split view, fullscreen, layout persistence and theme all come from dsh; the plugin only contributes tab types.
-- **Text/code file editing**: common source, config and documentation extensions (`.py`, `.js`, `.ts`, `.json`, `.yaml`, `.toml`, `.sh`, `.sql`, `.md`, `.txt`, `.css`, and more) are also handled by this plugin, with editing and saving in the right-sidebar tab. HTML, CSV, images, PDF and Office documents stay with the official preview so their richer read-only views are preserved.
-- **Cell editing**: code / markdown / raw cells; add, delete and move cells; run all; markdown preview (double-click to edit).
-- **Highlighting and indentation**: Python syntax highlighting (keywords, strings, numbers, comments, builtins, decorators, `!` magic lines); Tab / Shift+Tab to indent and dedent; Enter keeps the current indentation and adds a level after `:`.
-- **Empty files and recovery**: a 0-byte or whitespace-only `.ipynb` opens as a new notebook; a file that is not valid notebook JSON shows an error with **Reload** / **Open as empty notebook** actions.
-- **Real execution**: cells run in a persistent Python kernel in the host process, sharing variables, imports and module state between cells. Output streams as it arrives (stdout/stderr, HTML, Markdown, PNG/JPEG/SVG, JSON, tracebacks), with interrupt and kernel restart.
-- **Kernel environment picker**: choose the bundled Python or a conda environment registered in `~/.conda/environments.txt` from the notebook toolbar. Switching restarts the kernel on that interpreter, and the choice is stored in the notebook metadata.
-- **Saving**: writes go through dsh's filesystem with its version guard. If the file changed on disk, saving reports a conflict instead of silently overwriting it.
-- **Rich output**: pandas `DataFrame` uses `_repr_html_`; PIL images and `_repr_png_` / `_repr_svg_` / `_repr_json_` / `_repr_markdown_` are rendered. matplotlib figures (when installed in that Python environment) are emitted as inline PNGs after the cell.
-
-## Install
-
-From npm:
+## Install (dev)
 
 ```sh
-dsh plugin --profile web add @kikulmj/dsh-jupyter
+pnpm install --ignore-scripts && pnpm run build
+dsh plugin --profile <profile> add "dsh-notebook@link:$PWD"
+# then restart DSH
 ```
 
-The Desktop app uses the `desktop` profile:
+The interpreter needs `ipykernel` and `jupyter_client`: `uv pip install --python .venv/bin/python ipykernel jupyter_client`, or use the in-app helper.
 
-```sh
-dsh plugin --profile desktop add @kikulmj/dsh-jupyter
-```
+## Settings (`cordis.patch.yml` row `config:`)
 
-From GitHub (alternative):
+| Key | Default | Meaning |
+|---|---|---|
+| `python` | none | Interpreter when a notebook pins none and no project env is found |
+| `autosave` | `true` | Write edits and outputs shortly after each change |
+| `maxOutputChars` | `200000` | Per-cell cap on stored stream text |
+| `agentCellTimeoutS` | `120` | Per-cell limit for agent runs (0 = none) |
+| `idleMinutes` | `30` | Stop a kernel with no open view and no running cell |
+| `approval` | `auto` | `auto` asks unless full-access, `always`, `never` |
 
-```sh
-dsh plugin --profile web add github:kikulmj/dsh-jupyter
-```
+## Opening `.ipynb` here instead of in dsh-better-sidebar
 
-Local development (edit code → `pnpm build` → restart dsh):
+The sidebar's tab registry ranks candidates by **priority band, then by the length of the longest matching pattern, then by registration order**. dsh-better-sidebar claims `dsh-resource://file/**` (22 characters) in the same `extension` band, so a bare `*.ipynb` (7 characters) would lose. This plugin registers `dsh-resource://file/**/*.ipynb` (30 characters), which wins, and `canOpen` re-checks the extension. `.py` and every other file stay with better-sidebar.
 
-```sh
-dsh plugin --profile web add link:/path/to/dsh-jupyter
-```
-
-- The dsh installer checks `engines.dsh` (this plugin declares `>=0.2.0-0`) and accepts 0.2.x runtimes.
-- No pnpm `allowBuilds` and no node-gyp are needed: the plugin has no native modules such as `node-pty`.
-- Uninstall: `dsh plugin --profile web remove @kikulmj/dsh-jupyter`.
-
-## Usage
-
-1. Open a project session.
-2. Open the right-sidebar file tree (default `Mod+P`) and click any `.ipynb`.
-3. The notebook opens as a tab on the right; press `Shift+Enter` to run a code cell and `Ctrl/Cmd+S` to save.
-4. Common IPython line syntax is supported: `!command` (for example `!pip list`; `pip` / `python` resolve to the current kernel interpreter), `%pip`, `%cd`, `%pwd`.
-5. Clicking a text file such as `.py`, `.json` or `.txt` opens an editable tab; `Ctrl/Cmd+S` saves, with a version-conflict check.
-6. Use the **Kernel environment** picker in the notebook toolbar to switch to a conda env (for example `conda: binxing`). `!conda activate` inside a cell only affects that shell subprocess and cannot change the kernel; the picker restarts the kernel on the chosen interpreter and stores the choice in the notebook metadata.
-7. Open `examples/plot-demo.ipynb` for a matplotlib demo and a dependency-free SVG fallback.
-
-## Kernel
-
-- Interpreter priority for the bundled choice: `$DSH_PRIMARY_RUNTIME/dependencies/python/…` → `$DSH_HOME/dsh-runtimes/dsh-primary-runtime/dependencies/python/…` → `python3` / `python` on `PATH`.
-- Conda environments listed in `~/.conda/environments.txt` (and `~/.anaconda/environments.txt`) appear in the picker. Selecting one runs its `python` directly and sets `PATH` / `CONDA_PREFIX` / `CONDA_DEFAULT_ENV` to approximate `conda activate`.
-- The Python 3.12 bundled with Desktop already includes numpy, pandas and Pillow. The kernel bridge uses only the standard library and does not depend on `jupyter_client` or `ipykernel`.
-- Python kernels only. A notebook's other kernelspec does not switch languages; it still runs on Python.
-- On Windows, `!` commands whose first token is a common POSIX tool (`ls`, `cat`, `grep`, …) run through Git Bash when it is installed; other commands (`dir`, `conda`) keep `cmd.exe`.
-
-## Architecture
+## Layout
 
 ```
-src/
-  index.ts              Host half: /dsh-jupyter/* routes + agent announcement
-  core/types.ts         Wire types
-  host/scope.ts         Session workspace resolution + filesystem boundary checks
-  host/notebook-service.ts  nbformat 4 parse/serialize, reads and writes through ctx.fs (version guard)
-  host/routes.ts        read / write / raw / text-read / text-write / execute / interrupt / restart
-  host/python.ts        Locate dsh's bundled Python and list conda environments
-  host/kernel.ts        One persistent Python kernel process per notebook (JSONL stdio)
-  host/kernel_bridge.py Stdlib-only Python kernel bridge (persistent namespace, streaming, interrupt)
-  client/index.ts       Register the `.ipynb` and text-file tab types and body slots
-  client/panel.tsx      Notebook editor (native slot component)
-  client/text-editor.tsx Text/code file editor
-  client/code-editor.tsx Transparent textarea + highlight overlay
-  client/highlight.ts   Python / JS / C / Shell / SQL tokenizer
-  client/api.ts         /dsh-jupyter client
-  client/styles.ts      Cell/output/editor styles over dsh's `--dsw-*` theme tokens
+python/kernel_driver.py   ipykernel sidecar (JSON lines over stdio)
+src/core/                 wire types, no-nbformat .ipynb layer, output digest
+src/host/                 document + kernel owner, routes (RPC + raw), push stream, tools, approval gate, interpreter discovery
+src/client/               entry (tiny) + lazy view / CodeMirror / KaTeX chunks
+src/kit/                  copy of dsh-kit/ui
+skills/notebook-workflow/ bundled skill
 ```
 
-The browser half only `require`s `react`; the host half imports Node built-ins only. Every dsh service is declared as a peer dependency and provided by the profile at runtime.
+## Credits
 
-## Security
+Forked from [kikulmj/dsh-jupyter](https://github.com/kikulmj/dsh-jupyter) (Apache-2.0); kernel driver and the no-nbformat `.ipynb` approach from [beihzb/dsh-notebook](https://github.com/beihzb/dsh-notebook) (MIT). See [NOTICE](NOTICE).
 
-- Every route accepts loopback requests only and checks Host / Origin (the same-origin fence).
-- Reads and writes are rooted at the Session's working directory, bounded with `ctx.fs.resolve` + `ctx.fs.contains`, and written through dsh's sandboxed filesystem policy — the workspace limit is never bypassed.
-- The kernel runs cell code with the host user's privileges. That is the inherent semantics of a notebook; only run notebooks you trust.
+## Licence
 
-## Limitations
-
-- `input()` / stdin interaction is not supported.
-- `!conda activate` only changes that one shell subprocess; it does not change the kernel. Use the toolbar's **Kernel environment** picker instead.
-- Inline magics `!`, `%pip`, `%cd` and `%pwd` are supported; `%%` cell magics and other IPython magics (`%time`, `%run`, …) are not.
-- `!` commands run with the host user's privileges; output written directly to file descriptors by C extensions or subprocesses is shown once the cell finishes, not streamed live.
-- Text editing supports UTF-8 text only, up to 8 MiB per file; binary files still go to the official preview.
-- Host-half changes require restarting dsh; client-bundle changes reload through dsh HMR.
-- `lib/` is committed, so remote installs need no local build.
-
-## Development
-
-```sh
-pnpm install
-pnpm build     # tsc → tsdown → copy kernel_bridge.py
-```
+Apache-2.0, see [LICENSE](LICENSE), [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -6,9 +6,10 @@ Installs the **normal DeepSeek Harness UI** as an app and sends **Web Push notif
 
 | Route | Auth | What it does |
 |---|---|---|
-| `GET /manifest.webmanifest` | public (browsers fetch it without credentials; no secrets inside) | Replaces the stock manifest: same icons, `start_url: /`, `scope: /`, `display: standalone`, Android `share_target` |
+| `GET /manifest.webmanifest` | public (browsers fetch it without credentials; no secrets inside) | Replaces the stock manifest: same icons, `start_url: /app`, `scope: /`, `id: /`, `display: standalone`, Android `share_target` |
 | `GET /sw.js` | public | Service worker (see below); `Service-Worker-Allowed: /`, never cached by the browser |
-| `POST /share` | signed in, same-origin | Android share target. Saves text, url and files, answers `303 /?share=<id>` |
+| `GET /app`, `/app.js` | public, no secrets, `no-store` | Launch page of the installed app: signs in through a same-origin fetch, then opens `/`, or shows a paste-your-login-link form (see below) |
+| `POST /share` | signed in, same-origin | Android share target. Saves text, url and files, answers `303 /?share=<id>`, or JSON `{id}` when the request sends `Accept: application/json` |
 | `GET /share?id=` | signed in | The stored share, read by the UI to pre-fill a draft |
 | `GET /push/key` | signed in | The VAPID public key |
 | `POST /push/subscribe` | signed in, same-origin | Stores this device's `PushSubscription` (keyed by endpoint, with a device label and created time) |
@@ -40,9 +41,11 @@ Never for subagent sessions, never for turns nobody typed (schedules, triggers, 
 
 The push payload is `{ v, kind, title, body, sessionId }` and nothing else: no tokens, no URLs.
 
-**Opening a session from a notification.** The click handler focuses an existing app window and posts it `{ type: 'dsh-pwa:open-session', sessionId }`; the client half calls `uiWorkspace.openSession(id)`, the host's own navigation service (the same call `dsh-notify-me` uses). With no window open it opens `/?openSession=<id>`; the client reads that on start, waits for the session list, opens the session and removes the parameter from the address bar.
+**Why the app opens `/app`.** Core sets the sign-in cookie `HttpOnly; SameSite=Strict`. Chrome treats a launch from the Android home screen as a cross-site navigation, so a request for `/` carries no cookie and core answers `401`. The installed app has no address bar to fix that. `/app` is public and holds no secret; its script calls `/push/key` with a same-origin fetch (cookie sent): signed in, it goes to `/` and passes only `openSession` and `share` (validated ids); signed out, it asks for the login link (a full URL or the bare token), then navigates to `/?token=…` so the server sets the cookie. The token is never stored or logged. Reinstalling is not needed: `id` and `scope` are unchanged, and Chrome refreshes the manifest on its own schedule.
 
-**Share to DSH.** `POST /share` stores the share and redirects to `/?share=<id>`. The client fetches it and calls `uiWorkspace.startSession(undefined, { prompt, whenDraftExists: 'append' })`, the same entry the host's New Session flow uses, so the shared text lands in the normal composer as a draft. It is never sent. Shared files are saved under `<share.cwd>/.dsh-shares/<id>/` (or next to the record) and their paths are listed in the draft.
+**Opening a session from a notification.** The click handler focuses an existing app window and posts it `{ type: 'dsh-pwa:open-session', sessionId }`; the client half calls `uiWorkspace.openSession(id)`, the host's own navigation service (the same call `dsh-notify-me` uses). With no window open it opens `/app?openSession=<id>`; the client reads that on start, waits for the session list, opens the session and removes the parameter from the address bar.
+
+**Share to DSH.** The share sheet POSTs to `/share` as a cross-site navigation, so the browser withholds the `SameSite=Strict` sign-in cookie. The service worker therefore takes that POST, keeps title, text, url and files in Cache Storage (`dsh-share`, random id, 10 min TTL, cleared once delivered) and redirects to `/app?shareLocal=<id>`; `/app` posts it to `/share` itself (a same-origin fetch, so the cookie is sent) and goes on to `/?share=<id>`. The client fetches it and calls `uiWorkspace.startSession(undefined, { prompt, whenDraftExists: 'append' })`, the same entry the host's New Session flow uses, so the shared text lands in the normal composer as a draft. It is never sent. Shared files are saved under `<share.cwd>/.dsh-shares/<id>/` (or next to the record) and their paths are listed in the draft.
 
 ### Keys and storage
 
@@ -65,7 +68,7 @@ It answers only `GET` requests for public, content-addressed files: hashed `/ass
   config:
     name: DeepSeek Harness
     shortName: DSH
-    startUrl: /               # the installed app opens the normal UI
+    startUrl: /app            # launch page: signs in, then opens the normal UI
     themeColor: '#ffffff'
     backgroundColor: '#ffffff'
     serviceWorker: true
@@ -80,7 +83,7 @@ It answers only `GET` requests for public, content-addressed files: hashed `/ass
 
 ## Upgrading from 0.1
 
-The `/m` phone page is gone. An old `startUrl: /m` falls back to `/`; delete it, and `share.mode` (ignored now). Reinstall the app on the phone so it picks up the new manifest.
+The `/m` phone page is gone. An old `startUrl: /m` falls back to `/app`; delete it, and `share.mode` (ignored now). Reinstall the app on the phone so it picks up the new manifest.
 
 ## Develop
 

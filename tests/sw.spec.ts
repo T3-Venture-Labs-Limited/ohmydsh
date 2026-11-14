@@ -43,7 +43,7 @@ describe('service worker cache policy', () => {
       '/plugins/events', '/plugins/dsh-sentinel/state', '/plugins/x/client.js',                 // no rev
       '/abx/state', '/abx/events', '/browser/stream', '/sidebar/api/session.phase',
       '/share', '/share?id=aaaa', '/push/key', '/push/test', '/m', '/m/app.js?v=1234567890',     // never cached
-      '/', '/index.html', '/manifest.webmanifest', '/sw.js',
+      '/', '/app', '/app.js', '/index.html', '/manifest.webmanifest', '/sw.js',
       '/assets/../api/session/list', '/assets/index.js',                                         // not hashed
     ]) expect(policy.isCacheablePath(u(path)), path).toBe(false)
     expect(policy.isCacheablePath(new URL('http://evil.example/assets/index-Ciz7DZxv.js'))).toBe(false)
@@ -68,7 +68,7 @@ describe('service worker cache policy', () => {
   it('does not intercept non-cacheable requests (respondWith is never called) and ignores non-GET', () => {
     const { listeners } = load()
     const fetchHandler = listeners.get('fetch')!
-    for (const [method, path, mode] of [['GET', '/api/session/list', 'cors'], ['POST', '/share', 'navigate'], ['GET', '/plugins/events', 'cors'], ['GET', '/sw.js', 'same-origin']] as const) {
+    for (const [method, path, mode] of [['GET', '/api/session/list', 'cors'], ['POST', '/api/session/list', 'cors'], ['POST', '/share', 'cors'], ['GET', '/plugins/events', 'cors'], ['GET', '/sw.js', 'same-origin']] as const) {
       let responded = false
       fetchHandler({ request: { method, url: `http://127.0.0.1:3090${path}`, mode, headers: headers() }, respondWith: () => { responded = true }, waitUntil: () => {} })
       expect(responded, `${method} ${path}`).toBe(false)
@@ -186,7 +186,7 @@ describe('service worker push', () => {
     await w.push({ ...note, kind: 'test', sessionId: '' })
     expect(w.shown).toHaveLength(4)
   })
-  it('click focuses an existing window and tells it to open the session; with no window it opens /?openSession=<id>', async () => {
+  it('click focuses an existing window and tells it to open the session; with no window it opens /app?openSession=<id>', async () => {
     const w = loadWorker()
     const messages: unknown[] = []; let focused = 0
     w.windows.push({ focused: false, visibilityState: 'visible', focus: async () => { focused += 1 }, postMessage: (m: unknown) => { messages.push(m) } })
@@ -196,6 +196,57 @@ describe('service worker push', () => {
     w.windows.length = 0
     await w.click({ data: { sessionId: 'sess-1' }, close: () => {} })
     await w.click({ data: { sessionId: '' }, close: () => {} })
-    expect(w.opened).toEqual(['/?openSession=sess-1', '/'])
+    expect(w.opened).toEqual(['/app?openSession=sess-1', '/app'])
+  })
+})
+
+describe('service worker share target', () => {
+  function shareWorker(maxShareBytes = 1024 * 1024) {
+    const listeners = new Map<string, Listener>()
+    const store = new Map<string, Response>()
+    const cache = { put: async (k: string, r: Response) => { store.set(k, r) }, match: async (k: string | { url: string }) => store.get(typeof k === 'string' ? k : k.url)?.clone(), keys: async () => [...store.keys()].map((url) => ({ url })), delete: async (k: string | { url: string }) => store.delete(typeof k === 'string' ? k : k.url) }
+    const self: Record<string, unknown> = { location: new URL('http://127.0.0.1:3090/sw.js'), addEventListener: (t: string, f: Listener) => { listeners.set(t, f) }, skipWaiting: () => {}, clients: { claim: async () => {} } }
+    new Function('self', 'caches', 'fetch', 'Response', 'URL', 'crypto', serviceWorkerSource('1', { maxShareBytes }))(self, { open: async () => cache }, async () => new Response('x'), Response, URL, globalThis.crypto)
+    const post = async (form: FormData, extra: { mode?: string; path?: string; headers?: Record<string, string> } = {}) => {
+      const request = new Request(`http://127.0.0.1:3090${extra.path ?? '/share'}`, { method: 'POST', body: form, headers: extra.headers ?? {} })
+      Object.defineProperty(request, 'mode', { value: extra.mode ?? 'navigate' })
+      let answer: Promise<Response> | undefined
+      listeners.get('fetch')!({ request, respondWith: (p: Promise<Response>) => { answer = p }, waitUntil: () => {} })
+      return answer === undefined ? undefined : await answer
+    }
+    return { post, store }
+  }
+  const form = (fields: Record<string, string | File>) => { const f = new FormData(); for (const [k, v] of Object.entries(fields)) f.append(k, v); return f }
+
+  it('takes the cross-site share navigation, stashes it under a random id and redirects 303 to /app?shareLocal=<id>', async () => {
+    const w = shareWorker()
+    const res = await w.post(form({ title: 'T', text: 'hello', files: new File(['abc'], 'a.txt', { type: 'text/plain' }) }))
+    expect(res!.status).toBe(303)
+    const loc = new URL(res!.headers.get('location')!)
+    expect(loc.origin).toBe('http://127.0.0.1:3090'); expect(loc.pathname).toBe('/app'); expect(loc.searchParams.get('shareLocal')).toMatch(/^[a-f0-9]{24}$/)
+    const id = loc.searchParams.get('shareLocal')!
+    const meta = JSON.parse(await w.store.get(`http://127.0.0.1:3090/__dsh-share/${id}/meta`)!.text())
+    expect(meta).toMatchObject({ title: 'T', text: 'hello', url: '', files: [{ name: 'a.txt', type: 'text/plain', size: 3 }] })
+    expect(await w.store.get(`http://127.0.0.1:3090/__dsh-share/${id}/file/0`)!.text()).toBe('abc')
+  })
+  it('redirects to /app?shareError=1 for an empty or oversized share, and stores nothing', async () => {
+    const w = shareWorker(10)
+    expect(new URL((await w.post(form({ title: '', text: '' })))!.headers.get('location')!).search).toBe('?shareError=1')
+    expect(new URL((await w.post(form({ files: new File(['x'.repeat(50)], 'big.bin') })))!.headers.get('location')!).search).toBe('?shareError=1')
+    expect(w.store.size).toBe(0)
+  })
+  it('leaves /app’s own same-origin fetch to /share (not a navigation) and other POSTs to the network', async () => {
+    const w = shareWorker()
+    expect(await w.post(form({ text: 'x' }), { mode: 'cors' })).toBeUndefined()
+    expect(await w.post(form({ text: 'x' }), { path: '/push/test' })).toBeUndefined()
+  })
+  it('drops stashed shares older than the TTL', async () => {
+    const w = shareWorker()
+    const old = 'a'.repeat(24)
+    w.store.set(`http://127.0.0.1:3090/__dsh-share/${old}/meta`, new Response(JSON.stringify({ at: Date.now() - 3600_000 })))
+    w.store.set(`http://127.0.0.1:3090/__dsh-share/${old}/file/0`, new Response('x'))
+    await w.post(form({ text: 'fresh' }))
+    expect([...w.store.keys()].some((k) => k.includes(old))).toBe(false)
+    expect(w.store.size).toBe(1)
   })
 })

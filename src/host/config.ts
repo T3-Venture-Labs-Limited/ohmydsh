@@ -3,7 +3,7 @@ export interface PwaConfig {
   /** Application name shown on the install prompt and launcher. */
   readonly name: string
   readonly shortName: string
-  /** Where the installed app opens. Always the normal DSH UI (`/` unless you deliberately pick another path inside the app). */
+  /** Where the installed app opens. Default `/app`: a launch from the home screen is cross-site, so the page there signs in first, then goes to the normal DSH UI. `/` is accepted but loses the sign-in on Android. */
   readonly startUrl: string
   /** Manifest colours (a manifest cannot follow the in-app theme; these default to the stock DSH manifest colours). */
   readonly themeColor: string
@@ -47,8 +47,8 @@ export function readConfig(raw: unknown): PwaConfig {
   const share = section('share')
   const push = section('push')
   // The phone page at /m no longer exists: a config left over from it falls back to the normal UI.
-  const requested = typeof cfg['startUrl'] === 'string' && PATH.test(cfg['startUrl']) ? cfg['startUrl'] : '/'
-  const start = requested === '/m' || requested.startsWith('/m/') ? '/' : requested
+  const requested = typeof cfg['startUrl'] === 'string' && PATH.test(cfg['startUrl']) ? cfg['startUrl'] : '/app'
+  const start = requested === '/m' || requested.startsWith('/m/') ? '/app' : requested
   const maxMiB = typeof share['maxMiB'] === 'number' && Number.isFinite(share['maxMiB']) ? Math.min(Math.max(share['maxMiB'], 1), 200) : 25
   return {
     name: text(cfg['name'], 'DeepSeek Harness'),

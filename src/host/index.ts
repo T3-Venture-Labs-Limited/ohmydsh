@@ -2,8 +2,10 @@
  * Host half of dsh-pwa: installs the normal DSH web UI as an app and sends Web Push notifications to phones.
  *
  *   GET  /manifest.webmanifest   public; replaces the stock manifest (same icons; start_url "/", standalone, share_target)
- *   GET  /sw.js                  public; service worker: public-file cache + push + notification click
- *   POST /share                  signed-in + same-origin; Android share-sheet target, answers 303 to /?share=<id>
+ *   GET  /app, /app.js           public, secret-free launch page: signs in via a same-origin fetch (the Strict cookie is not
+ *                                sent on the cross-site launcher navigation), then goes to / or shows a paste-link form
+ *   GET  /sw.js                  public; service worker: public-file cache + push + notification click + share intake
+ *   POST /share                  signed-in + same-origin; share target; 303 to /?share=<id>, or JSON {id} when asked
  *   GET  /share?id=<id>          signed-in; the stored share, read by the normal UI to pre-fill a draft
  *   GET  /push/key               signed-in; the VAPID public key
  *   POST /push/subscribe         signed-in + same-origin; store this device's PushSubscription
@@ -26,11 +28,12 @@ import { loadVapid, type VapidKeys } from './vapid.ts'
 import { SubscriptionError, SubscriptionStore, parseSubscription, redactEndpoint } from './subscriptions.ts'
 import { createPusher, type Pusher } from './push.ts'
 import { createNotifier } from './notifier.ts'
+import { APP_CSP, appPageHtml, appScriptSource } from './app-page.ts'
 
 export const name = 'dsh-pwa'
 export const inject = ['webServer', 'connection']
 
-const VERSION = '0.2.0'
+const VERSION = '0.2.1'
 const SHARE_TTL_MS = 7 * 24 * 3600 * 1000
 const MAX_JSON_BYTES = 8 * 1024
 
@@ -119,7 +122,7 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
     ctx.effect(() => ctx.webServer.register(r), `dsh-pwa: ${r.kind} ${r.path}`)
   }
 
-  const swSource = config.serviceWorker ? serviceWorkerSource(VERSION) : killSwitchSource()
+  const swSource = config.serviceWorker ? serviceWorkerSource(VERSION, { maxShareBytes: config.share.maxMiB * 1024 * 1024 }) : killSwitchSource()
 
   route({
     kind: 'exact',
@@ -133,6 +136,20 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
       })
     },
   })
+
+  // The launch page. Public on purpose: it must load before the browser has proven who it is, and contains no secret.
+  const appAsset = (path: string, type: string, body: () => string, extra: Record<string, string> = {}): void => route({
+    kind: 'exact',
+    path,
+    handler: (req, res) => {
+      if (!methods(req, res, ['GET', 'HEAD'])) return
+      send(res, 200, req.method === 'HEAD' ? '' : body(), { 'content-type': type, 'cache-control': 'no-store', ...extra })
+    },
+  })
+  const appHtml = appPageHtml()
+  const appJs = appScriptSource()
+  appAsset('/app', 'text/html; charset=utf-8', () => appHtml, { 'content-security-policy': APP_CSP, 'referrer-policy': 'no-referrer' })
+  appAsset('/app.js', 'text/javascript; charset=utf-8', () => appJs)
 
   route({
     kind: 'exact',
@@ -163,13 +180,15 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
         return
       }
       if (req.method !== 'POST') { send(res, 405, '', { allow: 'GET, POST' }); return }
-      // A share-sheet POST is a top-level navigation initiated by the browser, so the sign-in cookie is sent. The
-      // Origin check blocks a cross-site form from posting here.
+      // A raw share-sheet POST is cross-site and carries no Strict cookie (the service worker takes it first and /app
+      // re-posts it from a same-origin fetch). The Origin check still blocks a cross-site form from posting here.
       if (!sameOrigin(req)) { send(res, 403, 'cross-site request rejected', { 'content-type': 'text/plain; charset=utf-8' }); return }
       try {
         await mkdir(sharesDir, { recursive: true, mode: 0o700 })
         const filesDir = config.share.cwd !== '' ? join(config.share.cwd, '.dsh-shares') : undefined
         const record = await receiveShare(req, { dir: sharesDir, cwd: config.share.cwd, maxBytes: config.share.maxMiB * 1024 * 1024, ...(filesDir === undefined ? {} : { filesDir }) })
+        // A same-origin fetch from /app asks for JSON; the 303 stays for plain form posts.
+        if (/\bapplication\/json\b/i.test(String(req.headers['accept'] ?? ''))) { sendJson(res, 200, { ok: true, id: record.id }); return }
         // 303 turns the POST into a GET of the normal UI, so a reload does not resubmit the share.
         send(res, 303, '', { location: `/?share=${record.id}`, 'cache-control': 'no-store' })
       } catch (error) {

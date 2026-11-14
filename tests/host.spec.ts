@@ -12,19 +12,19 @@ import { ShareError, isShareId, receiveShare, safeName } from '../src/host/share
 describe('config', () => {
   it('defaults and clamps; never throws', () => {
     const c = readConfig(undefined)
-    expect(c.startUrl).toBe('/'); expect(c.share.maxMiB).toBe(25); expect(c.serviceWorker).toBe(true); expect(c.push.enabled).toBe(true); expect(c.push.allowInsecureEndpoints).toBe(false)
-    expect(readConfig({ startUrl: 'https://evil', themeColor: 'red', share: { maxMiB: 9999 }, push: { subject: 'nope' } })).toMatchObject({ startUrl: '/', themeColor: '#ffffff', share: { maxMiB: 200 }, push: { subject: 'mailto:dsh-pwa@localhost.invalid' } })
+    expect(c.startUrl).toBe('/app'); expect(c.share.maxMiB).toBe(25); expect(c.serviceWorker).toBe(true); expect(c.push.enabled).toBe(true); expect(c.push.allowInsecureEndpoints).toBe(false)
+    expect(readConfig({ startUrl: 'https://evil', themeColor: 'red', share: { maxMiB: 9999 }, push: { subject: 'nope' } })).toMatchObject({ startUrl: '/app', themeColor: '#ffffff', share: { maxMiB: 200 }, push: { subject: 'mailto:dsh-pwa@localhost.invalid' } })
     expect(readConfig('nonsense').name).toBe('DeepSeek Harness')
   })
   it('a leftover startUrl of the removed phone page falls back to the normal UI', () => {
-    expect(readConfig({ startUrl: '/m' }).startUrl).toBe('/'); expect(readConfig({ startUrl: '/m/x' }).startUrl).toBe('/')
+    expect(readConfig({ startUrl: '/m' }).startUrl).toBe('/app'); expect(readConfig({ startUrl: '/m/x' }).startUrl).toBe('/app'); expect(readConfig({ startUrl: '/' }).startUrl).toBe('/')
   })
 })
 
 describe('manifest', () => {
   const m = buildManifest(readConfig({})) as Record<string, any> // eslint-disable-line
   it('is installable: name, start_url in scope, standalone, 192 + 512 + maskable icons', () => {
-    expect(m.name).toBeTruthy(); expect(m.display).toBe('standalone'); expect(m.scope).toBe('/'); expect(m.start_url).toBe('/')
+    expect(m.name).toBeTruthy(); expect(m.display).toBe('standalone'); expect(m.scope).toBe('/'); expect(m.id).toBe('/'); expect(m.start_url).toBe('/app')
     const sizes = m.icons.map((i: { sizes: string; purpose: string }) => `${i.sizes}:${i.purpose}`)
     expect(sizes).toEqual(['192x192:any', '512x512:any', '512x512:maskable'])
   })
@@ -65,7 +65,7 @@ describe('route table and gates', () => {
 
   it('registers exactly the documented routes and nothing under /m', () => {
     const { routes } = boot()
-    expect([...routes.keys()].sort()).toEqual(['exact /manifest.webmanifest', 'exact /push/key', 'exact /push/subscribe', 'exact /push/test', 'exact /push/unsubscribe', 'exact /share', 'exact /sw.js'])
+    expect([...routes.keys()].sort()).toEqual(['exact /app', 'exact /app.js', 'exact /manifest.webmanifest', 'exact /push/key', 'exact /push/subscribe', 'exact /push/test', 'exact /push/unsubscribe', 'exact /share', 'exact /sw.js'])
     expect([...routes.keys()].some((k) => /\/m(\/|$)/.test(k))).toBe(false)
     expect([...boot({ push: { enabled: false } }).routes.keys()].some((k) => k.includes('/push'))).toBe(false)
   })
@@ -78,7 +78,38 @@ describe('route table and gates', () => {
       expect((await run(r.handler, { method: 'POST', url: path })).status).toBe(405)
     }
     const manifest = JSON.parse((await run(routes.get('exact /manifest.webmanifest')!.handler, { method: 'GET', url: '/manifest.webmanifest' })).body)
-    expect(manifest.start_url).toBe('/'); expect(manifest.display).toBe('standalone'); expect(manifest.scope).toBe('/')
+    expect(manifest.start_url).toBe('/app'); expect(manifest.display).toBe('standalone'); expect(manifest.scope).toBe('/')
+  })
+  it('/app and /app.js are public (even with sign-in refused), no-store, nosniff, typed, secret-free', async () => {
+    for (const status of [401, 403] as const) {
+      const { routes } = boot({}, status)
+      for (const [path, type] of [['/app', 'text/html; charset=utf-8'], ['/app.js', 'text/javascript; charset=utf-8']] as const) {
+        const r = routes.get(`exact ${path}`)!
+        const get = await run(r.handler, { method: 'GET', url: path })
+        expect(get.status, path).toBe(200)
+        expect(get.headers).toMatchObject({ 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
+        expect(get.body).not.toMatch(/token=[A-Za-z0-9_-]{8,}|publicKey|endpoint/)
+        expect((await run(r.handler, { method: 'HEAD', url: path })).body).toBe('')
+        expect((await run(r.handler, { method: 'POST', url: path })).status).toBe(405)
+      }
+    }
+    const html = (await run(boot({}).routes.get('exact /app')!.handler, { method: 'GET', url: '/app' })).body
+    expect(html).toContain('Paste your DSH login link')
+  })
+  it('POST /share answers JSON {id} for Accept: application/json and 303 otherwise, behind the same gates', async () => {
+    const { routes } = boot({})
+    const body = '--b\r\nContent-Disposition: form-data; name="text"\r\n\r\nhi\r\n--b--\r\n'
+    const post = async (accept?: string) => {
+      const req = Object.assign(Readable.from([Buffer.from(body)]), { method: 'POST', url: '/share', headers: { host: '127.0.0.1:3090', origin: 'http://127.0.0.1:3090', 'content-type': 'multipart/form-data; boundary=b', 'content-length': String(body.length), ...(accept === undefined ? {} : { accept }) } })
+      const out = { status: 0, headers: {} as Record<string, string>, body: '' }
+      const res = { writeHead: (st: number, h: Record<string, string>) => { out.status = st; out.headers = h ?? {} }, end: (b?: string | Buffer) => { out.body = b === undefined ? '' : String(b) } }
+      await routes.get('exact /share')!.handler(req, res)
+      return out
+    }
+    const json = await post('application/json')
+    expect(json.status).toBe(200); expect(JSON.parse(json.body)).toMatchObject({ ok: true, id: expect.stringMatching(/^[a-f0-9]{24}$/) })
+    const redirect = await post()
+    expect(redirect.status).toBe(303); expect(redirect.headers['location']).toMatch(/^\/\?share=[a-f0-9]{24}$/)
   })
   it('sw.js allows root scope; serviceWorker:false serves the kill switch and injects no registration', async () => {
     const on = boot({}); const off = boot({ serviceWorker: false })

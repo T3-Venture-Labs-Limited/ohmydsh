@@ -12,14 +12,20 @@
  *  - Caches are versioned by the plugin; `activate` deletes every older `dsh-pwa-*` cache.
  *  - `push`: the payload is `{ v, kind, title, body, sessionId }` and nothing else. A notification is shown unless a
  *    visible, focused window already shows that session (asked over a MessageChannel; the client plugin answers).
- *    `notificationclick` focuses an existing window and tells it to open the session, or opens `/?openSession=<id>`.
+ *    `notificationclick` focuses an existing window and tells it to open the session, or opens `/app?openSession=<id>`
+ *    (never `/` directly: that launch is cross-site and would not carry the Strict sign-in cookie).
+ *  - `POST /share` is answered by the worker (see the share target section), which stashes it and redirects to /app.
  */
-export function serviceWorkerSource(version: string): string {
+export function serviceWorkerSource(version: string, options: { maxShareBytes?: number } = {}): string {
+  const maxShareBytes = Math.max(1, Math.floor(options.maxShareBytes ?? 25 * 1024 * 1024))
   return `'use strict'
 // dsh-pwa service worker ${JSON.stringify(version).slice(1, -1)}
 const VERSION = ${JSON.stringify(version)}
 const CACHE = 'dsh-pwa-' + VERSION
 const MAX_ENTRIES = 160
+const SHARE_CACHE = 'dsh-share'
+const SHARE_TTL_MS = 10 * 60 * 1000
+const MAX_SHARE_BYTES = ${maxShareBytes}
 
 const OFFLINE_HTML = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title>'
   + '<body style="font:16px system-ui;margin:0;display:grid;place-items:center;min-height:100vh;text-align:center;padding:24px">'
@@ -137,12 +143,66 @@ self.addEventListener('notificationclick', (event) => {
       if (sessionId) target.postMessage({ type: 'dsh-pwa:open-session', sessionId })
       return
     }
-    await self.clients.openWindow(sessionId ? '/?openSession=' + encodeURIComponent(sessionId) : '/')
+    // Always through /app: a launch from a notification is cross-site, so the Strict sign-in cookie is withheld from a direct "/" request.
+    await self.clients.openWindow(sessionId ? '/app?openSession=' + encodeURIComponent(sessionId) : '/app')
   })())
 })
 
+// ── Share target ──
+// The share sheet POSTs to /share as a cross-site navigation, so the Strict sign-in cookie is not sent and the server
+// would answer 401. The worker takes the POST instead, stashes it in Cache Storage under a random id (short TTL) and
+// redirects to /app?shareLocal=<id>; /app then posts it to /share from a same-origin fetch, where the cookie is sent.
+function randomId() {
+  const bytes = new Uint8Array(12)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function pruneShares(cache) {
+  const now = Date.now()
+  for (const key of await cache.keys()) {
+    if (!key.url.endsWith('/meta')) continue
+    const hit = await cache.match(key)
+    let at = 0
+    try { at = (await hit.json()).at || 0 } catch (e) { at = 0 }
+    if (now - at > SHARE_TTL_MS) {
+      const prefix = key.url.slice(0, -'meta'.length)
+      for (const other of await cache.keys()) if (other.url.startsWith(prefix)) await cache.delete(other)
+    }
+  }
+}
+
+async function stashShare(request) {
+  const redirect = (query) => Response.redirect(self.location.origin + '/app?' + query, 303)
+  try {
+    const declared = Number(request.headers.get('content-length') || '0')
+    if (declared > MAX_SHARE_BYTES) return redirect('shareError=1')
+    const form = await request.formData()
+    const field = (name) => { const v = form.get(name); return typeof v === 'string' ? v.slice(0, 20000) : '' }
+    const files = form.getAll('files').filter((v) => typeof v !== 'string').slice(0, 12)
+    const total = files.reduce((n, f) => n + f.size, 0)
+    const meta = { at: Date.now(), title: field('title'), text: field('text'), url: field('url'), files: files.map((f) => ({ name: f.name, type: f.type, size: f.size })) }
+    if (total > MAX_SHARE_BYTES || (meta.title === '' && meta.text === '' && meta.url === '' && files.length === 0)) return redirect('shareError=1')
+    const cache = await caches.open(SHARE_CACHE)
+    await pruneShares(cache)
+    const id = randomId()
+    const base = self.location.origin + '/__dsh-share/' + id + '/'
+    for (const [index, file] of files.entries()) await cache.put(base + 'file/' + index, new Response(file, { headers: { 'content-type': file.type || 'application/octet-stream' } }))
+    await cache.put(base + 'meta', new Response(JSON.stringify(meta), { headers: { 'content-type': 'application/json' } }))
+    return redirect('shareLocal=' + id)
+  } catch (e) {
+    return redirect('shareError=1')
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request
+  if (request.method === 'POST') {
+    const target = new URL(request.url)
+    // Only the share sheet's navigation: /app's own same-origin fetch to /share (JSON) must reach the server.
+    if (request.mode === 'navigate' && target.origin === self.location.origin && target.pathname === '/share') event.respondWith(stashShare(request))
+    return
+  }
   if (request.method !== 'GET') return
   const url = new URL(request.url)
   if (request.mode === 'navigate') {
@@ -155,7 +215,7 @@ self.addEventListener('fetch', (event) => {
 })
 
 // Test hooks (no effect in a browser): expose the policy for unit tests.
-self.__dshPwa = { isCacheablePath, isStorable, parsePayload, CACHE, VERSION }
+self.__dshPwa = { isCacheablePath, isStorable, parsePayload, stashShare, CACHE, VERSION }
 `
 }
 

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "__TITLE__",
+    "description": "Template plugin: adds a settings page and a sidebar panel built from the dsh-kit controls. Replace this text with what your plugin does and where to find it.",
+    "detail": "docs/DETAIL.md"
+  }
+}

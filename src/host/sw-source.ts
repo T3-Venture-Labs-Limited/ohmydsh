@@ -4,12 +4,15 @@
  *
  * Hard rules the worker enforces:
  *  - It only answers GET requests for static, content-addressed, public files: hashed shell assets, `?rev=` plugin
- *    bundles, `?v=` /m assets and the install icons. Everything else is left to the browser (`respondWith` is never
- *    called), so `/api`, the event streams, `/share`, index/HTML documents and every plugin route are untouched.
+ *    bundles and the install icons. Everything else is left to the browser (`respondWith` is never
+ *    called), so `/api`, the event streams, `/share`, `/push`, index/HTML documents and every plugin route are untouched.
  *  - It never stores a response that carries `Set-Cookie`, `Cache-Control: no-store|private`, or `Authorization`
  *    request credentials, and only stores 200 same-origin basic responses.
  *  - Navigations are network-first and never cached; when offline they get a built-in offline page.
  *  - Caches are versioned by the plugin; `activate` deletes every older `dsh-pwa-*` cache.
+ *  - `push`: the payload is `{ v, kind, title, body, sessionId }` and nothing else. A notification is shown unless a
+ *    visible, focused window already shows that session (asked over a MessageChannel; the client plugin answers).
+ *    `notificationclick` focuses an existing window and tells it to open the session, or opens `/?openSession=<id>`.
  */
 export function serviceWorkerSource(version: string): string {
   return `'use strict'
@@ -29,7 +32,6 @@ function isCacheablePath(url) {
   const p = url.pathname
   if (/^\\/assets\\/[^/]+-[A-Za-z0-9_-]{6,}\\.(?:js|css)$/.test(p)) return true       // hashed SPA shell files
   if (p.startsWith('/plugins/') && !p.startsWith('/plugins/events') && url.searchParams.has('rev') && /\\.js(?:$|\\?)|\\/\\?\\?/.test(p + url.search)) return true // rev-pinned bundles and combos
-  if (/^\\/m\\/[A-Za-z0-9_.-]+\\.(?:js|css)$/.test(p) && url.searchParams.has('v')) return true // /m assets
   if (/^\\/(?:icon-192|icon-512|icon-maskable-512|apple-touch-icon)\\.png$/.test(p)) return true
   return false
 }
@@ -71,6 +73,74 @@ self.addEventListener('activate', (event) => {
   })())
 })
 
+// ── Web Push ──
+const KINDS = ['approval', 'question', 'plan', 'reply', 'test']
+function clean(value, max) { return typeof value === 'string' ? value.slice(0, max) : '' }
+
+/** Only the five documented fields are read; anything else in a payload is ignored. */
+function parsePayload(data) {
+  let raw
+  try { raw = data ? data.json() : null } catch (e) { raw = null }
+  if (!raw || typeof raw !== 'object') return { kind: 'reply', title: 'DSH', body: '', sessionId: '' }
+  return {
+    kind: KINDS.includes(raw.kind) ? raw.kind : 'reply',
+    title: clean(raw.title, 120) || 'DSH',
+    body: clean(raw.body, 240),
+    sessionId: /^[A-Za-z0-9_-]{1,80}$/.test(clean(raw.sessionId, 80)) ? raw.sessionId : '',
+  }
+}
+
+/** Ask one window which session it shows. Resolves to '' when it does not answer in time. */
+function askSession(client) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel()
+    const timer = setTimeout(() => resolve(''), 500)
+    channel.port1.onmessage = (event) => { clearTimeout(timer); resolve(event.data && typeof event.data.sessionId === 'string' ? event.data.sessionId : '') }
+    try { client.postMessage({ type: 'dsh-pwa:current-session' }, [channel.port2]) } catch (e) { clearTimeout(timer); resolve('') }
+  })
+}
+
+async function sessionIsOnScreen(sessionId) {
+  if (!sessionId) return false
+  const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+  for (const client of windows) {
+    if (client.visibilityState !== 'visible' || !client.focused) continue
+    if (await askSession(client) === sessionId) return true
+  }
+  return false
+}
+
+self.addEventListener('push', (event) => {
+  const note = parsePayload(event.data)
+  event.waitUntil((async () => {
+    if (note.kind !== 'test' && await sessionIsOnScreen(note.sessionId)) return
+    await self.registration.showNotification(note.title, {
+      body: note.body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      // One notification per session: a newer one replaces the older one instead of stacking.
+      tag: note.sessionId || 'dsh-pwa-' + note.kind,
+      renotify: true,
+      data: { sessionId: note.sessionId, kind: note.kind },
+    })
+  })())
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const sessionId = event.notification.data && event.notification.data.sessionId || ''
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    const target = windows.find((c) => c.focused) || windows.find((c) => c.visibilityState === 'visible') || windows[0]
+    if (target) {
+      try { await target.focus() } catch (e) { /* not allowed: still tell it */ }
+      if (sessionId) target.postMessage({ type: 'dsh-pwa:open-session', sessionId })
+      return
+    }
+    await self.clients.openWindow(sessionId ? '/?openSession=' + encodeURIComponent(sessionId) : '/')
+  })())
+})
+
 self.addEventListener('fetch', (event) => {
   const request = event.request
   if (request.method !== 'GET') return
@@ -85,7 +155,7 @@ self.addEventListener('fetch', (event) => {
 })
 
 // Test hooks (no effect in a browser): expose the policy for unit tests.
-self.__dshPwa = { isCacheablePath, isStorable, CACHE, VERSION }
+self.__dshPwa = { isCacheablePath, isStorable, parsePayload, CACHE, VERSION }
 `
 }
 

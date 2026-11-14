@@ -8,23 +8,29 @@ import { readConfig } from '../src/host/config.ts'
 import { buildManifest } from '../src/host/manifest.ts'
 import { apply, sameOrigin } from '../src/host/index.ts'
 import { ShareError, isShareId, receiveShare, safeName } from '../src/host/share.ts'
-import { stylesheetHrefs, renderMobileIndex } from '../src/host/pages.ts'
 
 describe('config', () => {
   it('defaults and clamps; never throws', () => {
     const c = readConfig(undefined)
-    expect(c.startUrl).toBe('/m'); expect(c.share.mode).toBe('draft'); expect(c.share.maxMiB).toBe(25); expect(c.serviceWorker).toBe(true)
-    expect(readConfig({ startUrl: 'https://evil', themeColor: 'red', share: { maxMiB: 9999, mode: 'session' } })).toMatchObject({ startUrl: '/m', themeColor: '#ffffff', share: { maxMiB: 200, mode: 'session' } })
+    expect(c.startUrl).toBe('/'); expect(c.share.maxMiB).toBe(25); expect(c.serviceWorker).toBe(true); expect(c.push.enabled).toBe(true); expect(c.push.allowInsecureEndpoints).toBe(false)
+    expect(readConfig({ startUrl: 'https://evil', themeColor: 'red', share: { maxMiB: 9999 }, push: { subject: 'nope' } })).toMatchObject({ startUrl: '/', themeColor: '#ffffff', share: { maxMiB: 200 }, push: { subject: 'mailto:dsh-pwa@localhost.invalid' } })
     expect(readConfig('nonsense').name).toBe('DeepSeek Harness')
+  })
+  it('a leftover startUrl of the removed phone page falls back to the normal UI', () => {
+    expect(readConfig({ startUrl: '/m' }).startUrl).toBe('/'); expect(readConfig({ startUrl: '/m/x' }).startUrl).toBe('/')
   })
 })
 
 describe('manifest', () => {
   const m = buildManifest(readConfig({})) as Record<string, any> // eslint-disable-line
   it('is installable: name, start_url in scope, standalone, 192 + 512 + maskable icons', () => {
-    expect(m.name).toBeTruthy(); expect(m.display).toBe('standalone'); expect(m.scope).toBe('/'); expect(m.start_url.startsWith('/')).toBe(true)
+    expect(m.name).toBeTruthy(); expect(m.display).toBe('standalone'); expect(m.scope).toBe('/'); expect(m.start_url).toBe('/')
     const sizes = m.icons.map((i: { sizes: string; purpose: string }) => `${i.sizes}:${i.purpose}`)
     expect(sizes).toEqual(['192x192:any', '512x512:any', '512x512:maskable'])
+  })
+  it('has no shortcut or URL pointing at /m', () => {
+    expect(m.shortcuts).toBeUndefined()
+    expect(JSON.stringify(m)).not.toMatch(/"\/m[/"]/)
   })
   it('declares a POST multipart share_target for text, url and files, and omits it when disabled', () => {
     expect(m.share_target).toMatchObject({ action: '/share', method: 'POST', enctype: 'multipart/form-data' })
@@ -34,6 +40,9 @@ describe('manifest', () => {
 })
 
 describe('route table and gates', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pwa-home-'))
+  process.env['DSH_HOME'] = home
+  afterAll(() => { rmSync(home, { recursive: true, force: true }) })
   function boot(config: unknown = {}, reject: 401 | 403 | undefined = undefined) {
     const routes = new Map<string, { kind: string; handler: (req: any, res: any) => Promise<void> | void }>() // eslint-disable-line
     const injected: unknown[] = []
@@ -54,9 +63,11 @@ describe('route table and gates', () => {
     return out
   }
 
-  it('registers exactly the documented routes (exact beats the SPA fallback in the webserver match order)', () => {
+  it('registers exactly the documented routes and nothing under /m', () => {
     const { routes } = boot()
-    expect([...routes.keys()].sort()).toEqual(['exact /manifest.webmanifest', 'exact /share', 'exact /sw.js', 'prefix /m'])
+    expect([...routes.keys()].sort()).toEqual(['exact /manifest.webmanifest', 'exact /push/key', 'exact /push/subscribe', 'exact /push/test', 'exact /push/unsubscribe', 'exact /share', 'exact /sw.js'])
+    expect([...routes.keys()].some((k) => /\/m(\/|$)/.test(k))).toBe(false)
+    expect([...boot({ push: { enabled: false } }).routes.keys()].some((k) => k.includes('/push'))).toBe(false)
   })
   it('manifest and sw.js are public GET/HEAD, cacheless, and reject other methods', async () => {
     const { routes } = boot({}, 401)
@@ -66,7 +77,8 @@ describe('route table and gates', () => {
       expect(get.status, path).toBe(200); expect(get.headers['cache-control']).toBe('no-cache')
       expect((await run(r.handler, { method: 'POST', url: path })).status).toBe(405)
     }
-    expect(JSON.parse((await run(routes.get('exact /manifest.webmanifest')!.handler, { method: 'GET', url: '/manifest.webmanifest' })).body).start_url).toBe('/m')
+    const manifest = JSON.parse((await run(routes.get('exact /manifest.webmanifest')!.handler, { method: 'GET', url: '/manifest.webmanifest' })).body)
+    expect(manifest.start_url).toBe('/'); expect(manifest.display).toBe('standalone'); expect(manifest.scope).toBe('/')
   })
   it('sw.js allows root scope; serviceWorker:false serves the kill switch and injects no registration', async () => {
     const on = boot({}); const off = boot({ serviceWorker: false })
@@ -77,25 +89,27 @@ describe('route table and gates', () => {
     expect(on.injected).toHaveLength(1); expect(off.injected).toHaveLength(0)
     expect((on.injected[0] as { text: string }).text).toContain('navigator.serviceWorker.register("/sw.js"')
   })
-  it('/m and /share fail closed with 401/403 and are never public', async () => {
+  it('/share and every /push route fail closed with 401/403 and are never public', async () => {
     for (const status of [401, 403] as const) {
       const { routes } = boot({}, status)
-      expect((await run(routes.get('prefix /m')!.handler, { method: 'GET', url: '/m' })).status).toBe(status)
       expect((await run(routes.get('exact /share')!.handler, { method: 'POST', url: '/share', headers: { host: 'h', 'content-type': 'multipart/form-data; boundary=x' } })).status).toBe(status)
       expect((await run(routes.get('exact /share')!.handler, { method: 'GET', url: '/share?id=aaaaaaaaaaaaaaaaaaaaaaaa' })).status).toBe(status)
+      expect((await run(routes.get('exact /push/key')!.handler, { method: 'GET', url: '/push/key' })).status).toBe(status)
+      for (const path of ['/push/subscribe', '/push/unsubscribe', '/push/test']) {
+        const r = await run(routes.get(`exact ${path}`)!.handler, { method: 'POST', url: path, headers: { host: '127.0.0.1:3090', origin: 'http://127.0.0.1:3090', 'content-type': 'application/json' } })
+        expect(r.status, `${path} ${status}`).toBe(status)
+        expect(r.body).not.toMatch(/endpoint|publicKey/)
+      }
     }
   })
-  it('/m serves only its two assets; unknown files 404; only GET/HEAD', async () => {
+  it('push mutations refuse cross-origin requests even when signed in', async () => {
     const { routes } = boot({})
-    const h = routes.get('prefix /m')!.handler
-    expect((await run(h, { method: 'GET', url: '/m/../../etc/passwd' })).status).toBe(404)
-    expect((await run(h, { method: 'GET', url: '/m/secret.txt' })).status).toBe(404)
-    expect((await run(h, { method: 'POST', url: '/m' })).status).toBe(405)
-    const js = await run(h, { method: 'GET', url: '/m/app.js?v=abc' })
-    expect(js.status).toBe(200); expect(js.headers['cache-control']).toBe('public, max-age=31536000, immutable'); expect(js.headers['content-type']).toContain('javascript')
-    expect((await run(h, { method: 'GET', url: '/m/app.js' })).headers['cache-control']).toBe('no-cache')
-    const page = await run(h, { method: 'GET', url: '/m' })
-    expect(page.status).toBe(200); expect(page.headers['cache-control']).toBe('no-store'); expect(page.body).toContain('/m/app.js?v='); expect(page.body.indexOf('/m/events.js?v=')).toBeGreaterThan(-1); expect(page.body.indexOf('/m/events.js')).toBeLessThan(page.body.indexOf('/m/app.js'))
+    for (const path of ['/push/subscribe', '/push/unsubscribe', '/push/test']) {
+      for (const headers of [{ origin: 'https://evil.example' }, { 'sec-fetch-site': 'cross-site' }]) {
+        const r = await run(routes.get(`exact ${path}`)!.handler, { method: 'POST', url: path, headers: { host: '127.0.0.1:3090', 'content-type': 'application/json', ...headers } })
+        expect(r.status, `${path} ${JSON.stringify(headers)}`).toBe(403)
+      }
+    }
   })
   it('POST /share rejects cross-site requests before reading the body', async () => {
     const { routes } = boot({})
@@ -149,14 +163,3 @@ describe('share receiver', () => {
   })
 })
 
-describe('/m page helpers', () => {
-  it('keeps only same-origin stylesheet hrefs under /assets', () => {
-    const html = '<link rel="stylesheet" href="./assets/index-CSAdOBx6.css"><link rel="stylesheet" href="https://x.test/a.css"><link rel="stylesheet" href="/assets/vendor-DV2921Zo.css"><link rel="stylesheet" href="/other/x.css">'
-    expect(stylesheetHrefs(html)).toEqual(['/assets/index-CSAdOBx6.css', '/assets/vendor-DV2921Zo.css'])
-  })
-  it('renders a document with viewport, manifest link and versioned assets, and escapes the name', () => {
-    const html = renderMobileIndex({ stylesheets: ['/assets/a-123456.css'], appRev: 'r1', cssRev: 'r2', name: 'A "quoted" <name>' })
-    expect(html).toContain('width=device-width'); expect(html).toContain('rel="manifest"'); expect(html).toContain('/m/app.js?v=r1'); expect(html).toContain('&quot;quoted&quot; &lt;name&gt;')
-    expect(html).not.toMatch(/token|cookie/i)
-  })
-})

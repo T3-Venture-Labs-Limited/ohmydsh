@@ -4,7 +4,7 @@ import { Readable } from 'node:stream'
 import { basename, dirname, join } from 'node:path'
 import type { IncomingMessage } from 'node:http'
 
-/** What the phone shared, as stored for the /m page to turn into a session. */
+/** What the phone shared, as stored for the UI to turn into a composer draft. */
 export interface ShareRecord {
   readonly id: string
   readonly at: number
@@ -13,7 +13,7 @@ export interface ShareRecord {
   readonly url: string
   /** Absolute paths of saved files, inside the share directory. */
   readonly files: readonly { readonly name: string; readonly path: string; readonly size: number; readonly type: string }[]
-  /** Directory the new session should use as its cwd. */
+  /** Workspace directory the shared files were saved under (empty = next to the record). */
   readonly cwd: string
 }
 

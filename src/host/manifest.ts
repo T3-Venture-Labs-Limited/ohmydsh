@@ -2,14 +2,15 @@ import type { PwaConfig } from './config.ts'
 
 /**
  * Web app manifest, served at `/manifest.webmanifest` instead of the stock one (same icons, so the install icon stays
- * the DSH brand mark). `scope: "/"` keeps the full DSH UI and `/m` inside the installed app.
+ * the DSH brand mark). The installed app is the normal DSH UI: `start_url` and `scope` are `/`, so it opens full-screen
+ * on the same origin and shares the browser's HttpOnly sign-in cookie.
  */
 export function buildManifest(config: PwaConfig): Record<string, unknown> {
   const manifest: Record<string, unknown> = {
     id: '/',
     name: config.name,
     short_name: config.shortName,
-    description: 'DeepSeek Harness: read and reply to sessions and approve tool calls from your phone.',
+    description: 'DeepSeek Harness as an app, with notifications when a session needs you or a reply is ready.',
     start_url: config.startUrl,
     scope: '/',
     display: 'standalone',
@@ -20,10 +21,6 @@ export function buildManifest(config: PwaConfig): Record<string, unknown> {
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
       { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-    ],
-    shortcuts: [
-      { name: 'Sessions and approvals', short_name: 'Phone view', url: '/m', icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }] },
-      { name: 'Full DSH', short_name: 'DSH', url: '/', icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }] },
     ],
   }
   if (config.share.enabled) {

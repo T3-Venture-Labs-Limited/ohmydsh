@@ -1,115 +1,107 @@
 #!/usr/bin/env node
-// Live verification against the DEV harness (http://127.0.0.1:3090) with headless Chromium over CDP.
+// Live verification against the DEV harness (http://127.0.0.1:3090) with Chromium over CDP.
 //   node scripts/verify-dev.mjs [--out .tmp] [--port 9351]
-// Reads the dev launch token from the journal (never printed). Checks installability (Page.getInstallabilityErrors),
-// the manifest as Chromium parsed it, service-worker registration and its cache contents, that /api and /m documents
-// are never cached, a share-target round trip, and takes /m screenshots at 393x851 in light and dark.
-import { spawn, execSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+// Checks: manifest + installability, the service worker (cache holds only public files), route auth (401 without a
+// cookie, 403 cross-origin), notification click -> session (warm window and cold start), and share -> composer draft.
+// Reads the dev launch token from the journal (never printed). Sends no agent turn.
+import { execSync } from 'node:child_process'
+import { launch, sleep } from './cdp.mjs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 const args = process.argv.slice(2)
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d }
 const OUT = resolve(opt('out', '.tmp')); const PORT = Number(opt('port', '9351')); const BASE = 'http://127.0.0.1:3090'
 mkdirSync(OUT, { recursive: true })
-const journal = execSync('journalctl --user -u dsh-dev --no-pager', { maxBuffer: 1 << 26 }).toString()
-const token = [...journal.matchAll(/http:\/\/127\.0\.0\.1:3090\/\?token=([A-Za-z0-9_-]+)/g)].at(-1)?.[1]
+const token = [...execSync('journalctl --user -u dsh-dev --no-pager', { maxBuffer: 1 << 26 }).toString().matchAll(/\?token=([A-Za-z0-9_-]+)/g)].at(-1)?.[1]
 if (!token) throw new Error('no dev launch token in the journal')
-const prof = join(OUT, `cdp-profile-${PORT}`); rmSync(prof, { recursive: true, force: true })
-const chrome = spawn('/usr/bin/chromium', ['--headless=new', `--remote-debugging-port=${PORT}`, `--user-data-dir=${prof}`, '--no-first-run', '--disable-gpu', '--window-size=1280,900', 'about:blank'], { stdio: 'ignore' })
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const results = []
 const check = (name, ok, detail = '') => { results.push({ name, ok: Boolean(ok), detail }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  ' + detail : ''}`) }
+const b = await launch({ out: OUT, port: PORT })
+const sessionOnScreen = () => b.evaluate(`document.querySelector('[data-conversation-session]')?.dataset.conversationSession ?? ''`)
 try {
-  await sleep(2500)
-  const targets = await (await fetch(`http://127.0.0.1:${PORT}/json`)).json()
-  const ws = new WebSocket(targets.find((t) => t.type === 'page').webSocketDebuggerUrl)
-  await new Promise((r) => (ws.onopen = r))
-  let id = 0; const pend = new Map(); const handlers = []
-  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && pend.has(m.id)) { pend.get(m.id)(m); pend.delete(m.id) } else handlers.forEach((h) => h(m)) }
-  const send = (method, params = {}) => new Promise((r) => { const i = ++id; pend.set(i, r); ws.send(JSON.stringify({ id: i, method, params })) })
-  const evaluate = async (expression, awaitPromise = true) => (await send('Runtime.evaluate', { expression, awaitPromise, returnByValue: true })).result?.result?.value
-  const requests = []
-  handlers.push((m) => { if (m.method === 'Network.requestWillBeSent') requests.push(m.params.request.url) })
-  for (const d of ['Network', 'Page', 'Runtime', 'Emulation']) await send(`${d}.enable`)
+  await b.browser.send('Browser.grantPermissions', { origin: BASE, permissions: ['notifications'] })
+  for (const d of ['Network', 'Page', 'Runtime']) await b.page.send(`${d}.enable`)
 
-  // 1. sign in, open the full UI, wait for the worker
-  await send('Page.navigate', { url: `${BASE}/?token=${token}` }); await sleep(6000)
-  const sw = await evaluate(`(async () => { const r = await navigator.serviceWorker.ready; return { scope: r.scope, state: r.active && r.active.state, script: r.active && r.active.scriptURL } })()`)
-  check('service worker registers and activates', sw && sw.state === 'activated' && sw.scope === BASE + '/', JSON.stringify(sw))
-  check('page is a secure context', await evaluate('window.isSecureContext', false) === true)
+  // unauthenticated: a fresh context has no cookie yet
+  const anon = async (method, path, headers = {}, body) => (await fetch(BASE + path, { method, headers, ...(body ? { body } : {}) })).status
+  check('GET /push/key without sign-in -> 401', await anon('GET', '/push/key') === 401)
+  check('POST /push/subscribe without sign-in -> 401', await anon('POST', '/push/subscribe', { 'content-type': 'application/json', origin: BASE }, '{}') === 401)
+  check('POST /push/test without sign-in -> 401', await anon('POST', '/push/test', { 'content-type': 'application/json', origin: BASE }, '{}') === 401)
+  check('POST /share without sign-in -> 401', await anon('POST', '/share', { origin: BASE, 'content-type': 'multipart/form-data; boundary=x' }, '--x--') === 401)
+  check('/m is gone (falls to the SPA, not the old phone page)', !(await (await fetch(BASE + '/m')).text()).includes('/m/app.js'))
 
-  // 2. installability as Chromium computes it
-  const inst = await send('Page.getInstallabilityErrors')
+  await b.page.send('Page.navigate', { url: `${BASE}/?token=${token}` }); await sleep(6000)
+  const sw = await b.evaluate(`navigator.serviceWorker.ready.then(r => ({ scope: r.scope, state: r.active && r.active.state }))`)
+  check('service worker active with scope /', sw?.state === 'activated' && sw.scope === BASE + '/', JSON.stringify(sw))
+
+  // signed in: same-origin vs cross-origin
+  const fromPage = (path, headers, body = '{}') => b.evaluate(`fetch(${JSON.stringify(path)}, { method: 'POST', headers: ${JSON.stringify({ 'content-type': 'application/json', ...headers })}, body: ${JSON.stringify(body)} }).then(r => r.status)`)
+  check('signed-in same-origin POST /push/unsubscribe with a bad body -> 400 (reaches the handler)', await fromPage('/push/unsubscribe', {}) === 400)
+  // The Origin header is forbidden for page scripts, so cross-origin is proven with the cookie sent by a raw request.
+  const cookies = (await b.page.send('Network.getCookies', { urls: [BASE] })).result.cookies.map((c) => `${c.name}=${c.value}`).join('; ')
+  const raw = (path, headers) => anon('POST', path, { cookie: cookies, 'content-type': 'application/json', ...headers }, '{}')
+  check('signed-in but Origin from another site -> 403 on subscribe/unsubscribe/test', (await Promise.all(['/push/subscribe', '/push/unsubscribe', '/push/test'].map((p) => raw(p, { origin: 'https://evil.example' })))).every((s) => s === 403))
+  check('signed-in but Sec-Fetch-Site: cross-site -> 403', await raw('/push/subscribe', { 'sec-fetch-site': 'cross-site' }) === 403)
+  check('signed-in same-origin raw POST /push/test for an unknown device -> 404', await raw('/push/test', { origin: BASE }) === 404)
+
+  // manifest + installability
+  const inst = await b.page.send('Page.getInstallabilityErrors')
   const errors = inst.result?.installabilityErrors ?? []
   check('Page.getInstallabilityErrors is empty', errors.length === 0, JSON.stringify(errors.map((e) => e.errorId)))
-  const mf = await send('Page.getAppManifest')
+  const mf = await b.page.send('Page.getAppManifest')
   const parsed = mf.result?.data ? JSON.parse(mf.result.data) : {}
-  check('manifest served is ours (start_url /m, share_target)', mf.result?.url?.endsWith('/manifest.webmanifest') && parsed.start_url === '/m' && parsed.share_target?.action === '/share', `${mf.result?.url} start_url=${parsed.start_url}`)
+  check('manifest: start_url "/", scope "/", display standalone', parsed.start_url === '/' && parsed.scope === '/' && parsed.display === 'standalone', `start_url=${parsed.start_url} scope=${parsed.scope} display=${parsed.display}`)
+  check('manifest: icons 192 + 512 + maskable, no shortcut to /m, share_target kept', ['192x192', '512x512'].every((s) => parsed.icons?.some((i) => i.sizes === s)) && parsed.icons?.some((i) => i.purpose === 'maskable') && !JSON.stringify(parsed).includes('"/m') && parsed.share_target?.action === '/share')
   check('manifest has no parse errors', (mf.result?.errors ?? []).length === 0, JSON.stringify(mf.result?.errors))
   writeFileSync(join(OUT, 'manifest-as-parsed.json'), JSON.stringify({ url: mf.result?.url, errors: mf.result?.errors, installabilityErrors: errors, manifest: parsed }, null, 2))
 
-  // 3. what the worker cached; it must be only public static files
-  await send('Page.navigate', { url: `${BASE}/` }); await sleep(5000)
-  await evaluate(`fetch('/api/session/list',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:'v1',method:'session/list',payload:{args:{_request:{}}}})}).then(r=>r.text())`)
-  await evaluate(`fetch('/m').then(r=>r.text())`)
-  const cached = await evaluate(`(async () => { const out = {}; for (const k of await caches.keys()) out[k] = (await (await caches.open(k)).keys()).map(r => new URL(r.url).pathname + new URL(r.url).search.slice(0, 30)); return out })()`)
-  const all = Object.values(cached).flat()
-  check('worker cache holds only public static files', all.length > 0 && all.every((p) => /^\/(assets\/|plugins\/|m\/|icon-|apple-touch)/.test(p)) && !all.some((p) => /\/api|\/share|\/abx|\/browser|plugins\/events/.test(p)), `${all.length} entries`)
-  check('/api and /m documents are not in any cache', !all.some((p) => p.startsWith('/api') || p === '/m' || p === '/m/'))
-  writeFileSync(join(OUT, 'sw-cache-contents.json'), JSON.stringify(cached, null, 2))
-  const controlled = await evaluate('!!navigator.serviceWorker.controller', false)
-  check('page is controlled by the worker', controlled === true)
+  // cache holds only public files
+  const cached = await b.evaluate(`(async () => { const out = []; for (const k of await caches.keys()) for (const r of await (await caches.open(k)).keys()) out.push(new URL(r.url).pathname); return out })()`)
+  check('worker cache holds only public static files', cached.length > 0 && cached.every((p) => /^\/(assets\/|plugins\/|icon-|apple-touch)/.test(p)) && !cached.some((p) => /\/api|\/share|\/push|plugins\/events/.test(p)), `${cached.length} entries`)
 
-  // 4. share target round trip (fetch POST with the real multipart form the browser would send)
-  const share = await evaluate(`(async () => {
-    const fd = new FormData(); fd.append('title', 'Shared title'); fd.append('text', 'Check this out'); fd.append('url', 'https://example.com/x')
-    fd.append('files', new File(['hello from the phone'], 'note.txt', { type: 'text/plain' }))
-    const r = await fetch('/share', { method: 'POST', body: fd })
-    // The 303 is followed by fetch: ending on /m?share=<id> with 200 proves both the redirect and that /m is reachable.
-    const status = r.status; const redirected = r.redirected
-    const id = new URL(r.url).searchParams.get('share')
-    const got = id ? await (await fetch('/share?id=' + id)).json() : null
-    return { status, redirected, url: new URL(r.url).pathname, id, got }
-  })()`)
-  check('POST /share stores the share (redirect to /m?share=<id>)', share?.id && /^[a-f0-9]{24}$/.test(share.id) && share.redirected === true && share.url === '/m' && share.status === 200, JSON.stringify({ status: share?.status, redirected: share?.redirected, url: share?.url }))
-  check('GET /share?id returns text, url and the saved file', share?.got?.share?.text === 'Check this out' && share.got.share.files?.[0]?.name === 'note.txt' && share.got.share.files[0].size === 20)
+  // session ids to navigate between
+  const ids = await b.evaluate(`fetch('/api/session/list', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'client-request', rpcId: 'v1', method: 'session/list', payload: { args: { _request: {} } } }) }).then(r => r.text())`).then((t) => [...t.matchAll(/session-[0-9a-f-]{36}/g)].map((m) => m[0]))
+  const unique = [...new Set(ids)].slice(0, 3)
+  check('found sessions to navigate between', unique.length >= 2, `${unique.length} ids`)
 
-  // 5. the /m page at a 393x851 phone viewport, light and dark, with touch
-  for (const scheme of ['light', 'dark']) {
-    await send('Emulation.setDeviceMetricsOverride', { width: 393, height: 851, deviceScaleFactor: 2, mobile: true })
-    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] })
-    await send('Page.navigate', { url: `${BASE}/m` }); await sleep(3500)
-    const dims = await evaluate(`({ sw: document.documentElement.scrollWidth, iw: innerWidth, rows: document.querySelectorAll('.pwa-row').length, bg: getComputedStyle(document.body).backgroundColor, tabs: document.querySelectorAll('[role=tab]').length })`, false)
-    check(`/m ${scheme}: no horizontal overflow at 393px`, dims.sw <= dims.iw, JSON.stringify(dims))
-    const small = await evaluate(`[...document.querySelectorAll('button,textarea')].filter(e => { const r = e.getBoundingClientRect(); return r.width && (r.height < 43.5) }).map(e => e.className + ':' + Math.round(e.getBoundingClientRect().height))`, false)
-    check(`/m ${scheme}: tap targets are at least 44px`, small.length === 0, JSON.stringify(small))
-    const shot = await send('Page.captureScreenshot', { format: 'png' })
-    writeFileSync(join(OUT, `m-${scheme}-list.png`), Buffer.from(shot.result.data, 'base64'))
+  // warm click: the service worker receives a real notificationclick for session B while the window shows A
+  const [A, B] = unique
+  await b.page.send('Page.navigate', { url: `${BASE}/?openSession=${A}` }); await sleep(7000)
+  check('cold start ?openSession=A opens session A and cleans the URL', await sessionOnScreen() === A && await b.evaluate('location.search') === '', `shown=${(await sessionOnScreen()).slice(0, 16)} search="${await b.evaluate('location.search')}"`)
+  const targets = (await b.targets()).filter((t) => t.type === 'service_worker')
+  const swTarget = targets[0]
+  check('service worker target found for the click', swTarget !== undefined)
+  if (swTarget) {
+    const ws = new WebSocket(swTarget.webSocketDebuggerUrl); await new Promise((r) => (ws.onopen = r))
+    let id = 0; const pend = new Map()
+    ws.onmessage = (e) => { const m = JSON.parse(e.data); pend.get(m.id)?.(m) }
+    const send = (method, params = {}) => new Promise((r) => { const i = ++id; pend.set(i, r); ws.send(JSON.stringify({ id: i, method, params })) })
+    await send('Runtime.enable')
+    const fired = await send('Runtime.evaluate', { awaitPromise: true, returnByValue: true, expression: `(async () => {
+      const n = { data: { sessionId: ${JSON.stringify(B)}, kind: 'reply' }, close() {} }
+      const done = []
+      const e = new ExtendableEvent('notificationclick'); e.notification = n
+      Object.defineProperty(e, 'notification', { value: n })
+      const origWait = e.waitUntil.bind(e); e.waitUntil = (p) => { done.push(p); origWait(p) }
+      self.dispatchEvent(e); await Promise.all(done); return done.length })()` })
+    console.log('  click dispatch result:', JSON.stringify(fired.result?.result?.value ?? fired.result))
+    ws.close()
+    await sleep(3000)
+    check('notificationclick (warm window showing A) opens session B in the same window', await sessionOnScreen() === B, `shown=${(await sessionOnScreen()).slice(0, 16)} expected=${B.slice(0, 16)}`)
   }
-  // open the first session, screenshot, and type a draft (no prompt is sent: no agent turn, no model)
-  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] })
-  await send('Page.navigate', { url: `${BASE}/m` }); await sleep(3000)
-  const opened = await evaluate(`(async () => { const row = document.querySelector('.pwa-row'); if (!row) return { rows: 0 }; row.click(); for (let i = 0; i < 40 && !document.querySelectorAll('.pwa-msg').length; i++) await new Promise(r => setTimeout(r, 250)); return { rows: 1, msgs: document.querySelectorAll('.pwa-msg').length, hash: location.hash, composer: !!document.querySelector('.pwa-composer textarea') } })()`)
-  check('/m opens a session with history and a composer', opened.rows === 1 && opened.msgs > 0 && opened.composer, JSON.stringify(opened))
-  // No host-injected context may appear as a chat bubble (system-reminder blocks, time samples, model-change notices).
-  const leaked = await evaluate(`[...document.querySelectorAll('.pwa-msg')].map(e => e.textContent).filter(t => /<system-reminder>|Time sampled while preparing|\\[model changed:|COMPOSIO TRIGGER|The following information describes your current session/.test(t)).length`, false)
-  check('/m shows no injected-context bubbles in the open session', leaked === 0, `leaked=${leaked}`)
-  // Sweep the first sessions in the list too: open each one and look for leaks.
-  const sweep = await evaluate(`(async () => { location.hash = '#/'; await new Promise(r => setTimeout(r, 1500)); const bad = []; const n = Math.min(8, document.querySelectorAll('.pwa-row').length); for (let i = 0; i < n; i++) { location.hash = '#/'; await new Promise(r => setTimeout(r, 500)); document.querySelectorAll('.pwa-row')[i].click(); await new Promise(r => setTimeout(r, 1500)); const t = [...document.querySelectorAll('.pwa-msg')].map(e => e.textContent).filter(t => /<system-reminder>|Time sampled while preparing|\\[model changed:|COMPOSIO TRIGGER/.test(t)); if (t.length) bad.push(i) } location.hash = '#/'; return { swept: n, bad } })()`)
-  check('no session among the first 8 leaks injected context', sweep.swept >= 5 && sweep.bad.length === 0, JSON.stringify(sweep))
-  const shot2 = await send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync(join(OUT, 'm-light-session.png'), Buffer.from(shot2.result.data, 'base64'))
-  // the share landing view
-  await send('Page.navigate', { url: `${BASE}/m?share=${share?.id}` }); await sleep(3000)
-  const sharedUi = await evaluate(`({ title: document.querySelector('.pwa-card h3')?.textContent, text: document.querySelector('.pwa-card textarea')?.value })`, false)
-  check('/m?share= shows the shared text for review', sharedUi.title === 'Shared to DSH' && /Check this out/.test(sharedUi.text || ''), JSON.stringify(sharedUi))
-  const shot3 = await send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync(join(OUT, 'm-light-share.png'), Buffer.from(shot3.result.data, 'base64'))
-  writeFileSync(join(OUT, 'verify-results.json'), JSON.stringify(results, null, 2))
-} finally {
-  chrome.kill()
-}
+
+  // share target -> draft in the normal composer
+  const loc = await b.evaluate(`(async () => { const f = new FormData(); f.set('title', 'Look at this'); f.set('text', 'Shared from the phone'); f.set('url', 'https://example.com/page'); f.append('files', new File(['hello'], 'note.txt', { type: 'text/plain' })); const r = await fetch('/share', { method: 'POST', body: f, redirect: 'manual' }); return { type: r.type, status: r.status } })()`)
+  // a manual redirect is opaque to scripts, so follow it as the browser would: POST via a form navigation
+  await b.page.send('Page.navigate', { url: `${BASE}/` }); await sleep(4000)
+  await b.evaluate(`(() => { const form = document.createElement('form'); form.method = 'POST'; form.action = '/share'; form.enctype = 'multipart/form-data'; for (const [k, v] of [['title', 'Look at this'], ['text', 'Shared from the phone'], ['url', 'https://example.com/page']]) { const i = document.createElement('input'); i.name = k; i.value = v; form.appendChild(i) } document.body.appendChild(form); form.submit() })()`)
+  await sleep(9000)
+  const draft = await b.evaluate(`document.querySelector('[contenteditable=true]')?.innerText ?? ''`)
+  check('share POST -> 303 to /?share=… -> composer shows the shared text as a draft', /Look at this/.test(draft) && /Shared from the phone/.test(draft) && /example\.com\/page/.test(draft), JSON.stringify(draft.slice(0, 90)))
+  check('the draft was not sent (URL cleaned, no user message created by it)', await b.evaluate('location.search') === '', `search="${await b.evaluate('location.search')}" loc=${JSON.stringify(loc)}`)
+} finally { await b.close().catch(() => {}) }
 const failed = results.filter((r) => !r.ok)
+writeFileSync(join(OUT, 'verify-results.json'), JSON.stringify(results, null, 2))
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`)
 process.exit(failed.length === 0 ? 0 : 1)

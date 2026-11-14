@@ -1,17 +1,19 @@
 /**
- * Host half of dsh-pwa: makes the DSH web UI installable and adds a light phone page.
+ * Host half of dsh-pwa: installs the normal DSH web UI as an app and sends Web Push notifications to phones.
  *
- *   GET  /manifest.webmanifest   public; replaces the stock manifest (same icons) and adds share_target + shortcuts
- *   GET  /sw.js                  public; service worker that caches only public content-addressed files
- *   GET  /m, /m/*                signed-in; the light session / approvals page (vanilla JS, uses the same cookie)
- *   POST /share                  signed-in + same-origin; Android share-sheet target
- *   GET  /share?id=<id>          signed-in; the stored share for the /m page to turn into a session
+ *   GET  /manifest.webmanifest   public; replaces the stock manifest (same icons; start_url "/", standalone, share_target)
+ *   GET  /sw.js                  public; service worker: public-file cache + push + notification click
+ *   POST /share                  signed-in + same-origin; Android share-sheet target, answers 303 to /?share=<id>
+ *   GET  /share?id=<id>          signed-in; the stored share, read by the normal UI to pre-fill a draft
+ *   GET  /push/key               signed-in; the VAPID public key
+ *   POST /push/subscribe         signed-in + same-origin; store this device's PushSubscription
+ *   POST /push/unsubscribe       signed-in + same-origin; forget it
+ *   POST /push/test              signed-in + same-origin; push one test notification to the calling device
  *
  * Routing (verified in dsh-host-webserver): the match order is exact route, then longest prefix, then the single
- * fallback seat that serves the SPA. A duplicate (kind, path) registration throws, so nothing here can silently
- * shadow another plugin; `/m` is a prefix route and the rest are exact routes.
+ * fallback seat that serves the SPA, and a duplicate (kind, path) registration throws, so these exact routes cannot
+ * silently shadow another plugin.
  */
-import { existsSync } from 'node:fs'
 import { mkdir, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -19,29 +21,25 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readConfig, type PwaConfig } from './config.ts'
 import { buildManifest } from './manifest.ts'
 import { killSwitchSource, serviceWorkerSource } from './sw-source.ts'
-import { PAGE_ASSETS, loadPageFile, renderMobileIndex, stylesheetHrefs, type PageFile } from './pages.ts'
 import { ShareError, isShareId, pruneShares, readShare, receiveShare } from './share.ts'
+import { loadVapid, type VapidKeys } from './vapid.ts'
+import { SubscriptionError, SubscriptionStore, parseSubscription, redactEndpoint } from './subscriptions.ts'
+import { createPusher, type Pusher } from './push.ts'
+import { createNotifier } from './notifier.ts'
 
 export const name = 'dsh-pwa'
 export const inject = ['webServer', 'connection']
 
-const VERSION = '0.1.0'
-/** `public/` sits next to `lib/` in the package; from `src/host/` (tests) it is two levels up. */
-const PUBLIC_DIR = ['../public/', '../../public/'].map((rel) => new URL(rel, import.meta.url)).find((url) => existsSync(new URL('m/app.js', url))) ?? new URL('../public/', import.meta.url)
+const VERSION = '0.2.0'
 const SHARE_TTL_MS = 7 * 24 * 3600 * 1000
+const MAX_JSON_BYTES = 8 * 1024
 
 interface Route { kind: 'exact' | 'prefix'; path: string; handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void> }
 interface Ctx {
   effect(fn: () => unknown, label?: string): void
   on(event: string, fn: (...args: any[]) => unknown, opts?: unknown): () => void // eslint-disable-line
-  webServer: {
-    register(route: Route): () => void
-    readResource?(request: Request, peer: unknown): Promise<Response>
-  }
-  connection: {
-    requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined
-    browserPeer: unknown
-  }
+  webServer: { register(route: Route): () => void }
+  connection: { requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined }
   logger(name: string): { warn(...a: unknown[]): void; debug(...a: unknown[]): void }
 }
 
@@ -69,10 +67,39 @@ export function dataDir(): string {
   return join(process.env['DSH_HOME'] ?? join(homedir(), '.dsh'), 'plugin-data', 'dsh-pwa')
 }
 
+/** A short human label for a device, from the User-Agent (best effort; the client may send its own). */
+export function deviceLabel(userAgent: unknown): string {
+  const ua = typeof userAgent === 'string' ? userAgent : ''
+  const os = /Android/i.test(ua) ? 'Android' : /iPhone|iPad/i.test(ua) ? 'iOS' : /Windows/i.test(ua) ? 'Windows' : /Mac OS X/i.test(ua) ? 'macOS' : /Linux/i.test(ua) ? 'Linux' : 'Device'
+  const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'browser'
+  return `${os} ${browser}`
+}
+
+async function readJson(req: IncomingMessage): Promise<unknown> {
+  const type = String(req.headers['content-type'] ?? '')
+  if (!/^application\/json\b/i.test(type)) throw new SubscriptionError('content-type must be application/json')
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of req) {
+    size += (chunk as Buffer).byteLength
+    if (size > MAX_JSON_BYTES) throw new SubscriptionError('body too large')
+    chunks.push(chunk as Buffer)
+  }
+  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { throw new SubscriptionError('invalid JSON') }
+}
+
 export function apply(ctx: Ctx, rawConfig?: unknown): void {
   const config: PwaConfig = readConfig(rawConfig)
   const log = ctx.logger('dsh-pwa')
-  const sharesDir = join(dataDir(), 'shares')
+  const dir = dataDir()
+  const sharesDir = join(dir, 'shares')
+  const store = new SubscriptionStore(join(dir, 'subscriptions.json'))
+
+  // The VAPID pair is created on first use and kept for good (a new pair would orphan every subscription).
+  let vapidPromise: Promise<VapidKeys> | undefined
+  const vapid = (): Promise<VapidKeys> => (vapidPromise ??= loadVapid(dir).catch((error: unknown) => { vapidPromise = undefined; throw error }))
+  let pusherPromise: Promise<Pusher> | undefined
+  const pusher = (): Promise<Pusher> => (pusherPromise ??= vapid().then((keys) => createPusher({ vapid: keys, subject: config.push.subject, store, log })).catch((error: unknown) => { pusherPromise = undefined; throw error }))
 
   // Gate for every signed-in route: Host/Origin fence plus authentication, failing closed.
   const rejected = (req: IncomingMessage, res: ServerResponse): boolean => {
@@ -88,13 +115,11 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
     return false
   }
 
-  // ── Registration helper: every route is a disposable effect owned by this plugin ──
   const route = (r: Route): void => {
     ctx.effect(() => ctx.webServer.register(r), `dsh-pwa: ${r.kind} ${r.path}`)
   }
 
-  // The service worker revision changes with the plugin version and the SW-relevant config.
-  const swSource = config.serviceWorker ? serviceWorkerSource(`${VERSION}`) : killSwitchSource()
+  const swSource = config.serviceWorker ? serviceWorkerSource(VERSION) : killSwitchSource()
 
   route({
     kind: 'exact',
@@ -123,58 +148,6 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
     },
   })
 
-  // ── /m: the light phone page ──
-  const pageCache = new Map<string, PageFile>()
-  const pageFile = async (file: string): Promise<PageFile> => {
-    const cached = pageCache.get(file)
-    if (cached !== undefined) return cached
-    const loaded = await loadPageFile(PUBLIC_DIR, file)
-    pageCache.set(file, loaded)
-    return loaded
-  }
-  /** The host's own stylesheets (real theme tokens), read once from the in-process index render. */
-  let styles: string[] | undefined
-  const hostStyles = async (): Promise<string[]> => {
-    if (styles !== undefined) return styles
-    try {
-      const response = await ctx.webServer.readResource?.(new Request('http://dsh.internal/'), ctx.connection.browserPeer)
-      styles = response === undefined || !response.ok ? [] : stylesheetHrefs(await response.text())
-    } catch (error) {
-      log.warn('could not read the host index for stylesheets', error)
-      styles = []
-    }
-    return styles
-  }
-
-  route({
-    kind: 'prefix',
-    path: '/m',
-    handler: async (req, res) => {
-      if (rejected(req, res)) return
-      if (!methods(req, res, ['GET', 'HEAD'])) return
-      const pathname = new URL(req.url ?? '/', 'http://x').pathname
-      try {
-        if (pathname === '/m' || pathname === '/m/') {
-          const [app, css, events] = await Promise.all([pageFile('app.js'), pageFile('app.css'), pageFile('events.js')])
-          const html = renderMobileIndex({ stylesheets: await hostStyles(), appRev: app.rev, cssRev: css.rev, eventsRev: events.rev, name: config.name })
-          send(res, 200, req.method === 'HEAD' ? '' : html, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
-          return
-        }
-        const file = pathname.slice('/m/'.length)
-        if (!(PAGE_ASSETS as readonly string[]).includes(file)) { send(res, 404, ''); return }
-        const asset = await pageFile(file)
-        const versioned = new URL(req.url ?? '/', 'http://x').searchParams.has('v')
-        send(res, 200, req.method === 'HEAD' ? '' : asset.body, {
-          'content-type': asset.type,
-          'cache-control': versioned ? 'public, max-age=31536000, immutable' : 'no-cache',
-        })
-      } catch (error) {
-        log.warn('/m failed', error)
-        send(res, 500, 'The phone page is unavailable.', { 'content-type': 'text/plain; charset=utf-8' })
-      }
-    },
-  })
-
   // ── /share: Android share-sheet target ──
   route({
     kind: 'exact',
@@ -186,20 +159,19 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
         const id = new URL(req.url ?? '/', 'http://x').searchParams.get('id') ?? ''
         const record = isShareId(id) ? await readShare(sharesDir, id) : undefined
         if (record === undefined) { sendJson(res, 404, { ok: false, error: 'unknown share' }); return }
-        sendJson(res, 200, { ok: true, share: record, mode: config.share.mode })
+        sendJson(res, 200, { ok: true, share: record })
         return
       }
       if (req.method !== 'POST') { send(res, 405, '', { allow: 'GET, POST' }); return }
-      // A share-sheet POST is a top-level navigation: SameSite=Strict cookies are not sent on cross-site navigations,
-      // but the share sheet is browser-initiated (no initiating site), so the cookie IS sent. Anything else fails
-      // the 401 gate above; the Origin check blocks a cross-site form from posting here.
+      // A share-sheet POST is a top-level navigation initiated by the browser, so the sign-in cookie is sent. The
+      // Origin check blocks a cross-site form from posting here.
       if (!sameOrigin(req)) { send(res, 403, 'cross-site request rejected', { 'content-type': 'text/plain; charset=utf-8' }); return }
       try {
         await mkdir(sharesDir, { recursive: true, mode: 0o700 })
         const filesDir = config.share.cwd !== '' ? join(config.share.cwd, '.dsh-shares') : undefined
         const record = await receiveShare(req, { dir: sharesDir, cwd: config.share.cwd, maxBytes: config.share.maxMiB * 1024 * 1024, ...(filesDir === undefined ? {} : { filesDir }) })
-        // 303 turns the POST into a GET of /m, so a reload does not resubmit the share.
-        send(res, 303, '', { location: `/m?share=${record.id}`, 'cache-control': 'no-store' })
+        // 303 turns the POST into a GET of the normal UI, so a reload does not resubmit the share.
+        send(res, 303, '', { location: `/?share=${record.id}`, 'cache-control': 'no-store' })
       } catch (error) {
         const status = error instanceof ShareError ? error.status : 500
         if (status === 500) log.warn('share failed', error)
@@ -207,6 +179,99 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
       }
     },
   })
+
+  // ── Web Push ──
+  if (config.push.enabled) {
+    /** Common prologue of the three POST routes: method, sign-in, same-origin, JSON body. Returns the body or undefined after answering. */
+    const mutation = async (req: IncomingMessage, res: ServerResponse): Promise<Record<string, unknown> | undefined> => {
+      if (!methods(req, res, ['POST'])) return undefined
+      if (rejected(req, res)) return undefined
+      if (!sameOrigin(req) || req.headers['sec-fetch-site'] === 'cross-site') { send(res, 403, 'cross-site request rejected', { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return undefined }
+      try {
+        const body = await readJson(req)
+        return body !== null && typeof body === 'object' ? body as Record<string, unknown> : {}
+      } catch (error) {
+        sendJson(res, 400, { ok: false, error: error instanceof SubscriptionError ? error.message : 'bad request' })
+        return undefined
+      }
+    }
+    const unavailable = (res: ServerResponse, error: unknown): void => {
+      log.warn('push is unavailable', (error as Error).message)
+      sendJson(res, 503, { ok: false, error: 'push is unavailable on this host' })
+    }
+
+    route({
+      kind: 'exact',
+      path: '/push/key',
+      handler: async (req, res) => {
+        if (!methods(req, res, ['GET'])) return
+        if (rejected(req, res)) return
+        try { sendJson(res, 200, { ok: true, publicKey: (await vapid()).publicKey }) } catch (error) { unavailable(res, error) }
+      },
+    })
+
+    route({
+      kind: 'exact',
+      path: '/push/subscribe',
+      handler: async (req, res) => {
+        const body = await mutation(req, res)
+        if (body === undefined) return
+        try {
+          const subscription = parseSubscription(body['subscription'], { allowInsecure: config.push.allowInsecureEndpoints })
+          const label = typeof body['label'] === 'string' && body['label'].trim() !== '' ? body['label'].trim().slice(0, 60) : deviceLabel(req.headers['user-agent'])
+          await store.upsert(subscription, label)
+          log.debug('push subscription stored', redactEndpoint(subscription.endpoint))
+          sendJson(res, 200, { ok: true, label })
+        } catch (error) {
+          if (error instanceof SubscriptionError) sendJson(res, 400, { ok: false, error: error.message })
+          else { log.warn('subscribe failed', (error as Error).message); sendJson(res, 500, { ok: false, error: 'could not store the subscription' }) }
+        }
+      },
+    })
+
+    route({
+      kind: 'exact',
+      path: '/push/unsubscribe',
+      handler: async (req, res) => {
+        const body = await mutation(req, res)
+        if (body === undefined) return
+        const endpoint = body['endpoint']
+        if (typeof endpoint !== 'string' || endpoint === '') { sendJson(res, 400, { ok: false, error: 'endpoint required' }); return }
+        try { sendJson(res, 200, { ok: true, removed: await store.remove(endpoint) }) } catch (error) { log.warn('unsubscribe failed', (error as Error).message); sendJson(res, 500, { ok: false, error: 'could not remove the subscription' }) }
+      },
+    })
+
+    route({
+      kind: 'exact',
+      path: '/push/test',
+      handler: async (req, res) => {
+        const body = await mutation(req, res)
+        if (body === undefined) return
+        const endpoint = body['endpoint']
+        const subscription = typeof endpoint === 'string' ? await store.get(endpoint) : undefined
+        if (subscription === undefined) { sendJson(res, 404, { ok: false, error: 'this device is not subscribed' }); return }
+        try {
+          const result = await (await pusher()).sendTo(subscription, { v: 1, kind: 'test', title: 'DSH notifications work', body: 'This is a test notification from your DSH host.', sessionId: '' })
+          sendJson(res, result === 'sent' ? 200 : 502, { ok: result === 'sent', result })
+        } catch (error) { unavailable(res, error) }
+      },
+    })
+
+    // Session feed -> notifications. Subscribed devices only: with no subscription nothing is encrypted or sent.
+    const notifier = createNotifier({
+      notify: async (payload) => {
+        if ((await store.list()).length === 0) return
+        await (await pusher()).broadcast(payload)
+      },
+    })
+    ctx.effect(() => {
+      const offEvent = ctx.on('session/event', (session: never, event: never) => {
+        try { notifier.handle(session, event) } catch (error) { log.warn('push notifier failed', (error as Error).message) }
+      })
+      const offDisposed = ctx.on('session/disposed', (session: never) => { try { notifier.forget(session) } catch { /* ignore */ } })
+      return () => { offEvent(); offDisposed(); notifier.dispose() }
+    }, 'dsh-pwa: session events to push')
+  }
 
   // ── Register the service worker from the host index (structured injection; no client plugin needed) ──
   if (config.serviceWorker) {

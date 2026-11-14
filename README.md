@@ -1,30 +1,61 @@
 # dsh-pwa
 
-Installs DeepSeek Harness as an app and adds a light phone view. English-only UI, no runtime dependencies in the page.
+Installs the **normal DeepSeek Harness UI** as an app and sends **Web Push notifications** to phones that opt in. English-only UI, no phone-specific page: the installed app is the same interface you use in the browser, opened full-screen and signed in with the same HttpOnly cookie.
+
+![Settings > Phone app](docs/screenshots/settings.png)
 
 | Route | Auth | What it does |
 |---|---|---|
-| `GET /manifest.webmanifest` | public (browsers fetch it without credentials; no secrets inside) | Replaces the stock manifest: same icons, `start_url: /m`, `scope: /`, shortcuts, `share_target` |
+| `GET /manifest.webmanifest` | public (browsers fetch it without credentials; no secrets inside) | Replaces the stock manifest: same icons, `start_url: /`, `scope: /`, `display: standalone`, Android `share_target` |
 | `GET /sw.js` | public | Service worker (see below); `Service-Worker-Allowed: /`, never cached by the browser |
-| `GET /m`, `/m/app.js`, `/m/app.css` | signed in | The phone page: sessions, a session (read + reply, stop), approvals |
-| `POST /share` | signed in, same-origin | Android share target. Saves text, url and files, answers `303 /m?share=<id>` |
-| `GET /share?id=` | signed in | The stored share, read by `/m` |
+| `POST /share` | signed in, same-origin | Android share target. Saves text, url and files, answers `303 /?share=<id>` |
+| `GET /share?id=` | signed in | The stored share, read by the UI to pre-fill a draft |
+| `GET /push/key` | signed in | The VAPID public key |
+| `POST /push/subscribe` | signed in, same-origin | Stores this device's `PushSubscription` (keyed by endpoint, with a device label and created time) |
+| `POST /push/unsubscribe` | signed in, same-origin | Forgets it |
+| `POST /push/test` | signed in, same-origin | Sends one test push to the calling device |
 
-Routing was verified in `dsh-host-webserver`: the match order is **exact route, then longest prefix, then the one SPA fallback seat**, and a duplicate `(kind, path)` registration throws, so these routes win over the SPA fallback and cannot silently shadow another plugin. `/m` is a prefix route; the others are exact.
+Routing was verified in `dsh-host-webserver`: the match order is exact route, then longest prefix, then the single SPA fallback seat, and a duplicate `(kind, path)` registration throws, so these exact routes cannot silently shadow another plugin.
+
+## What the phone has to do
+
+1. Open DSH at its **HTTPS** address (for example Tailscale: `tailscale serve --bg --https=443 http://127.0.0.1:<port>`) or on `localhost`. Plain `http://` to a non-local host is not a secure context: Chrome will not install the app, run the worker or allow push.
+2. Open the DSH link with its token once, then Chrome menu > **Install app** (on Android this matters for push: an installed app keeps notifications reliable).
+3. In the installed app: **Settings > Phone app > Phone notifications > Enable**, and allow notifications when Android asks. Press **Send test notification** to check.
+
+Nothing asks for permission on page load; only the Enable button does. Only devices that pressed Enable receive pushes, so a desktop that already has `dsh-notify-me` does not get duplicates unless you also enable it there.
+
+## Notifications
+
+What triggers one (the host reads the session event feed with no page open, the same events `dsh-notify-me` uses):
+
+| Trigger | Notification |
+|---|---|
+| Approval request (`approval/asked`) | **Approval needed**, body = session title + tool + reason |
+| A pending `ask_user_question` | **Question for you**, body = session title + the question |
+| `exit_plan_mode` (plan review) | **Plan ready for review**, body = session title |
+| A reply finished (`turn/end` completed) | Title = session title, body = first ~120 characters of the reply |
+
+Never for subagent sessions, never for turns nobody typed (schedules, triggers, goal rounds), and never for a session in which no person has written (engram/ingest internals, automation). An approval that is decided within 1.5 s (auto-approved) is not sent. Bursts collapse: one notification per session and kind within 8 s, and the notification `tag` is the session id so a newer one replaces the older one on the phone. If a visible, focused window already shows that session, the service worker skips the notification.
+
+The push payload is `{ v, kind, title, body, sessionId }` and nothing else: no tokens, no URLs.
+
+**Opening a session from a notification.** The click handler focuses an existing app window and posts it `{ type: 'dsh-pwa:open-session', sessionId }`; the client half calls `uiWorkspace.openSession(id)`, the host's own navigation service (the same call `dsh-notify-me` uses). With no window open it opens `/?openSession=<id>`; the client reads that on start, waits for the session list, opens the session and removes the parameter from the address bar.
+
+**Share to DSH.** `POST /share` stores the share and redirects to `/?share=<id>`. The client fetches it and calls `uiWorkspace.startSession(undefined, { prompt, whenDraftExists: 'append' })`, the same entry the host's New Session flow uses, so the shared text lands in the normal composer as a draft. It is never sent. Shared files are saved under `<share.cwd>/.dsh-shares/<id>/` (or next to the record) and their paths are listed in the draft.
+
+### Keys and storage
+
+`$DSH_HOME/plugin-data/dsh-pwa/` (directory `0700`): `vapid.json` (VAPID key pair, generated once, `0600`; deleting it orphans every subscription), `subscriptions.json` (`0600`, atomic writes), `shares/`. A 404/410 from the push service deletes that subscription. Endpoints and keys are never logged in full (host and last six characters only). Subscription endpoints must be `https` and not a private or loopback host.
 
 ## Auth and safety
 
-- `/m`, `/share` call `connection.requestRejection(request)` first (Host/Origin fence + the same HttpOnly cookie as the full UI) and fail closed with 401/403. `POST /share` additionally requires a same-origin `Origin` (or `Sec-Fetch-Site: same-origin|none`).
-- The `/m` page talks to the same `/api/<namespace>/<method>` HTTP RPC and one `/api/remote.mux` WebSocket as the full UI. It sees exactly what you see in the full UI; there is no extra permission surface. Approvals use the `$events` stream: a second answering client receives the same `approval/request` waterfall as the full UI, and whichever answers first settles it. `/m` passes every other waterfall on (`next`).
-- Share records are stored under `$DSH_HOME/plugin-data/dsh-pwa/shares/<id>.json`; shared files go to `<share.cwd>/.dsh-shares/<id>/` when `share.cwd` is set (so a sandboxed agent can read them), otherwise next to the record. Files are `0600`, names sanitised to one path segment, size and file-count capped (`share.maxMiB`, default 25), and deleted after 7 days.
-- Which messages show (same rule as the full UI's chat): a `user/message` is the person's own only when `source.kind === "user"`; everything else the host injects (runtime-context, skill-catalog, time-context, model-selection notices, composio, retry, ...) is context and is never a bubble. The page shows human messages, assistant text, and each tool call as "Used <tool>" (`public/m/events.js`, unit-tested on recorded events in `tests/fixtures/`).
-- The page uses `textContent` only; no `innerHTML`, no inline script or style, no secrets embedded.
+- Every signed-in route calls `connection.requestRejection(request)` first (Host/Origin fence plus the same HttpOnly cookie as the full UI) and fails closed with 401/403. Mutations additionally require a same-origin `Origin` (or `Sec-Fetch-Site: same-origin|none`) and refuse `cross-site`.
+- Bodies are JSON only and capped at 8 KiB.
 
 ## The service worker never caches anything private
 
-It answers only `GET` requests for public, content-addressed files: hashed `/assets/*-<hash>.js|css`, plugin bundles requested with `?rev=`, `/m/*?v=` and the install icons. For everything else (`/api`, `/plugins/events`, `/abx/*`, `/browser/*`, `/share`, `/m` documents, `/`, the manifest, `/sw.js`) it does not call `respondWith`, so the browser handles the request exactly as without a worker. Navigations are network-first and never stored (an offline page is shown on failure). It also refuses to store any response with `Set-Cookie`, `Cache-Control: no-store|private`, `Vary: *`, non-200 or non-same-origin status, or any request carrying `Authorization`. Caches are versioned and old ones deleted on activate. `serviceWorker: false` serves a kill-switch script that unregisters the worker and clears `dsh-pwa-*` caches. Policy is unit-tested in `tests/sw.spec.ts` against the real worker source.
-
-The worker is registered from the host index through a structured `webserver/index-inject` row (a script appended to the body), so no client plugin has to write into the document. It only registers in a secure context.
+It answers only `GET` requests for public, content-addressed files: hashed `/assets/*-<hash>.js|css`, plugin bundles requested with `?rev=` and the install icons. For everything else (`/api`, `/plugins/events`, `/abx/*`, `/browser/*`, `/share`, `/push/*`, `/`, the manifest, `/sw.js`) it does not call `respondWith`. Navigations are network-first and never stored (an offline page is shown on failure). It refuses to store any response with `Set-Cookie`, `Cache-Control: no-store|private`, `Vary: *`, non-200 or non-same-origin status, or any request carrying `Authorization`. `serviceWorker: false` serves a kill-switch script that unregisters the worker and clears `dsh-pwa-*` caches. The worker is registered from the host index through a structured `webserver/index-inject` row, and only in a secure context.
 
 ## Config (`cordis.patch.yml`)
 
@@ -34,32 +65,31 @@ The worker is registered from the host index through a structured `webserver/ind
   config:
     name: DeepSeek Harness
     shortName: DSH
-    startUrl: /m          # or / for the full UI
+    startUrl: /               # the installed app opens the normal UI
+    themeColor: '#ffffff'
+    backgroundColor: '#ffffff'
     serviceWorker: true
     share:
       enabled: true
-      cwd: ""             # workspace directory for sessions started from a share (shared files are saved in its .dsh-shares/); empty = the DSH default workspace
-      mode: draft         # draft: pre-fill the composer, you press Send. session: send the shared content as the first prompt
+      cwd: ""                 # where shared files are saved (<cwd>/.dsh-shares/); empty = next to the share record
       maxMiB: 25
+    push:
+      enabled: true           # false removes the /push routes and the session feed listener
+      subject: "mailto:dsh-pwa@localhost.invalid"   # VAPID contact sent to the push service
 ```
 
-## Install
+## Upgrading from 0.1
 
-1. Open DSH over HTTPS (for example with Tailscale: enable HTTPS for your tailnet, then `tailscale serve --bg --https=443 http://127.0.0.1:<port>`, where `<port>` is the port DSH listens on) or on `localhost`. Plain `http://` to a non-local host is not a secure context: Chrome will not install it and ignores the worker.
-2. Open the DSH link with its token once on the phone, then Chrome menu > **Install app**. Open `/m` to check the phone view.
-
-## Notifications without an app store
-
-`dsh-notify-me` can forward reminders to a **custom webhook** (`{source, event, title, body, text, sessionId, time}` as JSON). Run [ntfy](https://ntfy.sh) on your tailnet, point the custom webhook at `https://<host>/<topic>` and install the ntfy Android app. A raw JSON POST to ntfy shows as the message body; for a nicer title, use ntfy's `X-Title` header through a tiny relay, or use Gotify, which notify-me supports directly. Browser Web Push needs a push service and is not implemented here.
+The `/m` phone page is gone. An old `startUrl: /m` falls back to `/`; delete it, and `share.mode` (ignored now). Reinstall the app on the phone so it picks up the new manifest.
 
 ## Develop
 
-`pnpm install && pnpm run check` (typecheck, oxlint, token lint, vitest, build, artifact + public checks). Layout: `src/host/` (routes), `public/m/` (phone page, served as-is), `src/client/` (Settings page), `src/kit/` (dsh-kit UI copy).
+`pnpm install && pnpm run check` (typecheck, oxlint, token lint, vitest, build, artifact check). Layout: `src/host/` (routes, VAPID, subscriptions, push sender, event notifier, service worker source), `src/client/` (Settings section, click/share bridge), `src/kit/` (dsh-kit UI copy). `web-push` is a runtime dependency; `scripts/check-artifacts.mjs` fails the build if it does not resolve. `node scripts/verify-dev.mjs` runs the live checks against the dev harness (`127.0.0.1:3090`) in Chromium.
 
 ## Not verified
 
-Installation and the share sheet on a real Android phone, over Tailscale HTTPS. Everything else was checked on `127.0.0.1` (a secure context): manifest, service worker, installability and the `/m` page at 393x851.
+Installation, the share sheet and push delivery to a real Android phone over Tailscale HTTPS. Everything else was checked in Chromium on `127.0.0.1` (a secure context), including real Web Push delivery through Chromium's push service.
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). UI controls in `src/kit/` are adapted from `@deepseek-ai/dsh-client-ui-primitives` (MIT, Copyright (c) 2026 DeepSeek); see [NOTICE](NOTICE).
+MIT, see [LICENSE](LICENSE). UI controls in `src/kit/` are adapted from `@deepseek-ai/dsh-client-ui-primitives` (MIT, Copyright (c) 2026 DeepSeek); see [NOTICE](NOTICE). `web-push` is MIT.

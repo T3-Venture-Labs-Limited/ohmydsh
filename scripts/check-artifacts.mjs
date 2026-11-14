@@ -50,6 +50,14 @@ for (const name of Object.keys({ ...pkg.devDependencies, ...pkg.peerDependencies
   if (!name.startsWith('@deepseek-ai/')) continue
   if (pkg.devDependencies?.[name] === undefined || pkg.peerDependencies?.[name] === undefined) missing.push(`${name} must be in both peerDependencies and devDependencies`)
 }
+// Runtime dependencies are imported by lib/index.js at activation: they must resolve from this package directory.
+{
+  const { createRequire } = await import('node:module')
+  const req = createRequire(resolve(root, 'package.json'))
+  for (const name of Object.keys(pkg.dependencies ?? {})) {
+    try { req.resolve(name) } catch { missing.push(`${name}  (runtime dependency does not resolve from the package; run pnpm install)`) }
+  }
+}
 if (missing.length > 0) {
   console.error('check-artifacts: FAILED. Do not link this plugin into a profile until these exist:\n  ' + missing.join('\n  '))
   process.exit(1)

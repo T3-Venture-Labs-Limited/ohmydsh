@@ -1,7 +1,7 @@
 {
   "name": "dsh-pwa",
-  "version": "0.1.0",
-  "description": "Install DSH as an app (manifest, service worker, share target) and a light phone view",
+  "version": "0.2.0",
+  "description": "Install the normal DSH UI as an app (manifest, service worker, share target) and get Web Push notifications on your phone",
   "license": "MIT",
   "author": "Superdao (https://github.com/deestax)",
   "repository": {
@@ -28,7 +28,6 @@
   },
   "files": [
     "lib",
-    "public",
     "locale",
     "docs",
     "icon.svg",
@@ -51,9 +50,9 @@
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
-    "build": "pnpm run clean && tsdown && node scripts/check-artifacts.mjs && node scripts/check-public.mjs && node tools/token-lint.mjs src lib public",
+    "build": "pnpm run clean && tsdown && node scripts/check-artifacts.mjs && node tools/token-lint.mjs src lib",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint src tests scripts tsdown.config.ts && node tools/token-lint.mjs src public",
+    "lint": "oxlint src tests scripts tsdown.config.ts && node tools/token-lint.mjs src",
     "test": "vitest run",
     "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build",
     "prepare": "pnpm run build"
@@ -74,6 +73,7 @@
     "@types/node": "26.2.0",
     "@types/react": "~18.3.1",
     "@types/react-dom": "^18.3.7",
+    "@types/web-push": "^3.6.4",
     "jsdom": "^29.1.1",
     "oxlint": "1.76.0",
     "react": "^18.3.1",
@@ -81,5 +81,8 @@
     "tsdown": "0.22.2",
     "typescript": "6.0.3",
     "vitest": "4.1.8"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
   }
 }

@@ -9,6 +9,7 @@ describe('client apply', () => {
     const registered: { name: string; id?: string }[] = []
     const ctx = {
       effect: vi.fn((fn: () => unknown) => fn()),
+      inject: vi.fn(),
       locale: { register: (ns: string, _l: string, d: Record<string, string>) => { dicts.set(ns, d); return () => dicts.delete(ns) }, bind: (ns: string) => (k: string) => dicts.get(ns)?.[k] ?? k },
       slots: { inject: (_n: string, f: () => unknown) => { f() }, register: (o: { name: string; id?: string }) => { registered.push(o); return () => {} } },
     }

@@ -1,0 +1,10 @@
+dsh-skill-studio
+Copyright (c) 2026 Superdao (deestax)
+
+Licensed under the MIT License (see LICENSE).
+
+UI controls (src/kit/) are adapted, via dsh-kit (https://github.com/deestax/dsh-kit), from
+@deepseek-ai/dsh-client-ui-primitives (https://github.com/deepseek-ai/deepseek-harness, packages/client/ui-primitives),
+MIT License, Copyright (c) 2026 DeepSeek: markup, sizes and behaviour of Button, Switch, SegmentedControl, Input, Modal
+and Tooltip, and the modal-layer and tooltip-placement helpers. The MIT permission notice is identical to the one in
+this repository's LICENSE file and applies to those portions as well.

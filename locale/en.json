@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Phone app",
+    "description": "Installs DSH as an app on your phone or desktop and adds a light phone view at /m for reading sessions, replying and approving tool calls. Also accepts shares from the Android share sheet. Open Settings > Phone app to install it, and open /m on your phone. Needs HTTPS (for example Tailscale HTTPS) or localhost to install. Adds a service worker that only caches public, versioned files; it never caches /api or anything signed in. Turn the plugin off to remove the manifest, worker and /m.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -46,7 +46,7 @@ function postRequest(payload: unknown): IncomingMessage {
   const stream = Readable.from([Buffer.from(JSON.stringify(payload))]) as unknown as IncomingMessage
   Object.assign(stream, {
     method: 'POST',
-    url: '/plugins/dsh-image-gen/image',
+    url: '/plugins/dsh-studio/image',
     headers: { host: '127.0.0.1:8765', 'content-type': 'application/json' },
   })
   return stream
@@ -76,7 +76,7 @@ describe('image route GET form', () => {
 
   it('rejects malformed references', async () => {
     const res = new FakeResponse()
-    await serveImage(getRequest('/plugins/dsh-image-gen/image?ref=not-base64'), res as unknown as ServerResponse, deps)
+    await serveImage(getRequest('/plugins/dsh-studio/image?ref=not-base64'), res as unknown as ServerResponse, deps)
     expect(res.status).toBe(400)
   })
 

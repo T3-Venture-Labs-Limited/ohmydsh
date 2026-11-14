@@ -4,7 +4,7 @@
  * The service lives in the host's `@deepseek-ai/dsh-system-prompt` plugin,
  * which this bundle does not depend on directly (it arrives transitively and
  * must not become a hard requirement: older hosts boot fine without it, and
- * the canvas context registration is strictly additive). This local
+ * the image-defaults context registration is strictly additive). This local
  * declaration restores the `ctx.systemPrompt` face for exactly the surface
  * this plugin consumes — dynamic context registration — mirroring the
  * runtime-probe pattern used for the settings service. The rest of the

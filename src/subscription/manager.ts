@@ -21,17 +21,6 @@ import { createPkce, type Pkce } from './oauth.js'
 import { startLoopback } from './loopback.js'
 import { parseBlob, serializeBlob, type SubscriptionBlob } from './blob.js'
 import {
-  CODEX_IMAGE_EDIT_URL,
-  CODEX_IMAGE_MODEL,
-  CODEX_IMAGE_URL,
-  CODEX_REDIRECT_URI,
-  codexAuthorizeUrl,
-  codexConfig,
-  codexExchangeCode,
-  codexIdentityHeaders,
-  codexRefresh,
-} from './vendors/codex.js'
-import {
   GROK_IMAGE_EDIT_URL,
   GROK_IMAGE_MODEL,
   GROK_IMAGE_URL,
@@ -57,7 +46,7 @@ import { xaiToolParameters } from '../xai-params.js'
 import { redactSecrets } from '../redact.js'
 
 /** Vendor ids used by the credential refs and the wire calls. */
-export type SubscriptionVendor = 'codex' | 'grok' | 'antigravity'
+export type SubscriptionVendor = 'grok' | 'antigravity'
 
 /**
  * Reference image passed to edit calls. Structural so callers can pass their
@@ -68,9 +57,8 @@ export interface SubscriptionReferenceImage {
   mediaType: string
 }
 
-/** The vendor each dsh-image-gen subscription provider maps onto. */
+/** The vendor each dsh-studio subscription provider maps onto. */
 export function vendorOf(provider: SubscriptionProvider): SubscriptionVendor {
-  if (provider === 'chatgpt-sub') return 'codex'
   if (provider === 'google-sub') return 'antigravity'
   return 'grok'
 }
@@ -85,7 +73,7 @@ export const SUBSCRIPTION_SIZES = ['1024x1024', '1024x1536', '1536x1024', 'auto'
 
 /**
  * Reference images per edit call. Every subscription channel accepts at
- * least this many (Codex edits up to 16, Grok up to 5, Antigravity up to 10),
+ * least this many (Grok up to 5, Antigravity up to 10),
  * so 5 keeps one shared guard in line with the Studio UI's upload cap.
  */
 export const SUBSCRIPTION_MAX_REFERENCE_IMAGES = 5
@@ -110,7 +98,7 @@ export interface LoginOutcome {
  */
 /** Provider names by vendor for login-result pages and errors. */
 function providerNameOf(vendor: SubscriptionVendor): string {
-  return SUBSCRIPTION_PROVIDER_DISPLAY_NAMES[vendor === 'codex' ? 'chatgpt-sub' : vendor === 'antigravity' ? 'google-sub' : 'grok-sub']
+  return SUBSCRIPTION_PROVIDER_DISPLAY_NAMES[vendor === 'antigravity' ? 'google-sub' : 'grok-sub']
 }
 
 export class SubscriptionManager {
@@ -148,13 +136,10 @@ export class SubscriptionManager {
    * browser to open. Completion lands in the loopback callback.
    */
   async beginLogin(vendor: SubscriptionVendor): Promise<{ url: string }> {
-    const redirectUri = vendor === 'codex' ? CODEX_REDIRECT_URI
-      : vendor === 'antigravity' ? ANTIGRAVITY_REDIRECT_URI
-      : GROK_REDIRECT_URI
+    const redirectUri = vendor === 'antigravity' ? ANTIGRAVITY_REDIRECT_URI : GROK_REDIRECT_URI
     const pkce = await createPkce()
     this.pending.set(pkce.state, { vendor, pkce })
-    const url = vendor === 'codex' ? codexAuthorizeUrl(codexConfig(), pkce)
-      : vendor === 'antigravity' ? antigravityAuthorizeUrl(antigravityConfig(), pkce)
+    const url = vendor === 'antigravity' ? antigravityAuthorizeUrl(antigravityConfig(), pkce)
       : grokAuthorizeUrl(grokConfig(), pkce)
     // The catch server must be listening before the browser opens, otherwise
     // the redirect to localhost:<port> hits a dead port and the login hangs.
@@ -171,13 +156,11 @@ export class SubscriptionManager {
     const row = this.pending.get(state)
     if (row === undefined || row.vendor !== vendor) throw new Error('login session expired; start again')
     this.pending.delete(state)
-    const blob = vendor === 'codex'
-      ? await codexExchangeCode(codexConfig(), row.pkce, code)
-      : vendor === 'antigravity'
-        ? await antigravityExchangeCode(antigravityConfig(), row.pkce, code)
-        : await grokExchangeCode(grokConfig(), row.pkce, code)
+    const blob = vendor === 'antigravity'
+      ? await antigravityExchangeCode(antigravityConfig(), row.pkce, code)
+      : await grokExchangeCode(grokConfig(), row.pkce, code)
     await this.saveBlob(vendor, blob)
-    return `<!doctype html><meta charset="utf-8"><title>dsh-image-gen</title><p lang="zh-CN">${providerNameOf(vendor)} 登录成功（${escapeHtml(blob.email)}），可以关闭此页返回设置。</p><p lang="en">${providerNameOf(vendor)} sign-in successful (${escapeHtml(blob.email)}). You can close this page and return to settings.</p>`
+    return `<!doctype html><meta charset="utf-8"><title>dsh-studio</title><p>${providerNameOf(vendor)} sign-in successful (${escapeHtml(blob.email)}). You can close this page and return to settings.</p>`
   }
 
   /** Sign out: clear the blob and the caches. No other setting changes. */
@@ -206,9 +189,7 @@ export class SubscriptionManager {
     const inflight = this.refreshLocks.get(vendor)
     if (inflight !== undefined) return inflight
     const refresh = (async () => {
-      const next = vendor === 'codex' ? await codexRefresh(blob)
-        : vendor === 'antigravity' ? await antigravityRefresh(blob)
-        : await grokRefresh(blob)
+      const next = vendor === 'antigravity' ? await antigravityRefresh(blob) : await grokRefresh(blob)
       const merged: SubscriptionBlob = {
         ...next,
         refreshToken: next.refreshToken.length > 0 ? next.refreshToken : blob.refreshToken,
@@ -236,7 +217,7 @@ export class SubscriptionManager {
     if (text.length === 0) throw new Error('prompt must be a non-empty string')
     const references = options.referenceImages ?? []
     if (references.length > SUBSCRIPTION_MAX_REFERENCE_IMAGES) {
-      throw new Error(`订阅生图最多支持 ${String(SUBSCRIPTION_MAX_REFERENCE_IMAGES)} 张参考图，当前 ${String(references.length)} 张`)
+      throw new Error(`Subscription generation accepts at most ${String(SUBSCRIPTION_MAX_REFERENCE_IMAGES)} reference images (got ${String(references.length)})`)
     }
 
     // Antigravity speaks the Gemini contents protocol, not OpenAI-style
@@ -260,19 +241,7 @@ export class SubscriptionManager {
     let url: string
     let headers: Record<string, string>
     let body: Record<string, unknown>
-    if (vendor === 'codex') {
-      // Codex edits ride a sibling endpoint with the same identity headers;
-      // reference images go as data-URL image_url entries (JSON, not multipart).
-      url = references.length > 0 ? CODEX_IMAGE_EDIT_URL : CODEX_IMAGE_URL
-      headers = codexIdentityHeaders(session)
-      body = {
-        prompt: codexPromptWithSize(text, options.size),
-        model: CODEX_IMAGE_MODEL,
-        ...(references.length > 0 ? { images: references.map(image => ({ image_url: toDataUrl(image) })) } : {}),
-        ...(options.size !== undefined && options.size.length > 0 ? { size: options.size } : {}),
-        ...(options.quality !== undefined && options.quality.length > 0 ? { quality: options.quality } : {}),
-      }
-    } else {
+    {
       // Grok edits ride the public /v1/images/edits JSON endpoint; reference
       // images go as typed image_url entries (JSON, not multipart).
       url = references.length > 0 ? GROK_IMAGE_EDIT_URL : GROK_IMAGE_URL
@@ -334,27 +303,6 @@ export class SubscriptionManager {
   }
 }
 
-/** The private Codex backend can ignore size while following a canvas ratio in
- * the prompt (live checks: 16:9 -> 1672x941, 9:16 -> 941x1672). Keep size too;
- * this is best-effort composition guidance, not an exact-pixel guarantee. */
-function codexPromptWithSize(prompt: string, size: string | undefined): string {
-  const dimensions = /^(\d+)x(\d+)$/.exec(size ?? '')
-  if (dimensions === null) return prompt
-  const width = Number(dimensions[1])
-  const height = Number(dimensions[2])
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0) return prompt
-  let divisor = width
-  let remainder = height
-  while (remainder !== 0) {
-    const next = divisor % remainder
-    divisor = remainder
-    remainder = next
-  }
-  const ratio = `${String(width / divisor)}:${String(height / divisor)}`
-  const orientation = width > height ? '横向宽屏' : width < height ? '竖向' : '正方形'
-  return `${prompt}\n\n输出图片的画布宽高比必须为${ratio}，${orientation}构图，完整画面铺满${orientation}画布。`
-}
-
 /** Map an OpenAI-style size onto the aspect ratio Antigravity accepts. */
 function antigravityAspectRatioOf(size: string | undefined): string | undefined {
   const table: Record<string, string> = {
@@ -379,7 +327,7 @@ function toDataUrl(image: SubscriptionReferenceImage): string {
   return `data:${image.mediaType};base64,${Buffer.from(image.data).toString('base64')}`
 }
 
-/** Response parsing: Codex and Grok reply in the same `{data:[{b64_json}]}` shape. */
+/** Response parsing: Grok replies in the `{data:[{b64_json}]}` shape. */
 function parseImages(payload: unknown): Array<{ b64_json: string; revisedPrompt?: string; reportedQuality?: string }> {
   const body = typeof payload === 'object' && payload !== null ? payload as Record<string, unknown> : {}
   const rows = Array.isArray(body.data) ? body.data : []
@@ -412,7 +360,7 @@ function extractErrorMessage(payload: unknown): string | undefined {
 
 function notLoggedInError(vendor: SubscriptionVendor): Error {
   const display = providerNameOf(vendor)
-  return new Error(`${display} 未登录：请到 设置 > 插件 > 图像生成 的订阅区完成登录`)
+  return new Error(`${display} is not signed in; sign in from the subscription section of Settings > Plugins > Studio`)
 }
 
 function escapeHtml(value: string): string {

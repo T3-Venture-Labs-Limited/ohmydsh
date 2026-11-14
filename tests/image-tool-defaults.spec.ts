@@ -41,33 +41,15 @@ function harness() {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('image tool defaults and placeholders', () => {
-  it('exposes live defaults and credential-free configured providers', async () => {
-    const h = harness()
-    const context = h.contexts.find(item => item.name === 'dsh-image-gen:image-defaults')
-    expect(context).toBeDefined()
-    await vi.waitFor(() => { expect(context!.text()).toContain('openai-compat (channel: default)') })
-    expect(context!.text()).toContain('relay-generate')
-    expect(context!.text()).toContain('relay-edit')
-    expect(context!.text()).not.toContain('relay.example')
-    expect(context!.text()).not.toContain('offline-test-key')
-    h.config.provider = 'chatgpt-sub'
-    expect(context!.text()).toContain('chatgpt-sub')
-    expect(context!.text()).toContain('image_size')
-    expect(context!.text()).not.toContain('relay-generate')
-    h.resolveCredential.mockResolvedValue(undefined)
-    h.credentialListeners.get('credentials/reference-updated')!()
-    await vi.waitFor(() => { expect(context!.text()).toContain(': none.') })
-    expect(context!.text()).not.toContain('offline-test-key')
-  })
-  it('describes the active relay channel that tool calls run on', () => {
-    const relay2 = { id: 'relay2', label: 'Relay 2', keyRef: 'DSH_IMAGE_GEN_OPENAI_COMPAT_KEY_RELAY2', baseURL: 'https://relay2.example/v1', model: 'relay2-generate', editModel: 'relay2-edit' }
-    const onlyNamed = imageToolContext({ provider: 'openai-compat', openaiCompatChannels: [relay2], openaiCompatActiveChannel: 'relay2' } as never)
-    expect(onlyNamed).toContain('generation model: "relay2-generate"; editing model: "relay2-edit".')
-    expect(onlyNamed).not.toContain('relay2.example')
-    const withLegacy = imageToolContext({ provider: 'openai-compat', openaiCompatBaseURL: 'https://relay.example/v1', openaiCompatModel: 'relay-generate', openaiCompatEditModel: 'relay-edit', openaiCompatChannels: [relay2], openaiCompatActiveChannel: 'relay2' } as never)
-    expect(withLegacy).toContain('generation model: "relay2-generate"; editing model: "relay2-edit".')
-    const legacyActive = imageToolContext({ provider: 'openai-compat', openaiCompatBaseURL: 'https://relay.example/v1', openaiCompatModel: 'relay-generate', openaiCompatChannels: [relay2] } as never)
-    expect(legacyActive).toContain('generation model: "relay-generate"')
+  it('names the Studio tools and the default provider, and tells the model to omit provider and model', () => {
+    const text = imageToolContext({ provider: 'openai-compat' } as never, ['grok-sub', 'replicate'])
+    expect(text).toContain('studio_make')
+    expect(text).toContain('Default provider: openai-compat.')
+    expect(text).toContain('Configured providers (key saved, subscription signed in, or ComfyUI workflow present): grok-sub, replicate.')
+    expect(text).toContain('OMIT provider and model from studio_make')
+    for (const gone of ['studio_generate', 'studio_edit', 'studio_generate_batch']) expect(text).not.toContain(gone)
+    expect(imageToolContext({ provider: 'google' } as never, [])).toContain('Configured providers (key saved, subscription signed in, or ComfyUI workflow present): none.')
+    expect(imageToolContext({ provider: 'google' } as never)).not.toContain('Configured providers')
   })
   it('lists the ComfyUI workflow names the workflow argument accepts', () => {
     expect(imageToolContext({ provider: 'openai' } as never)).not.toContain('ComfyUI workflows')
@@ -79,46 +61,18 @@ describe('image tool defaults and placeholders', () => {
     expect(capped).toContain('"wf-19" (+3 more); active: "wf-0"')
     expect(capped).not.toContain('"wf-20"')
   })
-  it('requires an explicit user request before model arguments are supplied', () => {
+  it('registers one model-facing generation entry point whose provider and model arguments are optional hints', () => {
     const h = harness()
-    for (const name of ['generate_image', 'generate_images', 'edit_image']) {
-      expect(h.tool(name).parameters.properties.model.description).toContain('OMIT unless the user explicitly requests')
-    }
+    const make = h.tool('studio_make')
+    expect(make.parameters.properties.model.description).toContain('OMIT to let Studio pick')
+    expect(make.parameters.properties.provider.description).toContain('OMIT unless the user names a provider')
+    for (const removed of ['studio_generate', 'studio_generate_batch', 'studio_edit']) expect(h.tool(removed)).toBeUndefined()
   })
-  it('disposes image and canvas prompt contexts with their Cordis scope', () => {
+  it('disposes the image prompt context with its Cordis scope', () => {
     const h = harness()
-    expect(h.contexts).toHaveLength(2)
-    expect(h.promptDisposers).toHaveLength(2)
+    expect(h.contexts).toHaveLength(1)
+    expect(h.promptDisposers).toHaveLength(1)
     for (const dispose of h.promptDisposers) dispose()
     expect(h.contexts).toHaveLength(0)
-  })
-  it('cleans size placeholders for subscription generation, batch and edits', async () => {
-    const generate = vi.spyOn(SubscriptionManager.prototype, 'generate').mockResolvedValue([{ b64_json: 'iVBORw0KGgo=' }])
-    const h = harness()
-    const args = { prompt: 'boat', provider: 'chatgpt-sub', size: '  ', aspect_ratio: '1:1' }
-    await h.tool('generate_image').execute(args, h.exec)
-    await h.tool('generate_images').execute({ ...args, prompts: ['one', 'two'] }, h.exec)
-    await h.tool('edit_image').execute(args, h.exec)
-    expect(generate).toHaveBeenCalledTimes(4)
-    expect(generate.mock.calls.every(([call]) => call.size === '1024x1024')).toBe(true)
-  })
-  it('keeps the configured provider, omits blank size/quality and selects the edit model only for edits', async () => {
-    const fetchMock = vi.fn(async (_url: unknown, _init?: RequestInit) => Response.json({ data: [{ b64_json: 'iVBORw0KGgo=' }] }))
-    vi.stubGlobal('fetch', fetchMock)
-    const h = harness()
-    const one = await h.tool('generate_image').execute({ prompt: 'boat', size: '', quality: ' ' }, h.exec)
-    const edit = await h.tool('edit_image').execute({ prompt: 'blue boat', size: '', quality: ' ' }, h.exec)
-    expect(one).toMatchObject({ provider: 'openai-compat', model: 'relay-generate' })
-    expect(edit).toMatchObject({ provider: 'openai-compat', model: 'relay-edit' })
-    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]!.body))).toEqual({ model: 'relay-generate', prompt: 'boat', size: '1024x1024' })
-    await h.tool('edit_image').execute({ prompt: 'boat', model: 'explicit-edit' }, h.exec)
-    expect((fetchMock.mock.calls[2]![1]!.body as FormData).get('model')).toBe('explicit-edit')
-  })
-  it('preserves explicit provider overrides and real unsupported parameter errors', async () => {
-    vi.spyOn(SubscriptionManager.prototype, 'generate').mockResolvedValue([{ b64_json: 'iVBORw0KGgo=' }])
-    const h = harness()
-    expect(await h.tool('generate_image').execute({ prompt: 'boat', provider: 'google-sub' }, h.exec)).toMatchObject({ provider: 'google-sub' })
-    await expect(h.tool('generate_image').execute({ prompt: 'boat', provider: 'chatgpt-sub', size: '', aspect_ratio: '1:1', image_size: '1K' }, h.exec)).rejects.toThrow('image_size')
-    await expect(h.tool('generate_image').execute({ prompt: 'boat', provider: 'chatgpt-sub', size: '1024x1024', aspect_ratio: '1:1' }, h.exec)).rejects.toThrow('只选一个')
   })
 })

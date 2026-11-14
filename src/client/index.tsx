@@ -1,6 +1,3 @@
-// Must stay the first import: it shims CSS.supports before tldraw's
-// module-scope environment probe runs (#40); see css-supports-shim.ts.
-import './tl/css-supports-shim.js'
 import { installDatalistScrollFix } from './datalist-scroll-fix.js'
 import { compatEditFormat } from '../watermark.js'
 import { useEffect, useState, useRef, type ChangeEvent, type FormEvent } from 'react'
@@ -21,7 +18,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 import {
-  currentSeedreamModel,
   CLOUD_CREDENTIAL_REFS,
   CLOUD_IMAGE_PROVIDERS,
   API_KEY_CONSOLE_URLS,
@@ -55,37 +51,19 @@ import {
   type SubscriptionProvider,
 } from '../shared.js'
 import { validateComfyUIWorkflowJson } from '../comfyui-workflow.js'
-import { saveGalleryItem } from './gallery-store.js'
-import { GalleryViewTab, type GalleryViewTabProps, type LocaleService } from './gallery-view.js'
-import { GeneratedImageCard, GeneratedImagesCard, PromotedImageResultNode, type ImageCardFace } from './image-result-view.js'
-export { GeneratedImageCard, GeneratedImagesCard, PromotedImageResultNode } from './image-result-view.js'
+import type { LocaleService } from './locale-service.js'
+import { StudioSurface, StudioToolView } from './workbench-loader.js'
+import { createPushTransport } from '../kit/push/transport.js'
+import { sharedState } from './shared-state.js'
+import { studioBus, type StudioIntent } from './studio-bus.js'
 import { DICT, type DictKey } from './plugin-i18n.js'
 import { PLUGIN_STYLE } from './plugin-style.js'
-import { GIF_STYLE } from './gif-style.js'
-import { createCanvasSessionSelection, startConversationLandings, type CanvasSessions, type CanvasSessionSelection } from './tl/conversation-landings.js'
 import { STUDIO_STYLE } from './studio-style.js'
-import { TL_CSS } from './tl/tl-css.js'
-import { TL_THEME_CSS } from './tl/tl-theme-css.js'
-import { INSPIRATION_STYLE } from './inspiration-style.js'
-import {
-  IMAGE_RESULT_NODE_KIND,
-  createImageResultDefinition,
-} from './image-result-node.js'
-import { conversationRegenerateRequest } from './conversation-regenerate.js'
 import { parseExtraFields, parseSizeTable } from './output-settings.js'
 import { DEFAULT_COMPAT_QUALITIES, validateOfficialSize } from '../openai-output.js'
 import { ImageProviderPill, PROVIDER_PILL_STYLE, type ProviderPillFace } from './provider-pill.js'
 import { writeSetting } from './settings-write.js'
-
-/** Build timestamp injected by tsdown at bundle time. */
-declare const __CANVAS_BUILD_TS__: string
-
-// Convention: the canvas bundle announces its build timestamp on load, so a
-// stale host webview cache is provable from the browser console. The typeof
-// guard keeps the module importable where the define is absent (vitest).
-if (typeof __CANVAS_BUILD_TS__ !== 'undefined') {
-  console.info(`[dsh-image-gen] canvas bundle ${__CANVAS_BUILD_TS__}`)
-}
+import { V2ProvidersSettings } from './v2-providers-settings.js'
 
 type Provider = ImageProvider
 type ProviderRowTarget = Provider | `openai-compat:${string}`
@@ -115,20 +93,8 @@ interface ImageSettings {
   openaiCompatEditFormat?: 'multipart' | 'jsonImageUrlArray' | 'formReferenceImages' | 'siliconflowJson'
   /** Extra JSON fields merged into the JSON edit body; ignored in multipart mode. */
   openaiCompatEditExtra?: Record<string, unknown>
-  seedreamBaseURL?: string
-  seedreamModel?: string
-  /** Ark `output_format`; `png` is lossless and keeps an alpha channel. */
-  seedreamOutputFormat?: 'png' | 'jpeg'
-  /** Ark `watermark`; off removes the baked-in "AI generated" mark. */
-  seedreamWatermark?: boolean
-  /** Ark `background`; `transparent` needs an alpha-bearing edit reference. */
-  seedreamBackground?: 'opaque' | 'transparent'
-  dashscopeEndpoint?: string
-  dashscopeModel?: string
   xaiBaseURL?: string
   xaiModel?: string
-  zhipuBaseURL?: string
-  zhipuModel?: string
   comfyuiBaseURL?: string
   comfyuiWorkflows?: ComfyUIWorkflowEntry[]
   comfyuiActiveWorkflow?: string
@@ -172,14 +138,10 @@ interface SettingsFace {
 type SettingsCardProps = PropsRuntime<'settings.plugins.tab'> & InjectFace<SettingsFace>
 type SlotInject = (key: string, factory: () => () => void) => void
 
-interface ModernUiConversation {
-  events: { register(definition: ReturnType<typeof createImageResultDefinition>): () => void }
-}
-
 /** Right-sidebar tab-type registration id (DSH 0.1.5 `sidebarRightTabs`). */
-const SIDEBAR_STUDIO_TAB_ID = 'dsh-image-gen/studio'
+const SIDEBAR_STUDIO_TAB_ID = 'dsh-studio/studio'
 /** The tab kind: a page type opened by kind, recognizing no resource address. */
-const SIDEBAR_STUDIO_TAB_KIND = 'dsh-image-gen-studio'
+const SIDEBAR_STUDIO_TAB_KIND = 'dsh-studio-studio'
 /**
  * Runtime face of DSH 0.1.5's `sidebarRightTabs` service (stage one of a
  * right-sidebar tab type's registration). Kept local and duck-typed: hosts
@@ -239,68 +201,37 @@ export function apply(ctx: Context): void {
     ?? settingsScopeApi?.bind<ImageSettings>({ namespace: IMAGE_GENERATION_NAMESPACE })
     ?? degradedScope<ImageSettings>()
   const locale = ctx.get('locale') as LocaleService | undefined
-  const promotion = { enabled: false }
-  ctx.effect(() => installDatalistScrollFix() || (() => {}), 'dsh-image-gen: datalist scroll handling')
 
-  ;(ctx.inject as unknown as (services: string[], callback: (owner: Context) => void) => void)(
-    ['sessions'],
-    owner => {
-      const sessions = owner.get('sessions') as CanvasSessions | undefined
-      if (typeof sessions?.binding !== 'function' || typeof sessions.list?.subscribe !== 'function') return
-      const selection = createCanvasSessionSelection()
-      owner.effect(() => startConversationLandings(sessions, selection), 'dsh-image-gen: live canvas images')
-      // Optional injection keeps old hosts working and also handles uiSession
-      // becoming available after the session controller has already started.
-      ;(owner.inject as unknown as (services: string[], callback: (uiOwner: Context) => void) => void)(['uiSession'], uiOwner => {
-        const ui = uiOwner.get('uiSession') as { adapter?: { current?: CanvasSessionSelection } } | undefined
-        const current = ui?.adapter?.current
-        if (typeof current?.getSnapshot !== 'function' || typeof current.subscribe !== 'function') return
-        uiOwner.effect(() => selection.bind(current), 'dsh-image-gen: current canvas session')
-      })
-    },
-  )
+  // Live job/asset channel: a Typert stream on DSH's single multiplexed WebSocket (no HTTP stream; the browser allows only 6
+  // per host). The lazy workbench chunk reads the opener from the shared page state.
+  const transport = createPushTransport(ctx as never, { pkg: 'dsh-studio', serviceKey: 'dshStudio', namespace: 'dshStudio', streams: [{ method: 'jobs' }] })
+  ctx.effect(() => {
+    const live = sharedState<{ open?: unknown }>('livePush', () => ({}))
+    live.open = (signal: AbortSignal) => transport.stream('jobs', [], signal)
+    return () => { live.open = undefined }
+  }, 'dsh-studio: live stream opener')
+  ctx.effect(() => installDatalistScrollFix() || (() => {}), 'dsh-studio: datalist scroll handling')
 
   ctx.effect(() => {
     const style = document.createElement('style')
-    style.dataset.plugin = 'dsh-image-gen'
-    style.textContent = `${PLUGIN_STYLE}\n${GIF_STYLE}\n${STUDIO_STYLE}\n${INSPIRATION_STYLE}\n${PROVIDER_PILL_STYLE}\n${TL_CSS}\n${TL_THEME_CSS}`
+    style.dataset.plugin = 'dsh-studio'
+    style.textContent = `${PLUGIN_STYLE}\n${STUDIO_STYLE}\n${PROVIDER_PILL_STYLE}`
     document.head.appendChild(style)
     return () => {
       style.remove()
     }
-  }, 'dsh-image-gen: styles')
+  }, 'dsh-studio: styles')
 
   // One-time cleanup: the workflow canvas tab was removed; drop its orphaned
   // IndexedDB database. Best-effort only: a missing database succeeds
   // immediately, and failures (locked/blocked) are ignored.
   if (typeof indexedDB !== 'undefined') {
-    const request = indexedDB.deleteDatabase('dsh_image_gen_canvas')
+    const request = indexedDB.deleteDatabase('dsh_studio_canvas')
     request.onerror = () => {}
     request.onblocked = () => {}
   }
 
   const register = ctx.slots.register.bind(ctx.slots) as unknown as (options: object, component: unknown) => () => void
-
-  ;(ctx.inject as unknown as (services: string[], callback: (owner: Context) => void) => void)(
-    ['uiConversation'],
-    (owner) => {
-      const uiConversation = asModernUiConversation(owner.get('uiConversation'))
-      if (uiConversation === undefined) {
-        throw new Error('dsh-image-gen: uiConversation has an incompatible interface')
-      }
-      promotion.enabled = true
-      const ownerRegister = owner.slots.register.bind(owner.slots) as unknown as (options: object, component: unknown) => () => void
-      owner.effect(
-      () => uiConversation.events.register(createImageResultDefinition()),
-      'dsh-image-gen: promoted image result node',
-      )
-      ;(owner.slots.inject as SlotInject)('conversation.chat.node', () => ownerRegister({
-        name: 'conversation.chat.node',
-        key: IMAGE_RESULT_NODE_KIND,
-        inject: () => ({ locale }),
-      }, PromotedImageResultNode))
-    },
-  )
 
   // 1. Settings item
   // Credential badges stay fresh: relay host reference-updated events to the settings card.
@@ -310,7 +241,7 @@ export function apply(ctx: Context): void {
     const remote = ctx.get('remote') as { $on?: (event: 'credentials/reference-updated', listener: () => void) => () => void } | undefined
     if (typeof remote?.$on !== 'function') return () => {}
     return remote.$on('credentials/reference-updated', notifyCredentialsUpdated)
-  }, 'dsh-image-gen: credential events')
+  }, 'dsh-studio: credential events')
   const credentialEvents: CredentialEvents = {
     listen(callback: () => void): () => void {
       credentialListeners.add(callback)
@@ -333,8 +264,8 @@ export function apply(ctx: Context): void {
     ;(owner.slots.inject as (key: string, factory: () => () => void) => void)('plugins.bundle.config', () => ownerRegister({
       name: 'plugins.bundle.config',
       // Keyed slots select by bundle package name, and this plugin ships as the
-      // 'dsh-image-gen' bundle.
-      key: 'dsh-image-gen',
+      // 'dsh-studio' bundle.
+      key: 'dsh-studio',
       locale,
       inject: injectSettingsFace,
     }, ImageGenerationSettingsCard))
@@ -351,7 +282,7 @@ export function apply(ctx: Context): void {
     const ownerRegister = owner.slots.register.bind(owner.slots) as unknown as (options: object, component: unknown) => () => void
     ;(owner.slots.inject as (key: string, factory: () => () => void) => void)('conversation.input.right', () => ownerRegister({
       name: 'conversation.input.right',
-      id: 'image-provider',
+      id: 'studio-provider',
       order: 10,
       inject: (): ProviderPillFace => ({ scope, credentials: credentialsProxy, locale, credentialEvents }),
     }, ImageProviderPill))
@@ -389,92 +320,60 @@ export function apply(ctx: Context): void {
   ctx.inject(['remote.credentials'], (remoteCtx) => {
     const credentials = asCredentialsRemote(remoteCtx.get('remote.credentials'))
     if (credentials === undefined) {
-      console.warn('dsh-image-gen: remote.credentials resolved with an incompatible interface; key settings stay degraded')
+      console.warn('dsh-studio: remote.credentials resolved with an incompatible interface; key settings stay degraded')
       return
     }
     credentialsRef.current = credentials
     notifyCredentialsUpdated()
   })
 
-  // 2. Tool result view card in chat stream
-  ctx.slots.inject('tool.call.toolview', () => register({
-    name: 'tool.call.toolview',
-    key: 'generate_image',
-    inject: (): ImageCardFace => ({ locale, promoted: promotion.enabled }),
-  }, GeneratedImageCard))
-  ctx.slots.inject('tool.call.toolview', () => register({
-    name: 'tool.call.toolview',
-    key: 'generate_images',
-    inject: (): ImageCardFace => ({ locale, promoted: promotion.enabled }),
-  }, GeneratedImagesCard))
-  ctx.slots.inject('tool.call.toolview', () => register({
-    name: 'tool.call.toolview',
-    key: 'edit_image',
-    inject: (): ImageCardFace => ({ locale, promoted: promotion.enabled }),
-  }, GeneratedImageCard))
+  // 3. v2 tool cards (studio_make / studio_job / studio_gallery): live job progress and asset thumbnails from the host API.
+  for (const key of ['studio_make', 'studio_job', 'studio_gallery']) {
+    ctx.slots.inject('tool.call.toolview', () => register({
+      name: 'tool.call.toolview',
+      key,
+    }, (props: { phase: 'preparing' | 'start' | 'result'; block: unknown }) => <StudioToolView toolName={key} phase={props.phase} block={props.block} />))
+  }
 
-  // 3. Native conversation view tab (DSH official slot: 'conversation.view')
+  // 4. Full workbench as a conversation view tab.
   ;(ctx.slots.inject as SlotInject)('conversation.view', () => register({
     name: 'conversation.view',
-    id: 'gallery',
+    id: 'studio',
     order: 20,
-    label: () => {
-      const active = locale?.getSnapshot?.()?.active
-      return active?.startsWith('en') ? 'Gallery' : '画廊'
-    },
-    inject: () => ({ locale, credentialEvents }),
-  }, GalleryViewTab))
+    label: () => 'Studio',
+  }, () => <StudioSurface inSidebar={false} />))
 
-  // 4. Right-sidebar studio tab (DSH 0.1.5 official `sidebar.right.pane.tab`
-  // seat): the native conversation keeps the main column while the workbench -
-  // tldraw infinite canvas + generate form + recent list - docks beside it in
-  // the old image-details seat. Two-stage registration, exactly as
-  // ui-sidebar-documentpreview does it: the type into `sidebarRightTabs`, the
-  // body into the keyed seat under the definition's id. Deferred injection
-  // keeps pre-0.1.5 hosts booting: without the service the seat simply never
-  // appears and the conversation-view gallery tab remains the only surface.
+  // 5. Right-sidebar Studio tab: the compact workbench (composer + jobs + recent + gallery) beside the conversation.
+  // Two-stage registration as ui-sidebar-documentpreview does it: the type into `sidebarRightTabs`, the body into the
+  // keyed seat. Deferred injection keeps hosts without the service booting; the conversation view stays available.
   ;(ctx.inject as unknown as (services: string[], callback: (owner: Context) => void) => void)(
     ['sidebarRightTabs'],
     (owner) => {
       const sidebarTabs = owner.get('sidebarRightTabs') as SidebarRightTabsFace
-      const sidebarTitle = (): string => {
-        const active = locale?.getSnapshot?.()?.active
-        return active?.startsWith('en') ? 'Image Studio' : '图像工作台'
-      }
-      // Stage one - the page type. The guide entry is the only one registered
-      // (the shipped guide declares none), so `defaultSeed` lands every new
-      // sidebar straight onto the studio tab.
+      const sidebarTitle = (): string => 'Studio'
       owner.effect(() => sidebarTabs.register({
         id: SIDEBAR_STUDIO_TAB_ID,
         kind: SIDEBAR_STUDIO_TAB_KIND,
         priority: 'extension',
         title: () => sidebarTitle(),
         guide: [{ order: 100, title: () => sidebarTitle() }],
-      }), 'dsh-image-gen: sidebar studio tab type')
-      // Stage two - the body, keyed by the definition id.
+      }), 'dsh-studio: sidebar studio tab type')
       const ownerRegister = owner.slots.register.bind(owner.slots) as unknown as (options: object, component: unknown) => () => void
       ;(owner.slots.inject as (key: string, factory: () => () => void) => void)('sidebar.right.pane.tab', () => ownerRegister({
         name: 'sidebar.right.pane.tab',
         key: SIDEBAR_STUDIO_TAB_ID,
-        inject: (): GalleryViewTabProps => ({
-          locale,
-          credentialEvents,
-          inSidebar: true,
-          defaultTab: 'studio',
-          initialCanvasSurface: 'infinite',
-        }),
-      }, GalleryViewTab))
+      }, () => <StudioSurface inSidebar />))
+      // "Open in Studio" from tool cards and other surfaces: reveal the sidebar tab, then deliver the intent.
+      ;(owner.inject as unknown as (services: string[], callback: (o: Context) => void) => void)(['sidebarRight'], (srOwner) => {
+        const sidebar = srOwner.get('sidebarRight') as { openTab?: (kind: string) => void } | undefined
+        if (typeof sidebar?.openTab !== 'function') return
+        srOwner.effect(() => {
+          studioBus.setOpener((_intent: StudioIntent) => { try { sidebar.openTab!(SIDEBAR_STUDIO_TAB_KIND) } catch { /* tab type not registered yet */ } })
+          return () => { studioBus.setOpener(undefined) }
+        }, 'dsh-studio: open-in-studio bridge')
+      })
     },
   )
-}
-
-function asModernUiConversation(value: unknown): ModernUiConversation | undefined {
-  if (value === null || typeof value !== 'object') return undefined
-  const events = (value as { events?: unknown }).events
-  if (events === null || typeof events !== 'object') return undefined
-  return typeof (events as { register?: unknown }).register === 'function'
-    ? value as ModernUiConversation
-    : undefined
 }
 
 function asCredentialsRemote(value: unknown): CredentialsRemote | undefined {
@@ -549,10 +448,6 @@ interface ProviderRowState {
   qualityOptionsText: string
   generateExtraText: string
   editSizeMode: 'auto' | 'selected'
-  /** seedream only: Ark output controls. Other rows keep the defaults. */
-  outputFormat: 'png' | 'jpeg'
-  watermark: boolean
-  background: 'opaque' | 'transparent'
 }
 
 function emptyProviderRow(): ProviderRowState {
@@ -586,9 +481,6 @@ function emptyProviderRow(): ProviderRowState {
     qualityOptionsText: DEFAULT_COMPAT_QUALITIES.join(', '),
     generateExtraText: '',
     editSizeMode: 'auto',
-    outputFormat: 'jpeg',
-    watermark: true,
-    background: 'opaque',
   }
 }
 
@@ -597,10 +489,7 @@ const CLOUD_MODEL_FIELDS = {
   google: 'googleModel',
   openai: 'openaiModel',
   'openai-compat': 'openaiCompatModel',
-  seedream: 'seedreamModel',
-  dashscope: 'dashscopeModel',
   xai: 'xaiModel',
-  zhipu: 'zhipuModel',
 } as const satisfies Record<CloudImageProvider, keyof ImageSettings>
 
 /** Settings field each cloud provider persists its endpoint or base URL under. */
@@ -608,10 +497,7 @@ const CLOUD_URL_FIELDS = {
   google: 'googleEndpoint',
   openai: 'openaiBaseURL',
   'openai-compat': 'openaiCompatBaseURL',
-  seedream: 'seedreamBaseURL',
-  dashscope: 'dashscopeEndpoint',
   xai: 'xaiBaseURL',
-  zhipu: 'zhipuBaseURL',
 } as const satisfies Record<CloudImageProvider, keyof ImageSettings>
 
 /** Dictionary key of each cloud provider's endpoint hint. */
@@ -619,10 +505,7 @@ const CLOUD_HINT_KEYS = {
   google: 'endpointHintGoogle',
   openai: 'endpointHintOpenAI',
   'openai-compat': 'endpointHintOpenAICompat',
-  seedream: 'endpointHintSeedream',
-  dashscope: 'endpointHintDashScope',
   xai: 'endpointHintXAI',
-  zhipu: 'endpointHintZhipu',
 } as const satisfies Record<CloudImageProvider, DictKey>
 
 /** Config field a cloud provider persists its model under. */
@@ -689,11 +572,6 @@ function rowsFromSettings(value: ImageSettings | undefined): ProviderRows {
         timeoutSeconds: Math.max(1, Math.round((value?.comfyuiTimeoutMs ?? DEFAULT_COMFYUI_TIMEOUT_MS) / 1000)),
       } : {}),
       ...(provider === 'openai-compat' ? compatRowFields(resolveOpenAICompatChannels(value ?? {})[0]!) : {}),
-      ...(provider === 'seedream' ? {
-        outputFormat: value?.seedreamOutputFormat === 'png' ? 'png' : 'jpeg',
-        watermark: value?.seedreamWatermark !== false,
-        background: value?.seedreamBackground === 'transparent' ? 'transparent' : 'opaque',
-      } : {}),
     }
   }
   for (const channel of resolveOpenAICompatChannels(value ?? {}).slice(1)) {
@@ -713,14 +591,14 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
   const [health, setHealth] = useState<SettingsHealth>()
   const state = settingsState(snapshot, health)
   const settingsWritable = state === 'ready'
-  const [lang, setLang] = useState(() => (props.locale?.getSnapshot?.()?.active?.startsWith('en') ? 'en' : 'zh'))
+  const lang = 'en' as const
   const [defaultProvider, setDefaultProvider] = useState<Provider>(() => props.scope.getSnapshot().value?.provider ?? 'google')
   const [providerMessage, setProviderMessage] = useState('')
   const [providerMessageIsError, setProviderMessageIsError] = useState(false)
   const [cloudTimeoutSeconds, setCloudTimeoutSeconds] = useState(() => (props.scope.getSnapshot().value?.cloudTimeoutMs ?? DEFAULT_CLOUD_TIMEOUT_MS) / 1000)
   const [cloudTimeoutMessage, setCloudTimeoutMessage] = useState('')
   const [saveToWorkspace, setSaveToWorkspace] = useState(() => props.scope.getSnapshot().value?.saveToWorkspace ?? true)
-  const [workspaceFolder, setWorkspaceFolder] = useState(() => props.scope.getSnapshot().value?.workspaceFolder ?? 'dsh-image-gen')
+  const [workspaceFolder, setWorkspaceFolder] = useState(() => props.scope.getSnapshot().value?.workspaceFolder ?? 'dsh-studio')
   const [showPill, setShowPill] = useState(() => props.scope.getSnapshot().value?.showProviderPill === true)
   const [uiMessage, setUiMessage] = useState('')
   const [uiMessageIsError, setUiMessageIsError] = useState(false)
@@ -732,7 +610,7 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
   const [keyTick, setKeyTick] = useState(0)
   // Subscription login state per provider, read from the host login-status route.
   const [subStatus, setSubStatus] = useState<Record<SubscriptionProvider, { state: 'logged-in' | 'logged-out' | 'unknown'; email?: string }>>(
-    () => ({ 'chatgpt-sub': { state: 'unknown' }, 'grok-sub': { state: 'unknown' }, 'google-sub': { state: 'unknown' } }),
+    () => ({ 'grok-sub': { state: 'unknown' }, 'google-sub': { state: 'unknown' } }),
   )
   const [subTick, setSubTick] = useState(0)
   const [subBusy, setSubBusy] = useState<Partial<Record<SubscriptionProvider, 'login' | 'logout'>>>({})
@@ -757,11 +635,6 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
     })
     return () => { controller.abort() }
   }, [open, snapshot.status, snapshot.mode])
-  useEffect(() => {
-    return props.locale?.subscribe?.(() => {
-      setLang(props.locale?.getSnapshot?.()?.active?.startsWith('en') ? 'en' : 'zh')
-    })
-  }, [props.locale])
   const credentialEvents = props.credentialEvents
   useEffect(() => credentialEvents?.listen(() => { setKeyTick(tick => tick + 1) }), [credentialEvents])
 
@@ -780,7 +653,7 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
         if (!response.ok) return
         const payload = await response.json() as { statuses?: Record<string, { state?: string; email?: string }> }
         if (!active || payload.statuses === undefined) return
-        const next: Record<SubscriptionProvider, { state: 'logged-in' | 'logged-out' | 'unknown'; email?: string }> = { 'chatgpt-sub': { state: 'unknown' }, 'grok-sub': { state: 'unknown' }, 'google-sub': { state: 'unknown' } }
+        const next: Record<SubscriptionProvider, { state: 'logged-in' | 'logged-out' | 'unknown'; email?: string }> = { 'grok-sub': { state: 'unknown' }, 'google-sub': { state: 'unknown' } }
         for (const provider of SUBSCRIPTION_PROVIDERS) {
           const row = payload.statuses[provider]
           if (row?.state === 'logged-in') next[provider] = { state: 'logged-in', ...(typeof row.email === 'string' ? { email: row.email } : {}) }
@@ -871,8 +744,8 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
   }
 
   const t = (keyName: DictKey, params?: Record<string, string>): string => {
-    const dict = lang === 'en' ? DICT.en : DICT.zh
-    let text: string = dict[keyName] || DICT.zh[keyName] || keyName
+    const dict = DICT.en
+    let text: string = dict[keyName] || keyName
     if (params) {
       for (const [k, v] of Object.entries(params)) {
         text = text.replace(`{${k}}`, v)
@@ -894,12 +767,8 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
     google: t('providerGoogle'),
     openai: t('providerOpenAI'),
     'openai-compat': t('providerOpenAICompat'),
-    seedream: t('providerSeedream'),
-    dashscope: t('providerDashScope'),
     xai: t('providerXAI'),
-    zhipu: t('providerZhipu'),
     comfyui: t('providerComfyUI'),
-    'chatgpt-sub': t('providerChatGPTSub'),
     'grok-sub': t('providerGrokSub'),
     'google-sub': t('providerGoogleSub'),
   }
@@ -909,7 +778,7 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
     setDefaultProvider(value?.provider ?? 'google')
     setCloudTimeoutSeconds((value?.cloudTimeoutMs ?? DEFAULT_CLOUD_TIMEOUT_MS) / 1000)
     setSaveToWorkspace(value?.saveToWorkspace ?? true)
-    setWorkspaceFolder(value?.workspaceFolder ?? 'dsh-image-gen')
+    setWorkspaceFolder(value?.workspaceFolder ?? 'dsh-studio')
     setShowPill(value?.showProviderPill === true)
     setRows(current => {
       const next = { ...current }
@@ -924,12 +793,7 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
             activeWorkflow: activeComfyUIWorkflow(value ?? {})?.name ?? '',
             timeoutSeconds: Math.max(1, Math.round((value?.comfyuiTimeoutMs ?? DEFAULT_COMFYUI_TIMEOUT_MS) / 1000)),
           } : {}),
-          ...(provider === 'seedream' ? {
-            outputFormat: value?.seedreamOutputFormat === 'png' ? 'png' : 'jpeg',
-            watermark: value?.seedreamWatermark !== false,
-            background: value?.seedreamBackground === 'transparent' ? 'transparent' : 'opaque',
-          } : {}),
-        }
+            }
       }
       for (const channel of resolveOpenAICompatChannels(value ?? {}).slice(1)) {
         const key = compatChannelRowKey(channel.id)
@@ -1058,11 +922,6 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
           await saveSetting('openaiCompatExtraBody', generateExtra)
           await saveSetting('openaiCompatEditSizeMode', row.editSizeMode)
         }
-        if (provider === 'seedream') {
-          await saveSetting('seedreamOutputFormat', row.outputFormat)
-          await saveSetting('seedreamWatermark', row.watermark)
-          await saveSetting('seedreamBackground', row.background)
-        }
         if (row.keyInput.trim().length > 0) {
           const keyRef = cloudCredentialRef(provider)
           if (keyRef === undefined) throw new Error(t('comfyuiNoKey'))
@@ -1085,7 +944,7 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
 
   const addCompatChannel = (): void => {
     const id = `channel-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
-    const label = `OpenAI 兼容 ${compatChannels.length + 2}`
+    const label = `OpenAI-compatible ${compatChannels.length + 2}`
     const channel: OpenAICompatChannel = {
       id,
       label,
@@ -1244,20 +1103,20 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
   }
 
   const badgeOf = (provider: Provider, channel?: OpenAICompatChannel): { text: string; className: string } => {
-    if (provider === 'comfyui') return { text: t('comfyuiNoKey'), className: 'dsh-ig-badge dsh-ig-badge-neutral' }
+    if (provider === 'comfyui') return { text: t('comfyuiNoKey'), className: 'dsh-st-badge dsh-st-badge-neutral' }
     if (isSubscriptionProvider(provider)) {
       const status = subStatus[provider].state
-      if (status === 'logged-in') return { text: t('subBadgeLoggedIn'), className: 'dsh-ig-badge dsh-ig-badge-ok' }
-      if (status === 'logged-out') return { text: t('subBadgeLoggedOut'), className: 'dsh-ig-badge dsh-ig-badge-missing' }
-      return { text: t('subBadgeUnknown'), className: 'dsh-ig-badge dsh-ig-badge-neutral' }
+      if (status === 'logged-in') return { text: t('subBadgeLoggedIn'), className: 'dsh-st-badge dsh-st-badge-ok' }
+      if (status === 'logged-out') return { text: t('subBadgeLoggedOut'), className: 'dsh-st-badge dsh-st-badge-missing' }
+      return { text: t('subBadgeUnknown'), className: 'dsh-st-badge dsh-st-badge-neutral' }
     }
     const target = channel === undefined ? provider : compatChannelRowKey(channel.id)
     const status = rows[target]!.keyStatus
-    if (status === 'checking') return { text: t('badgeChecking'), className: 'dsh-ig-badge dsh-ig-badge-neutral dsh-ig-badge-checking' }
-    if (status === 'configured') return { text: t('badgeConfigured'), className: 'dsh-ig-badge dsh-ig-badge-ok' }
-    if (status === 'missing') return { text: t('badgeMissing'), className: 'dsh-ig-badge dsh-ig-badge-missing' }
-    if (status === 'unavailable') return { text: t('badgeUnavailable'), className: 'dsh-ig-badge dsh-ig-badge-neutral' }
-    return { text: t('badgeUnknown'), className: 'dsh-ig-badge dsh-ig-badge-neutral' }
+    if (status === 'checking') return { text: t('badgeChecking'), className: 'dsh-st-badge dsh-st-badge-neutral dsh-st-badge-checking' }
+    if (status === 'configured') return { text: t('badgeConfigured'), className: 'dsh-st-badge dsh-st-badge-ok' }
+    if (status === 'missing') return { text: t('badgeMissing'), className: 'dsh-st-badge dsh-st-badge-missing' }
+    if (status === 'unavailable') return { text: t('badgeUnavailable'), className: 'dsh-st-badge dsh-st-badge-neutral' }
+    return { text: t('badgeUnknown'), className: 'dsh-st-badge dsh-st-badge-neutral' }
   }
 
   const importWorkflow = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
@@ -1333,12 +1192,12 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
   /** Folder input persists on Enter or blur; no save button needed. */
   const commitWorkspaceFolder = (): void => {
     const next = workspaceFolder.trim()
-    if (next === (snapshot.value?.workspaceFolder ?? 'dsh-image-gen')) return
+    if (next === (snapshot.value?.workspaceFolder ?? 'dsh-studio')) return
     setWorkspaceMessage(''); setWorkspaceMessageIsError(false)
     void saveSetting('workspaceFolder', next).then(() => {
       setWorkspaceMessage(t('saved'))
     }).catch((cause: unknown) => {
-      setWorkspaceFolder(snapshot.value?.workspaceFolder ?? 'dsh-image-gen')
+      setWorkspaceFolder(snapshot.value?.workspaceFolder ?? 'dsh-studio')
       setWorkspaceMessage(cause instanceof Error ? cause.message : String(cause))
       setWorkspaceMessageIsError(true)
     })
@@ -1359,7 +1218,7 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
     const target = channel === undefined ? provider : compatChannelRowKey(channel.id)
     const row = rows[target]!
     const update = (patch: Partial<ProviderRowState>): void => { updateRow(target, patch) }
-    const modelListId = `dsh-ig-${target.replace(/[^A-Za-z0-9_-]/g, '-')}-model-options`
+    const modelListId = `dsh-st-${target.replace(/[^A-Za-z0-9_-]/g, '-')}-model-options`
     const officialEditFormat = provider === 'openai-compat'
       ? compatEditFormat({ openaiCompatBaseURL: row.baseURL, openaiCompatModel: row.editModel.trim() || row.model }) : 'multipart'
     const automaticEditFormat = officialEditFormat !== 'multipart'
@@ -1372,18 +1231,18 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
       ? resolveOpenAICompatModels({ openaiCompatModel: row.model, openaiCompatModels: [...row.models, ...row.modelOptions] })
       : []
     return (
-      <div className="dsh-ig-provider-body">
+      <div className="dsh-st-provider-body">
         <form onSubmit={(event) => { event.preventDefault(); void saveProviderRow(provider, channel) }}>
           {provider === 'openai-compat' ? (
-            <label className="dsh-ig-field">
-              <span className="dsh-ig-label">{t('channelName')}</span>
-              <input className="dsh-ig-input" value={row.label} onChange={event => { update({ label: event.target.value }) }} placeholder={providerLabels[provider]} required={channel !== undefined} disabled={!settingsWritable} />
+            <label className="dsh-st-field">
+              <span className="dsh-st-label">{t('channelName')}</span>
+              <input className="dsh-st-input" value={row.label} onChange={event => { update({ label: event.target.value }) }} placeholder={providerLabels[provider]} required={channel !== undefined} disabled={!settingsWritable} />
             </label>
           ) : null}
-          <label className="dsh-ig-field">
-            <span className="dsh-ig-label">{t('apiKeyLabel', { provider: providerLabel })}</span>
+          <label className="dsh-st-field">
+            <span className="dsh-st-label">{t('apiKeyLabel', { provider: providerLabel })}</span>
             <input
-              className="dsh-ig-input"
+              className="dsh-st-input"
               type="password"
               autoComplete="off"
               value={row.keyInput}
@@ -1391,43 +1250,43 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
               placeholder={row.keyStatus === 'configured' ? t('apiKeyPlaceholder') : ''}
               disabled={!settingsWritable || keyReadOnly || keyUnavailable}
             />
-            <span className="dsh-ig-hint">
+            <span className="dsh-st-hint">
               {keyUnavailable ? t('credentialsUnavailable')
                 : keyReadOnly ? t('keyReadOnly', { source: row.keyInfo?.source ?? '' })
                 : t('apiKeyHint', { key: keyRef })}
               {channel === undefined && API_KEY_CONSOLE_URLS[provider] !== undefined ? (
                 <>
                   {' '}
-                  <a className="dsh-ig-link" href={API_KEY_CONSOLE_URLS[provider]} target="_blank" rel="noopener noreferrer">{t('getApiKey')}</a>
+                  <a className="dsh-st-link" href={API_KEY_CONSOLE_URLS[provider]} target="_blank" rel="noopener noreferrer">{t('getApiKey')}</a>
                 </>
               ) : null}
             </span>
           </label>
-          <label className="dsh-ig-field">
-            <span className="dsh-ig-label">{t('endpoint')}</span>
-            <div className="dsh-ig-input-group">
-              <input className="dsh-ig-input" type="url" value={row.baseURL} onChange={event => { update({ baseURL: event.target.value }) }} required disabled={!settingsWritable} />
+          <label className="dsh-st-field">
+            <span className="dsh-st-label">{t('endpoint')}</span>
+            <div className="dsh-st-input-group">
+              <input className="dsh-st-input" type="url" value={row.baseURL} onChange={event => { update({ baseURL: event.target.value }) }} required disabled={!settingsWritable} />
               {provider !== 'openai-compat' ? (
-                <button type="button" className="dsh-ig-btn-reset" title={t('resetTitle')} onClick={() => { update({ baseURL: DEFAULT_BASE_URLS[provider] }) }} disabled={!settingsWritable}>{t('reset')}</button>
+                <button type="button" className="dsh-st-btn-reset" title={t('resetTitle')} onClick={() => { update({ baseURL: DEFAULT_BASE_URLS[provider] }) }} disabled={!settingsWritable}>{t('reset')}</button>
               ) : null}
             </div>
-            <span className="dsh-ig-hint">{t(provider === 'google' && row.googleNative ? 'endpointHintGoogleNative' : CLOUD_HINT_KEYS[provider])}</span>
+            <span className="dsh-st-hint">{t(provider === 'google' && row.googleNative ? 'endpointHintGoogleNative' : CLOUD_HINT_KEYS[provider])}</span>
           </label>
           {provider === 'google' ? (
-            <label className="dsh-ig-field">
-              <span className="dsh-ig-label">{t('googleProtocol')}</span>
-              <select className="dsh-ig-input" value={row.googleNative ? 'native' : 'interactions'} onChange={event => { update({ googleNative: event.target.value === 'native' }) }} disabled={!settingsWritable}>
+            <label className="dsh-st-field">
+              <span className="dsh-st-label">{t('googleProtocol')}</span>
+              <select className="dsh-st-input" value={row.googleNative ? 'native' : 'interactions'} onChange={event => { update({ googleNative: event.target.value === 'native' }) }} disabled={!settingsWritable}>
                 <option value="interactions">{t('googleInteractions')}</option>
                 <option value="native">{t('googleNative')}</option>
               </select>
             </label>
           ) : null}
-          <label className="dsh-ig-field">
-            <span className="dsh-ig-label">{t(provider === 'openai-compat' ? 'defaultModel' : 'model')}</span>
+          <label className="dsh-st-field">
+            <span className="dsh-st-label">{t(provider === 'openai-compat' ? 'defaultModel' : 'model')}</span>
             {modelPullSupported(provider) ? (
-              <div className="dsh-ig-input-group">
+              <div className="dsh-st-input-group">
                 <input
-                  className="dsh-ig-input"
+                  className="dsh-st-input"
                   value={row.model}
                   onChange={event => { update({ model: event.target.value }) }}
                   onBlur={() => {
@@ -1442,31 +1301,31 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
                 </datalist>
                 <button
                   type="button"
-                  className="dsh-ig-btn-secondary"
+                  className="dsh-st-btn-secondary"
                   disabled={row.fetchingModels || row.saving || !settingsWritable}
                   onClick={() => { void fetchProviderModels(provider, channel) }}
                 >{row.fetchingModels ? t('fetchingModels') : t('fetchModels')}</button>
               </div>
             ) : (
-              <input className="dsh-ig-input" value={row.model} onChange={event => { update({ model: event.target.value }) }} required disabled={!settingsWritable} />
+              <input className="dsh-st-input" value={row.model} onChange={event => { update({ model: event.target.value }) }} required disabled={!settingsWritable} />
             )}
             {modelPullSupported(provider) ? (
               row.modelFetchMessage.length > 0 ? (
-                <span className={`dsh-ig-hint${row.modelFetchIsError ? ' dsh-ig-hint-error' : ''}`} role="status">{row.modelFetchMessage}</span>
+                <span className={`dsh-st-hint${row.modelFetchIsError ? ' dsh-st-hint-error' : ''}`} role="status">{row.modelFetchMessage}</span>
               ) : (
-                <span className="dsh-ig-hint">{t('fetchModelsHint')}</span>
+                <span className="dsh-st-hint">{t('fetchModelsHint')}</span>
               )
             ) : null}
           </label>
           {provider === 'openai-compat' && compatModelChoices.length > 0 ? (
-            <div className="dsh-ig-field">
-              <span className="dsh-ig-label">{t('availableModels')}</span>
-              <div className="dsh-ig-model-picker">
+            <div className="dsh-st-field">
+              <span className="dsh-st-label">{t('availableModels')}</span>
+              <div className="dsh-st-model-picker">
                 {compatModelChoices.map(id => {
                   const isDefault = row.model.trim() === id
                   const checked = isDefault || row.models.includes(id)
                   return (
-                    <label className="dsh-ig-check-row" key={id} title={id}>
+                    <label className="dsh-st-check-row" key={id} title={id}>
                       <input
                         type="checkbox"
                         checked={checked}
@@ -1476,27 +1335,27 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
                           update({ models: resolveOpenAICompatModels({ openaiCompatModel: row.model, openaiCompatModels: models }) })
                         }}
                       />
-                      <span className="dsh-ig-model-option">{id}</span>
-                      {isDefault ? <span className="dsh-ig-model-default">{t('defaultModelTag')}</span> : null}
+                      <span className="dsh-st-model-option">{id}</span>
+                      {isDefault ? <span className="dsh-st-model-default">{t('defaultModelTag')}</span> : null}
                     </label>
                   )
                 })}
               </div>
-              <span className="dsh-ig-hint">{t('availableModelsHint')}</span>
+              <span className="dsh-st-hint">{t('availableModelsHint')}</span>
             </div>
           ) : null}
           {provider === 'openai-compat' ? (
-            <label className="dsh-ig-field">
-              <span className="dsh-ig-label">{t('editModel')}</span>
-              <input className="dsh-ig-input" value={row.editModel} onChange={event => { update({ editModel: event.target.value }) }} list={modelListId} disabled={!settingsWritable} />
-              <span className="dsh-ig-hint">{t('editModelHint')}</span>
+            <label className="dsh-st-field">
+              <span className="dsh-st-label">{t('editModel')}</span>
+              <input className="dsh-st-input" value={row.editModel} onChange={event => { update({ editModel: event.target.value }) }} list={modelListId} disabled={!settingsWritable} />
+              <span className="dsh-st-hint">{t('editModelHint')}</span>
             </label>
           ) : null}
           {provider === 'openai-compat' ? (
-            <label className="dsh-ig-field">
-              <span className="dsh-ig-label">{t('editFormat')}</span>
+            <label className="dsh-st-field">
+              <span className="dsh-st-label">{t('editFormat')}</span>
               <select
-                className="dsh-ig-input"
+                className="dsh-st-input"
                 value={automaticEditFormat ? '__official__' : row.editFormat}
                 onChange={event => { update({ editFormat: parseEditFormat(event.target.value) }) }}
                 disabled={!settingsWritable || automaticEditFormat}
@@ -1507,109 +1366,66 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
                 <option value="formReferenceImages">{t('editFormatFormReferenceImages')}</option>
                 <option value="siliconflowJson">{t('editFormatSiliconFlow')}</option>
               </select>
-              <span className="dsh-ig-hint">{t(editFormat === 'siliconflowJson' ? 'editFormatSiliconFlowHint' : 'editFormatHint')}</span>
+              <span className="dsh-st-hint">{t(editFormat === 'siliconflowJson' ? 'editFormatSiliconFlowHint' : 'editFormatHint')}</span>
             </label>
           ) : null}
-          {provider === 'seedream' ? (
-            <>
-              <label className="dsh-ig-field">
-                <span className="dsh-ig-label">{t('arkOutputFormat')}</span>
-                <select
-                  className="dsh-ig-input"
-                  value={row.outputFormat}
-                  onChange={event => { update({ outputFormat: event.target.value === 'png' ? 'png' : 'jpeg' }) }}
-                  disabled={!settingsWritable}
-                >
-                  <option value="jpeg">{t('arkOutputFormatJpeg')}</option>
-                  <option value="png">{t('arkOutputFormatPng')}</option>
-                </select>
-                <span className="dsh-ig-hint">{t('arkOutputFormatHint')}</span>
-              </label>
-              <label className="dsh-ig-field">
-                <span className="dsh-ig-label">{t('arkWatermark')}</span>
-                <select
-                  className="dsh-ig-input"
-                  value={row.watermark ? 'on' : 'off'}
-                  onChange={event => { update({ watermark: event.target.value === 'on' }) }}
-                  disabled={!settingsWritable}
-                >
-                  <option value="on">{t('arkWatermarkOn')}</option>
-                  <option value="off">{t('arkWatermarkOff')}</option>
-                </select>
-                <span className="dsh-ig-hint">{t('arkWatermarkHint')}</span>
-              </label>
-              <label className="dsh-ig-field">
-                <span className="dsh-ig-label">{t('arkBackground')}</span>
-                <select
-                  className="dsh-ig-input"
-                  value={row.background}
-                  onChange={event => { update({ background: event.target.value === 'transparent' ? 'transparent' : 'opaque' }) }}
-                  disabled={!settingsWritable}
-                >
-                  <option value="opaque">{t('arkBackgroundOpaque')}</option>
-                  <option value="transparent">{t('arkBackgroundTransparent')}</option>
-                </select>
-                <span className="dsh-ig-hint">{t('arkBackgroundHint')}</span>
-              </label>
-            </>
-          ) : null}
           {provider === 'openai' || provider === 'openai-compat' ? (
-            <label className="dsh-ig-field">
-              <span className="dsh-ig-label">{t('sizeTable')}</span>
-              <textarea className="dsh-ig-input dsh-ig-textarea" value={row.sizeTableText} onChange={event => { update({ sizeTableText: event.target.value }) }} rows={3} disabled={!settingsWritable} />
-              <span className="dsh-ig-hint">{t('sizeTableHint')}</span>
+            <label className="dsh-st-field">
+              <span className="dsh-st-label">{t('sizeTable')}</span>
+              <textarea className="dsh-st-input dsh-st-textarea" value={row.sizeTableText} onChange={event => { update({ sizeTableText: event.target.value }) }} rows={3} disabled={!settingsWritable} />
+              <span className="dsh-st-hint">{t('sizeTableHint')}</span>
             </label>
           ) : null}
           {provider === 'openai-compat' ? (
             <>
-              <label className="dsh-ig-field">
-                <span className="dsh-ig-label">{t('defaultQuality')}</span>
-                <input className="dsh-ig-input" value={row.generationQuality} onChange={event => { update({ generationQuality: event.target.value }) }} placeholder="high" disabled={!settingsWritable} />
-                <span className="dsh-ig-hint">{t('defaultQualityHint')}</span>
+              <label className="dsh-st-field">
+                <span className="dsh-st-label">{t('defaultQuality')}</span>
+                <input className="dsh-st-input" value={row.generationQuality} onChange={event => { update({ generationQuality: event.target.value }) }} placeholder="high" disabled={!settingsWritable} />
+                <span className="dsh-st-hint">{t('defaultQualityHint')}</span>
               </label>
-              <label className="dsh-ig-field">
-                <span className="dsh-ig-label">{t('qualityOptions')}</span>
-                <input className="dsh-ig-input" value={row.qualityOptionsText} onChange={event => { update({ qualityOptionsText: event.target.value }) }} disabled={!settingsWritable} />
+              <label className="dsh-st-field">
+                <span className="dsh-st-label">{t('qualityOptions')}</span>
+                <input className="dsh-st-input" value={row.qualityOptionsText} onChange={event => { update({ qualityOptionsText: event.target.value }) }} disabled={!settingsWritable} />
               </label>
-              <label className="dsh-ig-field">
-                <span className="dsh-ig-label">{t('generateExtra')}</span>
-                <textarea className="dsh-ig-input dsh-ig-textarea" value={row.generateExtraText} onChange={event => { update({ generateExtraText: event.target.value }) }} placeholder={'{"watermark":false}'} rows={2} disabled={!settingsWritable} />
-                <span className="dsh-ig-hint">{t('generateExtraHint')}</span>
+              <label className="dsh-st-field">
+                <span className="dsh-st-label">{t('generateExtra')}</span>
+                <textarea className="dsh-st-input dsh-st-textarea" value={row.generateExtraText} onChange={event => { update({ generateExtraText: event.target.value }) }} placeholder={'{"watermark":false}'} rows={2} disabled={!settingsWritable} />
+                <span className="dsh-st-hint">{t('generateExtraHint')}</span>
               </label>
             </>
           ) : null}
           {provider === 'openai-compat' && (editFormat === 'jsonImageUrlArray' || editFormat === 'qwenJson' || editFormat === 'siliconflowJson') ? (
             <>
             {editFormat === 'jsonImageUrlArray' ? (
-            <label className="dsh-ig-field">
-              <span className="dsh-ig-label">{t('editSizeMode')}</span>
-              <select className="dsh-ig-input" value={row.editSizeMode} onChange={event => { update({ editSizeMode: event.target.value === 'selected' ? 'selected' : 'auto' }) }} disabled={!settingsWritable}>
+            <label className="dsh-st-field">
+              <span className="dsh-st-label">{t('editSizeMode')}</span>
+              <select className="dsh-st-input" value={row.editSizeMode} onChange={event => { update({ editSizeMode: event.target.value === 'selected' ? 'selected' : 'auto' }) }} disabled={!settingsWritable}>
                 <option value="auto">{t('editSizeAuto')}</option><option value="selected">{t('editSizeSelected')}</option>
               </select>
             </label>
             ) : null}
-            <label className="dsh-ig-field">
-              <span className="dsh-ig-label">{t('editExtra')}</span>
+            <label className="dsh-st-field">
+              <span className="dsh-st-label">{t('editExtra')}</span>
               <textarea
-                className="dsh-ig-input dsh-ig-textarea"
+                className="dsh-st-input dsh-st-textarea"
                 value={row.editExtraText}
                 onChange={event => { update({ editExtraText: event.target.value }) }}
                 placeholder={t('editExtraPlaceholder')}
                 rows={2}
                 disabled={!settingsWritable}
               />
-              <span className="dsh-ig-hint">{t('editExtraHint')}</span>
+              <span className="dsh-st-hint">{t('editExtraHint')}</span>
             </label>
             </>
           ) : null}
-          <div className="dsh-ig-row-actions">
-            <p className={`dsh-ig-status${row.messageIsError ? ' dsh-ig-status-error' : ''}`} role="status">{row.message || testResultText(row.testResult)}</p>
-            <span className="dsh-ig-row-buttons">
-              <button type="button" className="dsh-ig-btn-secondary" disabled={row.testing || row.saving} onClick={() => { void testConnection(provider, channel) }}>{row.testing ? t('testing') : t('testConnection')}</button>
+          <div className="dsh-st-row-actions">
+            <p className={`dsh-st-status${row.messageIsError ? ' dsh-st-status-error' : ''}`} role="status">{row.message || testResultText(row.testResult)}</p>
+            <span className="dsh-st-row-buttons">
+              <button type="button" className="dsh-st-btn-secondary" disabled={row.testing || row.saving} onClick={() => { void testConnection(provider, channel) }}>{row.testing ? t('testing') : t('testConnection')}</button>
               {row.keyStatus === 'configured' && !keyReadOnly ? (
-                <button type="button" className="dsh-ig-btn-secondary dsh-ig-btn-danger" disabled={row.saving} onClick={() => { void clearProviderKey(provider, channel) }}>{t('clearKey')}</button>
+                <button type="button" className="dsh-st-btn-secondary dsh-st-btn-danger" disabled={row.saving} onClick={() => { void clearProviderKey(provider, channel) }}>{t('clearKey')}</button>
               ) : null}
-              <button className="dsh-ig-save" type="submit" disabled={row.saving || row.testing || row.fetchingModels || !settingsWritable}>{row.saving ? t('saving') : t('save')}</button>
+              <button className="dsh-st-save" type="submit" disabled={row.saving || row.testing || row.fetchingModels || !settingsWritable}>{row.saving ? t('saving') : t('save')}</button>
             </span>
           </div>
         </form>
@@ -1620,49 +1436,49 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
   const renderComfyUIBody = () => {
     const row = rows.comfyui
     return (
-      <div className="dsh-ig-provider-body">
+      <div className="dsh-st-provider-body">
         <form onSubmit={(event) => { event.preventDefault(); void saveProviderRow('comfyui') }}>
-          <label className="dsh-ig-field">
-            <span className="dsh-ig-label">{t('endpoint')}</span>
-            <div className="dsh-ig-input-group">
-              <input className="dsh-ig-input" type="url" value={row.baseURL} onChange={event => { updateRow('comfyui', { baseURL: event.target.value }) }} required disabled={!settingsWritable} />
-              <button type="button" className="dsh-ig-btn-reset" title={t('resetTitle')} onClick={() => { updateRow('comfyui', { baseURL: DEFAULT_BASE_URLS.comfyui }) }} disabled={!settingsWritable}>{t('reset')}</button>
+          <label className="dsh-st-field">
+            <span className="dsh-st-label">{t('endpoint')}</span>
+            <div className="dsh-st-input-group">
+              <input className="dsh-st-input" type="url" value={row.baseURL} onChange={event => { updateRow('comfyui', { baseURL: event.target.value }) }} required disabled={!settingsWritable} />
+              <button type="button" className="dsh-st-btn-reset" title={t('resetTitle')} onClick={() => { updateRow('comfyui', { baseURL: DEFAULT_BASE_URLS.comfyui }) }} disabled={!settingsWritable}>{t('reset')}</button>
             </div>
-            <span className="dsh-ig-hint">{t('endpointHintComfyUI')}</span>
+            <span className="dsh-st-hint">{t('endpointHintComfyUI')}</span>
           </label>
-          <div className="dsh-ig-field">
-            <span className="dsh-ig-label">{t('workflow')}</span>
-            <div className="dsh-ig-file-row">
-              <label className="dsh-ig-file-button">
-                <input className="dsh-ig-file-input" type="file" accept=".json,application/json" onChange={event => { void importWorkflow(event) }} />
+          <div className="dsh-st-field">
+            <span className="dsh-st-label">{t('workflow')}</span>
+            <div className="dsh-st-file-row">
+              <label className="dsh-st-file-button">
+                <input className="dsh-st-file-input" type="file" accept=".json,application/json" onChange={event => { void importWorkflow(event) }} />
                 {t('workflowImport')}
               </label>
-              {row.workflows.length === 0 ? <span className="dsh-ig-file-name">{t('workflowMissing')}</span> : null}
+              {row.workflows.length === 0 ? <span className="dsh-st-file-name">{t('workflowMissing')}</span> : null}
             </div>
             {row.workflows.length > 0 ? (
-              <ul className="dsh-ig-workflow-list">
+              <ul className="dsh-st-workflow-list">
                 {row.workflows.map((entry, index) => (
-                  <li className="dsh-ig-workflow-row" key={String(index)}>
-                    <div className="dsh-ig-workflow-main">
-                      <label className="dsh-ig-workflow-active" title={t('workflowActiveTitle')}>
+                  <li className="dsh-st-workflow-row" key={String(index)}>
+                    <div className="dsh-st-workflow-main">
+                      <label className="dsh-st-workflow-active" title={t('workflowActiveTitle')}>
                         <input
                           type="radio"
-                          name="dsh-ig-active-workflow"
+                          name="dsh-st-active-workflow"
                           aria-label={t('workflowActiveTitle')}
                           checked={entry.name === row.activeWorkflow}
                           onChange={() => { updateRow('comfyui', { activeWorkflow: entry.name }) }}
                         />
                       </label>
                       <input
-                        className="dsh-ig-input dsh-ig-workflow-name"
+                        className="dsh-st-input dsh-st-workflow-name"
                         value={entry.name}
                         title={entry.name}
                         onChange={event => { renameWorkflow(index, event.target.value) }}
                       />
-                      <button type="button" className="dsh-ig-btn-reset" onClick={() => { removeWorkflow(index) }}>{t('workflowRemove')}</button>
+                      <button type="button" className="dsh-st-btn-reset" onClick={() => { removeWorkflow(index) }}>{t('workflowRemove')}</button>
                     </div>
                     <input
-                      className="dsh-ig-input dsh-ig-workflow-preset"
+                      className="dsh-st-input dsh-st-workflow-preset"
                       value={entry.presetPrompt ?? ''}
                       placeholder={t('workflowPresetPlaceholder')}
                       title={t('workflowPresetTitle')}
@@ -1672,18 +1488,18 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
                 ))}
               </ul>
             ) : null}
-            <span className="dsh-ig-hint">{t('workflowHint')}</span>
+            <span className="dsh-st-hint">{t('workflowHint')}</span>
           </div>
-          <label className="dsh-ig-field">
-            <span className="dsh-ig-label">{t('timeout')}</span>
-            <input className="dsh-ig-input" type="number" min="1" max="3600" step="1" value={row.timeoutSeconds} onChange={event => { updateRow('comfyui', { timeoutSeconds: Number(event.target.value) }) }} required disabled={!settingsWritable} />
-            <span className="dsh-ig-hint">{t('timeoutHint')}</span>
+          <label className="dsh-st-field">
+            <span className="dsh-st-label">{t('timeout')}</span>
+            <input className="dsh-st-input" type="number" min="1" max="3600" step="1" value={row.timeoutSeconds} onChange={event => { updateRow('comfyui', { timeoutSeconds: Number(event.target.value) }) }} required disabled={!settingsWritable} />
+            <span className="dsh-st-hint">{t('timeoutHint')}</span>
           </label>
-          <div className="dsh-ig-row-actions">
-            <p className={`dsh-ig-status${row.messageIsError ? ' dsh-ig-status-error' : ''}`} role="status">{row.message || testResultText(row.testResult)}</p>
-            <span className="dsh-ig-row-buttons">
-              <button type="button" className="dsh-ig-btn-secondary" disabled={row.testing} onClick={() => { void testConnection('comfyui') }}>{row.testing ? t('testing') : t('testConnection')}</button>
-              <button className="dsh-ig-save" type="submit" disabled={row.saving || !settingsWritable || row.workflows.length === 0}>{row.saving ? t('saving') : t('save')}</button>
+          <div className="dsh-st-row-actions">
+            <p className={`dsh-st-status${row.messageIsError ? ' dsh-st-status-error' : ''}`} role="status">{row.message || testResultText(row.testResult)}</p>
+            <span className="dsh-st-row-buttons">
+              <button type="button" className="dsh-st-btn-secondary" disabled={row.testing} onClick={() => { void testConnection('comfyui') }}>{row.testing ? t('testing') : t('testConnection')}</button>
+              <button className="dsh-st-save" type="submit" disabled={row.saving || !settingsWritable || row.workflows.length === 0}>{row.saving ? t('saving') : t('save')}</button>
             </span>
           </div>
         </form>
@@ -1697,37 +1513,37 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
     const status = subStatus[provider]
     const busy = subBusy[provider]
     return (
-      <div className="dsh-ig-provider-body">
+      <div className="dsh-st-provider-body">
         <form onSubmit={(event) => { event.preventDefault(); void saveProviderRow(provider) }}>
-          <div className="dsh-ig-field">
-            <span className="dsh-ig-label">{t('subSectionTitle')}</span>
-            <p className="dsh-ig-hint">{t('subHint')}</p>
-            <p className="dsh-ig-hint" role="note">{t('subProxyHint')}</p>
+          <div className="dsh-st-field">
+            <span className="dsh-st-label">{t('subSectionTitle')}</span>
+            <p className="dsh-st-hint">{t('subHint')}</p>
+            <p className="dsh-st-hint" role="note">{t('subProxyHint')}</p>
           </div>
-          <div className="dsh-ig-field">
-            <span className="dsh-ig-label">{t('subAccountLabel')}</span>
-            <p className="dsh-ig-hint">{status.state === 'logged-in'
+          <div className="dsh-st-field">
+            <span className="dsh-st-label">{t('subAccountLabel')}</span>
+            <p className="dsh-st-hint">{status.state === 'logged-in'
               ? t('subAccountEmail', { email: status.email ?? '' })
               : status.state === 'logged-out' ? t('subAccountNone') : t('subBadgeUnknown')}</p>
-            <span className="dsh-ig-row-buttons">
+            <span className="dsh-st-row-buttons">
               {status.state === 'logged-in'
-                ? <button type="button" className="dsh-ig-btn-secondary" disabled={busy !== undefined} onClick={() => { void subscriptionLogout(provider) }}>{busy === 'logout' ? t('subLoggingOut') : t('subLogout')}</button>
-                : <button type="button" className="dsh-ig-save" disabled={busy !== undefined} onClick={() => { void subscriptionLogin(provider); setSubTick(tick => tick + 1) }}>{busy === 'login' ? t('subLoggingIn') : t('subLogin')}</button>}
+                ? <button type="button" className="dsh-st-btn-secondary" disabled={busy !== undefined} onClick={() => { void subscriptionLogout(provider) }}>{busy === 'logout' ? t('subLoggingOut') : t('subLogout')}</button>
+                : <button type="button" className="dsh-st-save" disabled={busy !== undefined} onClick={() => { void subscriptionLogin(provider); setSubTick(tick => tick + 1) }}>{busy === 'login' ? t('subLoggingIn') : t('subLogin')}</button>}
             </span>
           </div>
-          <label className="dsh-ig-field">
-            <span className="dsh-ig-label">{t('subModelLabel')}</span>
-            <input className="dsh-ig-input" type="text" value={row.model} readOnly disabled />
-            <span className="dsh-ig-hint">{t('subModelHint')}</span>
+          <label className="dsh-st-field">
+            <span className="dsh-st-label">{t('subModelLabel')}</span>
+            <input className="dsh-st-input" type="text" value={row.model} readOnly disabled />
+            <span className="dsh-st-hint">{t('subModelHint')}</span>
           </label>
-          <div className="dsh-ig-field">
-            <span className="dsh-ig-hint">{t('subEditCapability')}</span>
+          <div className="dsh-st-field">
+            <span className="dsh-st-hint">{t('subEditCapability')}</span>
           </div>
-          <div className="dsh-ig-row-actions">
-            <p className={`dsh-ig-status${row.messageIsError ? ' dsh-ig-status-error' : ''}`} role="status">{row.message || testResultText(row.testResult)}</p>
-            <span className="dsh-ig-row-buttons">
-              <button type="button" className="dsh-ig-btn-secondary" disabled={row.testing} onClick={() => { void testConnection(provider); setSubTick(tick => tick + 1) }}>{row.testing ? t('testing') : t('testConnection')}</button>
-              <button className="dsh-ig-save" type="submit" disabled={row.saving || !settingsWritable}>{row.saving ? t('saving') : t('save')}</button>
+          <div className="dsh-st-row-actions">
+            <p className={`dsh-st-status${row.messageIsError ? ' dsh-st-status-error' : ''}`} role="status">{row.message || testResultText(row.testResult)}</p>
+            <span className="dsh-st-row-buttons">
+              <button type="button" className="dsh-st-btn-secondary" disabled={row.testing} onClick={() => { void testConnection(provider); setSubTick(tick => tick + 1) }}>{row.testing ? t('testing') : t('testConnection')}</button>
+              <button className="dsh-st-save" type="submit" disabled={row.saving || !settingsWritable}>{row.saving ? t('saving') : t('save')}</button>
             </span>
           </div>
         </form>
@@ -1744,16 +1560,16 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
     const badge = badgeOf(provider)
     const label = provider === 'openai-compat' && row.label.trim().length > 0 ? row.label.trim() : providerLabels[provider]
     return (
-      <div key={provider} className="dsh-ig-provider-row">
-        <div className="dsh-ig-provider-head-row">
-          <button type="button" className="dsh-ig-provider-head" aria-expanded={row.expanded} onClick={() => { updateRow(provider, { expanded: !row.expanded }) }}>
-            <span className="dsh-ig-provider-name">{label}</span>
-            <span className={badge.className} title={badge.text}><span className="dsh-ig-badge-dot" aria-hidden="true" />{badge.text}</span>
-            <span className={`dsh-ig-provider-chevron ${row.expanded ? 'dsh-ig-provider-chevron-open' : ''}`} aria-hidden="true">
+      <div key={provider} className="dsh-st-provider-row">
+        <div className="dsh-st-provider-head-row">
+          <button type="button" className="dsh-st-provider-head" aria-expanded={row.expanded} onClick={() => { updateRow(provider, { expanded: !row.expanded }) }}>
+            <span className="dsh-st-provider-name">{label}</span>
+            <span className={badge.className} title={badge.text}><span className="dsh-st-badge-dot" aria-hidden="true" />{badge.text}</span>
+            <span className={`dsh-st-provider-chevron ${row.expanded ? 'dsh-st-provider-chevron-open' : ''}`} aria-hidden="true">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6l4 4 4-4"/></svg>
             </span>
           </button>
-          {provider === 'openai-compat' ? <button type="button" className="dsh-ig-btn-secondary dsh-ig-channel-add" title={t('addCompatChannel')} aria-label={t('addCompatChannel')} onClick={addCompatChannel} disabled={!settingsWritable}>
+          {provider === 'openai-compat' ? <button type="button" className="dsh-st-btn-secondary dsh-st-channel-add" title={t('addCompatChannel')} aria-label={t('addCompatChannel')} onClick={addCompatChannel} disabled={!settingsWritable}>
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
           </button> : null}
         </div>
@@ -1767,16 +1583,16 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
     const row = rows[target]!
     const badge = badgeOf('openai-compat', channel)
     return (
-      <div key={target} className="dsh-ig-provider-row dsh-ig-compat-channel-row">
-        <div className="dsh-ig-provider-head-row">
-          <button type="button" className="dsh-ig-provider-head" aria-expanded={row.expanded} onClick={() => { updateRow(target, { expanded: !row.expanded }) }}>
-            <span className="dsh-ig-provider-name">{channel.label}</span>
-            <span className={badge.className} title={badge.text}><span className="dsh-ig-badge-dot" aria-hidden="true" />{badge.text}</span>
-            <span className={`dsh-ig-provider-chevron ${row.expanded ? 'dsh-ig-provider-chevron-open' : ''}`} aria-hidden="true">
+      <div key={target} className="dsh-st-provider-row dsh-st-compat-channel-row">
+        <div className="dsh-st-provider-head-row">
+          <button type="button" className="dsh-st-provider-head" aria-expanded={row.expanded} onClick={() => { updateRow(target, { expanded: !row.expanded }) }}>
+            <span className="dsh-st-provider-name">{channel.label}</span>
+            <span className={badge.className} title={badge.text}><span className="dsh-st-badge-dot" aria-hidden="true" />{badge.text}</span>
+            <span className={`dsh-st-provider-chevron ${row.expanded ? 'dsh-st-provider-chevron-open' : ''}`} aria-hidden="true">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6l4 4 4-4"/></svg>
             </span>
           </button>
-          <button type="button" className="dsh-ig-btn-secondary dsh-ig-btn-danger" disabled={row.saving || !settingsWritable} onClick={() => { void removeCompatChannel(channel) }}>{t('removeChannel')}</button>
+          <button type="button" className="dsh-st-btn-secondary dsh-st-btn-danger" disabled={row.saving || !settingsWritable} onClick={() => { void removeCompatChannel(channel) }}>{t('removeChannel')}</button>
         </div>
         {row.expanded ? renderCloudBody('openai-compat', channel) : null}
       </div>
@@ -1784,23 +1600,23 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
   }
 
   return (
-    <li className="dsh-ig-card">
-      <div className="dsh-ig-head">
-        <span className="dsh-ig-head-text">
-          <span className="dsh-ig-title">{t('title')}</span>
-          <span className="dsh-ig-desc">{t('description')}</span>
+    <li className="dsh-st-card">
+      <div className="dsh-st-head">
+        <span className="dsh-st-head-text">
+          <span className="dsh-st-title">{t('title')}</span>
+          <span className="dsh-st-desc">{t('description')}</span>
         </span>
       </div>
-      <div className="dsh-ig-body">
-          {settingsMessage !== undefined ? <p className="dsh-ig-status dsh-ig-status-readonly" role="note">{settingsMessage}</p> : null}
-          <div className="dsh-ig-field">
-            <span className="dsh-ig-label">{t('defaultProvider')}</span>
-            <div className="dsh-ig-radios" role="radiogroup" aria-label={t('defaultProvider')}>
+      <div className="dsh-st-body">
+          {settingsMessage !== undefined ? <p className="dsh-st-status dsh-st-status-readonly" role="note">{settingsMessage}</p> : null}
+          <div className="dsh-st-field">
+            <span className="dsh-st-label">{t('defaultProvider')}</span>
+            <div className="dsh-st-radios" role="radiogroup" aria-label={t('defaultProvider')}>
               {IMAGE_PROVIDERS.map(provider => (
-                <label key={provider} className={`dsh-ig-radio${defaultProvider === provider ? ' dsh-ig-radio-checked' : ''}`}>
+                <label key={provider} className={`dsh-st-radio${defaultProvider === provider ? ' dsh-st-radio-checked' : ''}`}>
                   <input
                     type="radio"
-                    name="dsh-ig-default-provider"
+                    name="dsh-st-default-provider"
                     checked={defaultProvider === provider}
                     onChange={() => { selectDefaultProvider(provider) }}
                     disabled={!settingsWritable}
@@ -1809,13 +1625,13 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
                 </label>
               ))}
             </div>
-            <span className="dsh-ig-hint">{t('defaultProviderHint')}</span>
-            {providerMessage.length > 0 ? <span className={`dsh-ig-status${providerMessageIsError ? ' dsh-ig-status-error' : ''}`} role="status">{providerMessage}</span> : null}
+            <span className="dsh-st-hint">{t('defaultProviderHint')}</span>
+            {providerMessage.length > 0 ? <span className={`dsh-st-status${providerMessageIsError ? ' dsh-st-status-error' : ''}`} role="status">{providerMessage}</span> : null}
           </div>
-          <label className="dsh-ig-field">
-            <span className="dsh-ig-label">{t('cloudTimeout')}</span>
+          <label className="dsh-st-field">
+            <span className="dsh-st-label">{t('cloudTimeout')}</span>
             <input
-              className="dsh-ig-input"
+              className="dsh-st-input"
               type="number" min="5" max="3600" step="1"
               value={cloudTimeoutSeconds}
               onChange={event => { setCloudTimeoutSeconds(Number(event.target.value)) }}
@@ -1823,55 +1639,56 @@ export function ImageGenerationSettingsCard(props: SettingsCardProps) {
               onKeyDown={event => { if (event.key === 'Enter') commitCloudTimeout() }}
               required disabled={!settingsWritable}
             />
-            <span className="dsh-ig-hint">{t('cloudTimeoutHint')}</span>
-            {cloudTimeoutMessage.length > 0 ? <span className="dsh-ig-status dsh-ig-status-error" role="status">{cloudTimeoutMessage}</span> : null}
+            <span className="dsh-st-hint">{t('cloudTimeoutHint')}</span>
+            {cloudTimeoutMessage.length > 0 ? <span className="dsh-st-status dsh-st-status-error" role="status">{cloudTimeoutMessage}</span> : null}
           </label>
-          <div className="dsh-ig-providers">
+          <V2ProvidersSettings credentials={props.credentials} writable={settingsWritable} credentialsAvailable={credentialsAvailable()} credentialEvents={props.credentialEvents} />
+          <div className="dsh-st-providers">
             {IMAGE_PROVIDERS.flatMap(provider => [
               renderProviderRow(provider),
               ...(provider === 'openai-compat' ? compatChannels.map(channel => renderCompatChannelRow(channel)) : []),
             ])}
           </div>
-          <div className="dsh-ig-section">
-            <span className="dsh-ig-section-title">{t('workspaceSection')}</span>
-            <div className="dsh-ig-field">
-              <label className="dsh-ig-check-row">
+          <div className="dsh-st-section">
+            <span className="dsh-st-section-title">{t('workspaceSection')}</span>
+            <div className="dsh-st-field">
+              <label className="dsh-st-check-row">
                 <input type="checkbox" checked={saveToWorkspace} onChange={event => { toggleSaveToWorkspace(event.target.checked) }} disabled={!settingsWritable} />
-                <span className="dsh-ig-label">{t('saveToWorkspace')}</span>
+                <span className="dsh-st-label">{t('saveToWorkspace')}</span>
               </label>
-              <span className="dsh-ig-hint">{t('saveToWorkspaceHint')}</span>
+              <span className="dsh-st-hint">{t('saveToWorkspaceHint')}</span>
             </div>
             {saveToWorkspace ? (
-              <label className="dsh-ig-field">
-                <span className="dsh-ig-label">{t('folder')}</span>
+              <label className="dsh-st-field">
+                <span className="dsh-st-label">{t('folder')}</span>
                 <input
-                  className="dsh-ig-input"
+                  className="dsh-st-input"
                   value={workspaceFolder}
                   onChange={event => { setWorkspaceFolder(event.target.value) }}
                   onBlur={() => { commitWorkspaceFolder() }}
                   onKeyDown={event => { if (event.key === 'Enter') commitWorkspaceFolder() }}
-                  placeholder="dsh-image-gen"
+                  placeholder="dsh-studio"
                   disabled={!settingsWritable}
                 />
-                <span className="dsh-ig-hint">{t('folderHint')}</span>
+                <span className="dsh-st-hint">{t('folderHint')}</span>
               </label>
             ) : null}
-            {workspaceMessage.length > 0 ? <p className={`dsh-ig-status${workspaceMessageIsError ? ' dsh-ig-status-error' : ''}`} role="status">{workspaceMessage}</p> : null}
+            {workspaceMessage.length > 0 ? <p className={`dsh-st-status${workspaceMessageIsError ? ' dsh-st-status-error' : ''}`} role="status">{workspaceMessage}</p> : null}
           </div>
-          <div className="dsh-ig-section">
-            <span className="dsh-ig-section-title">{t('uiSection')}</span>
-            <div className="dsh-ig-field">
-              <label className="dsh-ig-check-row">
+          <div className="dsh-st-section">
+            <span className="dsh-st-section-title">{t('uiSection')}</span>
+            <div className="dsh-st-field">
+              <label className="dsh-st-check-row">
                 <input
                   type="checkbox"
                   checked={showPill}
                   onChange={event => { toggleShowPill(event.target.checked) }}
                   disabled={!settingsWritable}
                 />
-                <span className="dsh-ig-label">{t('showPill')}</span>
+                <span className="dsh-st-label">{t('showPill')}</span>
               </label>
-              <span className="dsh-ig-hint">{t('showPillHint')}</span>
-              {uiMessage.length > 0 ? <p className={`dsh-ig-status${uiMessageIsError ? ' dsh-ig-status-error' : ''}`} role="status">{uiMessage}</p> : null}
+              <span className="dsh-st-hint">{t('showPillHint')}</span>
+              {uiMessage.length > 0 ? <p className={`dsh-st-status${uiMessageIsError ? ' dsh-st-status-error' : ''}`} role="status">{uiMessage}</p> : null}
             </div>
           </div>
         </div>
@@ -1886,8 +1703,6 @@ function modelOf(provider: Provider, value: ImageSettings | undefined): string {
     : isSubscriptionProvider(provider)
       ? DEFAULT_MODELS[provider]
       : value?.[CLOUD_MODEL_FIELDS[provider as CloudImageProvider]]
-  // A retired Seedream model runs on its replacement; show that one (saving rewrites it).
-  if (provider === 'seedream') return currentSeedreamModel(typeof stored === 'string' ? stored : undefined)
   return typeof stored === 'string' && stored.length > 0 ? stored : DEFAULT_MODELS[provider]
 }
 

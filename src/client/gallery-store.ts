@@ -47,13 +47,13 @@ export interface GalleryItem {
   workspaceId?: string | undefined
   /** Conversation session ID where the image was generated */
   sessionId?: string | undefined
-  /** Attachment ids of the source images this image was edited from; used by the canvas to rebuild edit chains. Optional so records written by older versions stay readable. */
+  /** Attachment ids of the source images this image was edited from; kept for lineage. Optional so records written by older versions stay readable. */
   sourceAttachmentIds?: string[] | undefined
   /** Raw pre-normalization bytes: an import the attachment layer changed, or a generated GIF it normalized to a still. */
   original?: { key: string; bytes: number; mediaType: ImageMediaType } | undefined
 }
 
-const DB_NAME = 'dsh_image_gen_db'
+const DB_NAME = 'dsh_studio_db'
 const DB_VERSION = 4
 const STORE_NAME = 'gallery_history'
 const TOMBSTONE_STORE = 'gallery_tombstones'
@@ -206,7 +206,7 @@ function notifyListeners(): void {
     try {
       listener()
     } catch (err) {
-      console.error('[dsh-image-gen] Gallery listener error:', err)
+      console.error('[dsh-studio] Gallery listener error:', err)
     }
   }
 }
@@ -274,7 +274,7 @@ export async function saveGalleryItem(
     notifyListeners()
     return true
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to save gallery item to IndexedDB:', err)
+    console.warn('[dsh-studio] Failed to save gallery item to IndexedDB:', err)
     return false
   }
 }
@@ -317,7 +317,7 @@ export async function getGalleryItems(): Promise<GalleryItem[]> {
   try {
     return await readGalleryItems()
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to read gallery items from IndexedDB:', err)
+    console.warn('[dsh-studio] Failed to read gallery items from IndexedDB:', err)
     return []
   }
 }
@@ -360,7 +360,7 @@ export async function toggleFavoriteGalleryItem(id: string): Promise<boolean> {
     notifyListeners()
     return newStatus
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to toggle favorite item in IndexedDB:', err)
+    console.warn('[dsh-studio] Failed to toggle favorite item in IndexedDB:', err)
     return false
   }
 }
@@ -491,7 +491,7 @@ export async function clearGallery(): Promise<void> {
     void clearGalleryThumbs()
     notifyListeners()
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to clear gallery in IndexedDB:', err)
+    console.warn('[dsh-studio] Failed to clear gallery in IndexedDB:', err)
   }
 }
 
@@ -567,7 +567,7 @@ function notifyFavorites(): void {
     try {
       listener()
     } catch (err) {
-      console.error('[dsh-image-gen] Favorites listener error:', err)
+      console.error('[dsh-studio] Favorites listener error:', err)
     }
   }
 }
@@ -647,7 +647,7 @@ export async function saveFavoritePrompt(text: string): Promise<boolean> {
     notifyFavorites()
     return true
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to save favorite prompt:', err)
+    console.warn('[dsh-studio] Failed to save favorite prompt:', err)
     return false
   }
 }
@@ -659,7 +659,7 @@ export async function getFavoritePrompts(): Promise<FavoritePrompt[]> {
     const rows = await readAll<FavoritePrompt>(db, FAV_PROMPT_STORE)
     return rows.sort((a, b) => b.addedAt - a.addedAt)
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to read favorite prompts:', err)
+    console.warn('[dsh-studio] Failed to read favorite prompts:', err)
     return []
   }
 }
@@ -675,7 +675,7 @@ export async function deleteFavoritePrompt(id: string): Promise<void> {
     })
     notifyFavorites()
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to delete favorite prompt:', err)
+    console.warn('[dsh-studio] Failed to delete favorite prompt:', err)
   }
 }
 
@@ -700,7 +700,7 @@ export async function addFavoriteFolder(kind: 'image' | 'prompt', name: string):
     notifyFavorites()
     return folder
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to add favorite folder:', err)
+    console.warn('[dsh-studio] Failed to add favorite folder:', err)
     return null
   }
 }
@@ -712,7 +712,7 @@ export async function getFavoriteFolders(): Promise<FavoriteFolder[]> {
     const rows = await readAll<FavoriteFolder>(db, FAV_FOLDER_STORE)
     return rows.sort((a, b) => a.addedAt - b.addedAt)
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to read favorite folders:', err)
+    console.warn('[dsh-studio] Failed to read favorite folders:', err)
     return []
   }
 }
@@ -745,7 +745,7 @@ export async function deleteFavoriteFolder(id: string): Promise<void> {
     })
     notifyFavorites()
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to delete favorite folder:', err)
+    console.warn('[dsh-studio] Failed to delete favorite folder:', err)
   }
 }
 
@@ -768,7 +768,7 @@ async function moveFavorite(storeName: string, id: string, folderId: string | un
     if (ok) notifyFavorites()
     return ok
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to move favorite:', err)
+    console.warn('[dsh-studio] Failed to move favorite:', err)
     return false
   }
 }
@@ -799,7 +799,7 @@ export async function updateFavoritePrompt(id: string, text: string): Promise<bo
     if (ok) notifyFavorites()
     return ok
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to update favorite prompt:', err)
+    console.warn('[dsh-studio] Failed to update favorite prompt:', err)
     return false
   }
 }

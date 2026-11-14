@@ -115,7 +115,7 @@ describe('Antigravity discovery and failure diagnostics', () => {
     const error = await manager().generate({ vendor: 'antigravity', prompt: 'a blue cup' }).catch(value => value as Error)
     expect(error).toBeInstanceOf(Error)
     expect(error.message).toContain('UNSUPPORTED_CLIENT')
-    expect(error.message).toContain('兼容项目')
+    expect(error.message).toContain('compatibility project')
     expect(error.message).toContain('HTTP 500')
     expect(error.message).toContain('HTTP 429')
     expect(error.message).toContain('daily-cloudcode-pa.googleapis.com')

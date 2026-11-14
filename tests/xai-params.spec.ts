@@ -12,8 +12,8 @@ describe('xAI tool output parameters', () => {
   })
 
   it('rejects ratios and tiers the xAI image endpoint does not accept', () => {
-    expect(() => xaiToolParameters({ size: '1000x100' })).toThrow('不支持比例')
-    expect(() => xaiToolParameters({ imageSize: '4K' })).toThrow('不支持清晰度')
-    expect(() => xaiToolParameters({ size: '1536x864', aspectRatio: '9:16' })).toThrow('不一致')
+    expect(() => xaiToolParameters({ size: '1000x100' })).toThrow('does not support aspect ratio')
+    expect(() => xaiToolParameters({ imageSize: '4K' })).toThrow('does not support resolution')
+    expect(() => xaiToolParameters({ size: '1536x864', aspectRatio: '9:16' })).toThrow('disagree')
   })
 })

@@ -135,9 +135,9 @@ describe('generateGoogleImage', () => {
     expect(JSON.parse(init.body as string)).toEqual({
       model: 'gemini-3.1-flash-image',
       input: [
-        { type: 'text', text: '图 1 (Image 1):' },
+        { type: 'text', text: 'Image 1:' },
         { type: 'image', mime_type: 'image/png', data: Buffer.from('source image 1').toString('base64') },
-        { type: 'text', text: '图 2 (Image 2):' },
+        { type: 'text', text: 'Image 2:' },
         { type: 'image', mime_type: 'image/jpeg', data: Buffer.from('source image 2').toString('base64') },
         { type: 'text', text: 'add black sunglasses' },
       ],

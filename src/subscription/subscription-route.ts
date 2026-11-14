@@ -18,7 +18,6 @@ const MAX_BODY_BYTES = 16 * 1024
 
 /** The vendor each subscription provider logs in as. */
 function vendorOfProvider(provider: SubscriptionProvider): SubscriptionVendor {
-  if (provider === 'chatgpt-sub') return 'codex'
   if (provider === 'google-sub') return 'antigravity'
   return 'grok'
 }
@@ -29,13 +28,13 @@ export function registerSubscriptionRoutes(ctx: Context, manager: SubscriptionMa
     kind: 'exact',
     path: SUBSCRIPTION_LOGIN_ROUTE,
     handler: (req, res) => { void serveLogin(req, res, manager) },
-  }, admission)), 'dsh-image-gen: subscription login route')
+  }, admission)), 'dsh-studio: subscription login route')
 
   ctx.effect(() => ctx.webServer.register(withWebAdmission({
     kind: 'exact',
     path: SUBSCRIPTION_STATUS_ROUTE,
     handler: (req, res) => { void serveStatus(req, res, manager) },
-  }, admission)), 'dsh-image-gen: subscription status route')
+  }, admission)), 'dsh-studio: subscription status route')
 }
 
 async function serveLogin(req: IncomingMessage, res: ServerResponse, manager: SubscriptionManager): Promise<void> {

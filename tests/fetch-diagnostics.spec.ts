@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { describeTransportFailure, guardedFetch } from '../src/fetch-diagnostics.js'
-import { editSeedreamImage } from '../src/seedream.js'
-import { generateOpenAICompatibleImage } from '../src/openai-compatible.js'
+import { editOpenAICompatibleImage, generateOpenAICompatibleImage } from '../src/openai-compatible.js'
 import { generateGoogleImage } from '../src/google.js'
-import { generateDashScopeImage } from '../src/dashscope.js'
 
 afterEach(() => { vi.unstubAllGlobals() })
 const signal = new AbortController().signal
@@ -52,12 +50,6 @@ describe('describeTransportFailure', () => {
 })
 
 describe('guardedFetch transport diagnostics (#79)', () => {
-  it('rethrows generation transport failures with phase, elapsed seconds, and the cause chain', async () => {
-    const fetchMock = vi.fn(async () => { throw socketFailure() })
-    vi.stubGlobal('fetch', fetchMock)
-    await expect(generateOpenAICompatibleImage({ provider: 'seedream', apiKey: 'key', baseURL: 'https://ark.example/api/v3', model: 'seedream', prompt: 'a cat', maxBytes: 1024, signal }))
-      .rejects.toThrow(/^seedream image request failed after \d+(\.\d+)?s: TypeError: fetch failed <- Error \[UND_ERR_SOCKET\]: other side closed$/)
-  })
 
   it('keeps the original error reachable on cause', async () => {
     const original = socketFailure()
@@ -65,29 +57,6 @@ describe('guardedFetch transport diagnostics (#79)', () => {
     const rejection: Error = await generateOpenAICompatibleImage({ provider: 'openai', apiKey: 'key', baseURL: 'https://api.openai.com/v1', model: 'gpt-image-2', prompt: 'a cat', maxBytes: 1024, signal })
       .then(() => { throw new Error('expected a rejection') }, error => error)
     expect(rejection.cause).toBe(original)
-  })
-
-  it('reports download transport failures as a separate phase', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ url: 'https://image.example/result' }] }), { headers: { 'content-type': 'application/json' } }))
-      .mockRejectedValueOnce(socketFailure('socket hung up'))
-    vi.stubGlobal('fetch', fetchMock)
-    await expect(generateOpenAICompatibleImage({ provider: 'seedream', apiKey: 'key', baseURL: 'https://ark.example/api/v3', model: 'seedream', prompt: 'a cat', maxBytes: 1024, signal }))
-      .rejects.toThrow(/^seedream image download failed after \d+(\.\d+)?s: TypeError: fetch failed <- Error \[UND_ERR_SOCKET\]: socket hung up$/)
-  })
-
-  it('labels edit transport failures with the editing phase', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw socketFailure() }))
-    await expect(editSeedreamImage({ apiKey: 'key', baseURL: 'https://ark.example/api/v3', model: 'seedream', prompt: 'add a hat', sourceImages: [{ data: new Uint8Array([1]), mediaType: 'image/png' }], maxBytes: 1024, signal }))
-      .rejects.toThrow(/^seedream image editing failed after \d+(\.\d+)?s: /)
-  })
-
-  it('reports the abort reason when the caller signal cancelled the request', async () => {
-    const controller = new AbortController()
-    controller.abort(new Error('upstream budget expired'))
-    vi.stubGlobal('fetch', vi.fn(async () => { throw controller.signal.reason }))
-    await expect(guardedFetch('seedream image request', controller.signal, () => fetch('https://ark.example/api/v3/images/generations')))
-      .rejects.toThrow(/^seedream image request failed after \d+(\.\d+)?s: aborted \(Error: upstream budget expired\)$/)
   })
 
   it('redacts key-shaped values leaking through cause messages', async () => {
@@ -121,13 +90,12 @@ describe('guardedFetch transport diagnostics (#79)', () => {
 })
 
 const opaqueKey = 'fixture-5f811fea-d938-46d7-9a47-07148cc510db'
-const compatibleInput = { provider: 'seedream' as const, apiKey: opaqueKey, baseURL: 'https://ark.example/api/v3', model: 'seedream', prompt: 'a cat', maxBytes: 1024, signal }
+const compatibleInput = { provider: 'openai-compat' as const, apiKey: opaqueKey, baseURL: 'https://relay.example/v1', model: 'relay-image', prompt: 'a cat', maxBytes: 1024, signal }
 const editInput = { ...compatibleInput, sourceImages: [{ data: new Uint8Array([1]), mediaType: 'image/png' as const }] }
 const requestCases = [
-  { label: 'seedream image request', run: () => generateOpenAICompatibleImage(compatibleInput) },
-  { label: 'seedream image editing', run: () => editSeedreamImage(editInput) },
+  { label: 'openai-compat image request', run: () => generateOpenAICompatibleImage(compatibleInput) },
+  { label: 'openai image edit request', run: () => editOpenAICompatibleImage(editInput) },
   { label: 'Google image generation request', run: () => generateGoogleImage({ apiKey: opaqueKey, endpoint: 'https://google.example/interactions', model: 'gemini-image', prompt: 'a cat', aspectRatio: '1:1', imageSize: '2K', maxBytes: 1024, signal }) },
-  { label: 'DashScope image generation', run: () => generateDashScopeImage({ apiKey: opaqueKey, endpoint: 'https://dashscope.example/api/v1', model: 'qwen-image', prompt: 'a cat', maxBytes: 1024, signal }) },
 ]
 
 /** A response that delivers a partial chunk, then loses its connection after headers. */
@@ -159,22 +127,6 @@ describe('complete provider transport diagnostics (#79 regressions)', () => {
     const error: Error = await run().then(() => { throw new Error('expected failure') }, error => error)
     expect(error.message).not.toContain(opaqueKey)
     expect(error.message).toContain('[REDACTED]')
-  })
-
-  it.each([
-    { name: 'compatible generation', run: () => generateOpenAICompatibleImage(compatibleInput), response: { data: [{ url: 'https://image.example/result' }] }, label: 'seedream image download' },
-    { name: 'Seedream editing', run: () => editSeedreamImage(editInput), response: { data: [{ url: 'https://image.example/result' }] }, label: 'seedream image download' },
-    { name: 'DashScope generation', run: requestCases[3]!.run, response: { output: { choices: [{ message: { content: [{ image: 'https://image.example/result' }] } }] } }, label: 'DashScope image download' },
-  ])('reports $name image-body disconnects with phase and key redaction', async ({ run, response, label }) => {
-    const failure = socketFailure(`fixture rejected credential ${opaqueKey}`)
-    vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(response)))
-      .mockResolvedValueOnce(brokenBody('image/png', failure)))
-    const error: Error = await run().then(() => { throw new Error('expected failure') }, error => error)
-    expect(error.message).toContain(`${label} failed after `)
-    expect(error.message).toContain('UND_ERR_SOCKET')
-    expect(error.message).not.toContain(opaqueKey)
-    expect(error.cause).toBe(failure)
   })
 
   it.each([
@@ -218,11 +170,5 @@ describe('complete provider transport diagnostics (#79 regressions)', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('x'.repeat(5000))))
     await expect(generateOpenAICompatibleImage({ ...compatibleInput, maxBytes: 1 }))
       .rejects.toThrow(/^Image response exceeded the 4098 byte limit$/)
-  })
-
-  it('preserves invalid-JSON errors instead of labeling them transport failures', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('invalid json')))
-    await expect(generateOpenAICompatibleImage(compatibleInput)).rejects.toThrow(/^seedream image request returned invalid JSON$/)
-    await expect(requestCases[3]!.run()).rejects.toBeInstanceOf(SyntaxError)
   })
 })

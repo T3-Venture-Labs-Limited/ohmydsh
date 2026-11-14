@@ -4,7 +4,6 @@ import { downloadPublicImage } from './public-image-download.js'
 import { guardedFetch, readResponseBody } from './fetch-diagnostics.js'
 import { redactSecrets } from './redact.js'
 import { detectImageMediaType } from './reference-image.js'
-import { arkOutputBody, type ArkOutputOptions } from './shared.js'
 
 const ERROR_LIMIT = 4096
 
@@ -24,7 +23,7 @@ export interface GeneratedCompatibleImage {
  * studio call never asks for SVG; guard the widened result type anyway.
  */
 export function rasterOnly<T extends { data: Uint8Array; mediaType: GeneratedMediaType }>(image: T): { data: Uint8Array; mediaType: ImageMediaType } {
-  if (image.mediaType === 'image/svg+xml') throw new Error('SVG 输出仅在对话工具中支持；工作台请使用位图格式')
+  if (image.mediaType === 'image/svg+xml') throw new Error('SVG output is only supported in the chat tools; use a bitmap format in the workbench')
   return { data: image.data, mediaType: image.mediaType }
 }
 
@@ -51,7 +50,7 @@ export interface CompatibleReferenceImage {
 }
 
 export async function generateOpenAICompatibleImage(input: {
-  provider: 'openai' | 'openai-compat' | 'seedream' | 'xai' | 'zhipu'
+  provider: 'openai' | 'openai-compat' | 'xai'
   apiKey: string
   baseURL: string
   model: string
@@ -70,8 +69,6 @@ export async function generateOpenAICompatibleImage(input: {
   strictImageDownloads?: boolean
   maxBytes: number
   signal: AbortSignal
-  /** Ark-only output controls; ignored by every other provider. */
-  arkOptions?: ArkOutputOptions
 }): Promise<GeneratedCompatibleImage> {
   const response = await guardedFetch(`${input.provider} image request`, input.signal, () => fetch(imageEndpoint(input.baseURL, 'generations'), {
     method: 'POST', redirect: 'error', signal: input.signal,
@@ -81,10 +78,6 @@ export async function generateOpenAICompatibleImage(input: {
       prompt: input.prompt,
       ...(input.size === undefined ? {} : { size: input.size }),
       ...(input.quality === undefined ? {} : { quality: input.quality }),
-      // `background: false` — Ark rejects `transparent` on this endpoint
-      // outright (it needs exactly one input image), so it is the edit path's
-      // option alone.
-      ...(input.provider === 'seedream' ? { response_format: 'url', ...arkOutputBody(input.arkOptions, { background: false }) } : {}),
       ...(input.extraBody ?? {}),
     }),
   }), input.apiKey)
@@ -138,14 +131,14 @@ export async function editOpenAICompatibleImage(input: {
   if (input.editFormat === 'siliconflowJson') {
     const body: Record<string, unknown> = { model: input.model, prompt: input.prompt, ...(input.editExtra ?? {}), ...(input.extraBody ?? {}) }
     const model = typeof body.model === 'string' ? body.model.trim() : ''
-    if (!model) throw new Error('硅基流动图生图需要编辑模型')
+    if (!model) throw new Error('SiliconFlow image edit needs an edit model')
     body.model = model
-    if (model === 'Qwen/Qwen-Image') throw new Error('Qwen/Qwen-Image 是文生图模型；请配置图生图模型，例如 Qwen/Qwen-Image-Edit')
+    if (model === 'Qwen/Qwen-Image') throw new Error('Qwen/Qwen-Image is a text-to-image model; configure an edit model such as Qwen/Qwen-Image-Edit')
     const maxReferences = model === 'Qwen/Qwen-Image-Edit-2509' ? 3 : 1
-    if (input.sourceImages.length < 1 || input.sourceImages.length > maxReferences) throw new Error(`${model} 图生图支持 1–${String(maxReferences)} 张参考图，当前 ${String(input.sourceImages.length)} 张；请精简参考图或选择支持多图的编辑模型`)
+    if (input.sourceImages.length < 1 || input.sourceImages.length > maxReferences) throw new Error(`${model} image edit accepts 1–${String(maxReferences)} reference images (got ${String(input.sourceImages.length)}); reduce the references or pick an edit model that takes several`)
     // Qwen edits derive output dimensions from the reference. Generic picker
     // defaults must not turn into unsupported image_size/size/quality fields.
-    if (['size', 'image_size', 'quality'].some(key => key in body)) throw new Error('此硅基流动图生图格式不发送 size、image_size 或 quality；请从图生图额外字段中移除这些字段')
+    if (['size', 'image_size', 'quality'].some(key => key in body)) throw new Error('This SiliconFlow edit format does not send size, image_size or quality; remove those fields from the edit extras')
     delete body.image
     delete body.image2
     delete body.image3
@@ -289,7 +282,7 @@ function rejectsResponseFormat(text: string): boolean {
       message = [typeof body.error === 'string' ? body.error : undefined, error?.message, error?.code, body.message, body.detail].filter(value => typeof value === 'string').join(' ')
     }
   } catch { /* Some relays return plain-text validation errors. */ }
-  return /(?:response[_ -]?format|b64_json)/i.test(message) && /(?:unsupported|not\s+(?:support|allowed|permitted|accepted|implemented)|unknown|unrecognized|unexpected|invalid|extra\s+(?:field|input)|不支持|不允许|未知|无效|未识别)/i.test(message)
+  return /(?:response[_ -]?format|b64_json)/i.test(message) && /(?:unsupported|not\s+(?:support|allowed|permitted|accepted|implemented)|unknown|unrecognized|unexpected|invalid|extra\s+(?:field|input))/i.test(message)
 }
 
 interface ImageResponseOptions {

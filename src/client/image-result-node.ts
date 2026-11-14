@@ -2,7 +2,7 @@
 import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import { VAULT_KEY_PATTERN } from '../shared.js'
 
-export const IMAGE_RESULT_NODE_KIND = 'dsh-image-result'
+export const IMAGE_RESULT_NODE_KIND = 'dsh-studio-result'
 
 export interface ImageResultPresentation {
   /**
@@ -20,7 +20,7 @@ export interface ImageResultPresentation {
   readonly savedTo?: string
   /** Workflow seed reported by the ComfyUI provider, when available. */
   readonly seed?: number
-  /** Attachment ids of the edit sources when this image came from edit_image; used to rebuild canvas edit chains. */
+  /** Attachment ids of the edit sources when this image came from studio_edit; kept for lineage. */
   readonly sourceAttachmentIds?: readonly string[]
   /** Raw bytes in the vault when the attachment is a normalized copy; today only an animated GIF. */
   readonly original?: { readonly key: string; readonly bytes: number; readonly mediaType: ImageMediaType }
@@ -101,7 +101,7 @@ export function createImageResultDefinition(): ConversationNodeDefinitionLike<Im
     start: (_context, match) => {
       if (match.event.type === 'tool/ptc-dispatch') {
         const results = imageResultsFromPtcDispatch(match.event)
-        if (results.length === 0) throw new Error('dsh-image-result start requires a plugin image dispatch')
+        if (results.length === 0) throw new Error('dsh-studio-result start requires a plugin image dispatch')
         return { results: results.map(result => ({ ...result, seq: match.event.seq })) }
       }
       const turn = eventTurn(match.event)
@@ -109,7 +109,7 @@ export function createImageResultDefinition(): ConversationNodeDefinitionLike<Im
         ? imageResultsFromMeta(match.event.data.meta)
         : []
       if (turn === undefined || results.length === 0) {
-        throw new Error('dsh-image-result start requires an image Tool result')
+        throw new Error('dsh-studio-result start requires an image Tool result')
       }
       return { turn, results: results.map(result => ({ ...result, seq: match.event.seq })) }
     },
@@ -171,7 +171,7 @@ function appendResult(
 /** Parse the plugin-owned durable presentation metadata from a Tool result event. */
 export function imageResultFromMeta(value: unknown): ImageResultPresentation | undefined {
   const meta = record(value)
-  if (meta?.kind !== 'dsh-image-gen' && meta?.kind !== 'dsh-image-gen-svg') return undefined
+  if (meta?.kind !== 'dsh-studio' && meta?.kind !== 'dsh-studio-svg') return undefined
   const attachment = imageAttachment(meta.attachment)
   const svg = typeof meta.svg === 'string' && meta.svg.trimStart().startsWith('<') ? meta.svg : undefined
   // A result carries exactly one artifact: the stored raster, or the vector markup.
@@ -194,7 +194,7 @@ export function imageResultFromMeta(value: unknown): ImageResultPresentation | u
 /** Parse all successful images from either a single or batch Tool result. */
 export function imageResultsFromMeta(value: unknown): readonly ImageResultPresentation[] {
   const meta = record(value)
-  if (meta?.kind === 'dsh-image-gen-batch' && Array.isArray(meta.images)) {
+  if (meta?.kind === 'dsh-studio-batch' && Array.isArray(meta.images)) {
     return meta.images.flatMap(image => {
       const result = imageResultFromMeta(image)
       return result === undefined ? [] : [result]
@@ -210,7 +210,7 @@ function eventTurn(event: EventLike): number | undefined {
 }
 
 /** Plugin tools whose PTC (run_code) dispatch results are image results. */
-const PTC_IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(['generate_image', 'generate_images', 'edit_image'])
+const PTC_IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(['studio_generate', 'studio_generate_batch', 'studio_edit'])
 
 /**
  * Fixed summary text rendered by the tools' imageOutput(). PTC dispatch events
@@ -264,7 +264,7 @@ export function imageResultsFromPtcDispatch(event: EventLike): readonly ImageRes
       if (svgSummary === null) continue
       const savedTo = PTC_SVG_SAVED_TO_PATTERN.exec(summaryText)?.[1]
       const promptMarker = '\nImage prompt: '
-      const promptAt = data.name === 'generate_images' ? summaryText.indexOf(promptMarker) : -1
+      const promptAt = data.name === 'studio_generate_batch' ? summaryText.indexOf(promptMarker) : -1
       results.push({
         svg: candidate.text,
         prompt: promptAt < 0 ? stringValue(args?.prompt, 'Generated Image') : summaryText.slice(promptAt + promptMarker.length),
@@ -283,7 +283,7 @@ export function imageResultsFromPtcDispatch(event: EventLike): readonly ImageRes
     const originalMatch = ORIGINAL_NOTE_PATTERN.exec(summaryText)
     const original = originalMatch === null ? undefined : originalFromMeta({ key: originalMatch[1], bytes: Number(originalMatch[2]), mediaType: originalMatch[3] })
     const promptMarker = '\nImage prompt: '
-    const promptAt = data.name === 'generate_images' ? summaryText.indexOf(promptMarker) : -1
+    const promptAt = data.name === 'studio_generate_batch' ? summaryText.indexOf(promptMarker) : -1
     results.push({
       attachment,
       prompt: promptAt < 0 ? stringValue(args?.prompt, 'Generated Image') : summaryText.slice(promptAt + promptMarker.length),
@@ -298,7 +298,7 @@ export function imageResultsFromPtcDispatch(event: EventLike): readonly ImageRes
   return results
 }
 
-/** Collect edit_image source attachment ids (single or list form) from dispatch arguments. */
+/** Collect studio_edit source attachment ids (single or list form) from dispatch arguments. */
 function sourceAttachmentIds(args: Record<string, unknown> | undefined): readonly string[] | undefined {
   if (args === undefined) return undefined
   const single = typeof args.source_attachment_id === 'string' ? [args.source_attachment_id] : undefined

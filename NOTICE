@@ -1,0 +1,49 @@
+Dsh Studio
+Copyright 2026 Superdao (deestax)
+
+This product is a modified version of dsh-image-gen (Apache License 2.0, see LICENSE). Modified files carry prominent change
+notices through this file and the git history, as Section 4(b) of the Apache License requires.
+
+  dsh-image-gen
+  Copyright 2026 shanliuling and contributors
+  https://github.com/shanliuling/dsh-image-gen
+  Licensed under the Apache License, Version 2.0
+  (the upstream project ships no separate NOTICE file; its copyright statement is kept above and in LICENSE)
+
+Summary of changes made to dsh-image-gen 0.11.2: renamed package, ids, routes, tool names and storage; removed the
+inspiration library, GIF sprite-sheet handling and the Seedream, DashScope, Zhipu and ChatGPT-subscription providers;
+translated the UI and error strings to English; removed the tldraw-based infinite canvas (and its tools, routes and dependency); moved the studio UI into a lazily loaded chunk; replaced the build
+with the dsh-kit template; added the v2 provider layer, job queue, library with lineage, video, inpaint/outpaint, upscaling
+and the HyperFrames hand-off.
+
+Subscription login flows (src/subscription/) are adapted from @goodandready/dsh-subscriptions, MIT License, Copyright (c) 2026
+GooDAnDReaDY, via dsh-image-gen. Upstream licence text:
+
+    MIT License
+
+    Copyright (c) 2026 GooDAnDReaDY
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+UI controls (src/kit/) are adapted, via dsh-kit (https://github.com/deestax/dsh-kit), from
+@deepseek-ai/dsh-client-ui-primitives (https://github.com/deepseek-ai/deepseek-harness, packages/client/ui-primitives),
+MIT License, Copyright (c) 2026 DeepSeek: markup, sizes and behaviour of Button, Switch, SegmentedControl, Input, Modal
+and Tooltip, and the modal-layer and tooltip-placement helpers. The MIT licence text is reproduced in
+THIRD_PARTY_NOTICES.md.
+

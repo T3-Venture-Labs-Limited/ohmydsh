@@ -6,11 +6,8 @@ import { googleModelsEndpoint } from './google.js'
 import type { SubscriptionManager } from './subscription.js'
 import {
   DEFAULT_COMFYUI_BASE_URL,
-  DEFAULT_DASHSCOPE_ENDPOINT,
   DEFAULT_OPENAI_BASE_URL,
-  DEFAULT_SEEDREAM_BASE_URL,
   DEFAULT_XAI_BASE_URL,
-  DEFAULT_ZHIPU_BASE_URL,
   IMAGE_PROVIDERS,
   isSubscriptionProvider,
   TEST_CONNECTION_ROUTE,
@@ -51,12 +48,6 @@ export function probeTarget(
     return { url: googleModelsUrl(config), headers: { 'x-goog-api-key': apiKey ?? '' } }
   }
   const headers = { authorization: `Bearer ${apiKey ?? ''}` }
-  if (provider === 'dashscope') {
-    return { url: joinUrl(config.dashscopeEndpoint ?? DEFAULT_DASHSCOPE_ENDPOINT, 'models'), headers }
-  }
-  if (provider === 'seedream') {
-    return { url: joinUrl(config.seedreamBaseURL ?? DEFAULT_SEEDREAM_BASE_URL, 'models'), headers }
-  }
   if (provider === 'openai-compat') {
     const base = config.openaiCompatBaseURL?.trim() ?? ''
     // Never silently fall back to the official URL: probing api.openai.com with
@@ -66,9 +57,6 @@ export function probeTarget(
   }
   if (provider === 'xai') {
     return { url: joinUrl(config.xaiBaseURL ?? DEFAULT_XAI_BASE_URL, 'models'), headers }
-  }
-  if (provider === 'zhipu') {
-    return { url: joinUrl(config.zhipuBaseURL ?? DEFAULT_ZHIPU_BASE_URL, 'models'), headers }
   }
   return { url: joinUrl(config.openaiBaseURL ?? DEFAULT_OPENAI_BASE_URL, 'models'), headers }
 }
@@ -125,16 +113,6 @@ export function filterRelayImageModelIds(ids: readonly string[]): string[] {
   return ids.filter(id => /(^|[-_.])(image|imagen|flux|seedream|seededit|sd|sdxl|sd3|cogview|janus|wan|kolors|hunyuan-image)/i.test(id) || /^(dall-e|gpt-image)/i.test(id))
 }
 
-/** Ark catalog filter: the Seedream (generation) and SeedEdit (editing) families. */
-export function filterSeedreamImageModelIds(ids: readonly string[]): string[] {
-  return ids.filter(id => /seedream|seededit/i.test(id))
-}
-
-/** Zhipu catalog filter: GLM-Image and CogView families. */
-export function filterZhipuImageModelIds(ids: readonly string[]): string[] {
-  return ids.filter(id => /glm-image|cogview/i.test(id))
-}
-
 /** Extract model ids from an OpenAI-style `{data:[{id}]}` or xAI-style `{models:[{id}]}` payload. */
 export function parseOpenAIModelIds(payload: unknown): string[] {
   if (typeof payload !== 'object' || payload === null) return []
@@ -147,31 +125,6 @@ export function parseOpenAIModelIds(payload: unknown): string[] {
     if (typeof entry !== 'object' || entry === null) continue
     const id = (entry as { id?: unknown }).id
     if (typeof id === 'string' && id.length > 0) ids.push(id)
-  }
-  return ids
-}
-
-/**
- * Extract image-capable model ids from a DashScope native
- * `{output:{models:[{model,capabilities}]}}` payload. The `capabilities`
- * array marks image generation as `IG`; name fragments are a fallback for
- * payloads that omit the field.
- */
-export function parseDashScopeImageModelIds(payload: unknown): string[] {
-  if (typeof payload !== 'object' || payload === null) return []
-  const output = (payload as { output?: unknown }).output
-  if (typeof output !== 'object' || output === null) return []
-  const models = (output as { models?: unknown }).models
-  if (!Array.isArray(models)) return []
-  const ids: string[] = []
-  for (const entry of models) {
-    if (typeof entry !== 'object' || entry === null) continue
-    const model = (entry as { model?: unknown }).model
-    if (typeof model !== 'string' || model.length === 0) continue
-    const capabilities = (entry as { capabilities?: unknown }).capabilities
-    const imageCapable = (Array.isArray(capabilities) && capabilities.includes('IG'))
-      || /wanx|qwen-image|wan2|image/i.test(model)
-    if (imageCapable) ids.push(model)
   }
   return ids
 }
@@ -220,13 +173,13 @@ export async function fetchGoogleImageModels(
   url.searchParams.set('pageSize', String(GOOGLE_MODELS_PAGE_SIZE))
   const result = await fetchClassifiedJson(url, { 'x-goog-api-key': apiKey }, apiKey, signal)
   if (!result.ok) return result
-  if (result.payload === null) return { ok: false, reason: 'error', message: '响应不是有效的 JSON' }
+  if (result.payload === null) return { ok: false, reason: 'error', message: 'The response is not valid JSON' }
   return { ok: true, models: filterImageModelIds(parseGoogleModelIds(result.payload)) }
 }
 
-/** Pull and filter image-capable models from an OpenAI-compatible endpoint (official, relay, Ark, xAI, Zhipu). */
+/** Pull and filter image-capable models from an OpenAI-compatible endpoint (official, relay, xAI). */
 export async function fetchOpenAIImageModels(
-  provider: 'openai' | 'openai-compat' | 'seedream' | 'xai' | 'zhipu',
+  provider: 'openai' | 'openai-compat' | 'xai',
   config: Config,
   apiKey: string | undefined,
   signal?: AbortSignal | undefined,
@@ -234,15 +187,11 @@ export async function fetchOpenAIImageModels(
   if (apiKey === undefined) return { ok: false, reason: 'missing-key' }
   const configured = provider === 'openai' ? config.openaiBaseURL?.trim() ?? ''
     : provider === 'openai-compat' ? config.openaiCompatBaseURL?.trim() ?? ''
-    : provider === 'seedream' ? config.seedreamBaseURL?.trim() ?? ''
-    : provider === 'xai' ? config.xaiBaseURL?.trim() ?? ''
-    : config.zhipuBaseURL?.trim() ?? ''
+    : config.xaiBaseURL?.trim() ?? ''
   // Official rows fall back to their vendor defaults like the probe does; the
   // relay row is dead without its user-specific address.
   const fallback = provider === 'openai' ? DEFAULT_OPENAI_BASE_URL
-    : provider === 'seedream' ? DEFAULT_SEEDREAM_BASE_URL
     : provider === 'xai' ? DEFAULT_XAI_BASE_URL
-    : provider === 'zhipu' ? DEFAULT_ZHIPU_BASE_URL
     : ''
   const base = configured.length > 0 ? configured : fallback
   if (base.length === 0) return { ok: false, reason: 'error', message: 'Base URL is not configured' }
@@ -250,38 +199,16 @@ export async function fetchOpenAIImageModels(
   const path = provider === 'xai' ? 'image-generation-models' : 'models'
   const result = await fetchClassifiedJson(joinUrl(base, path), { authorization: `Bearer ${apiKey}` }, apiKey, signal)
   if (!result.ok) return result
-  if (result.payload === null) return { ok: false, reason: 'error', message: '响应不是有效的 JSON' }
+  if (result.payload === null) return { ok: false, reason: 'error', message: 'The response is not valid JSON' }
   const ids = parseOpenAIModelIds(result.payload)
   return {
     ok: true,
     models: provider === 'openai' ? filterOpenAIImageModelIds(ids)
       : provider === 'openai-compat' ? filterRelayImageModelIds(ids)
-      : provider === 'seedream' ? filterSeedreamImageModelIds(ids)
-      : provider === 'xai' ? ids
-      : filterZhipuImageModelIds(ids),
+      : ids,
   }
 }
 
-/** Pull and filter image-capable models from the DashScope native model list (`capabilities=IG`). */
-export async function fetchDashScopeImageModels(
-  config: Config,
-  apiKey: string | undefined,
-  signal?: AbortSignal | undefined,
-): Promise<ModelsResult> {
-  if (apiKey === undefined) return { ok: false, reason: 'missing-key' }
-  const configured = config.dashscopeEndpoint?.trim() ?? ''
-  const base = configured.length > 0 ? configured : DEFAULT_DASHSCOPE_ENDPOINT
-  const url = new URL(joinUrl(base, 'models'))
-  // Ask the service to pre-filter image-generation models (IG capability) and
-  // return a generous page; the parser re-checks the capability field anyway.
-  url.searchParams.set('capabilities', 'IG')
-  url.searchParams.set('page_no', '1')
-  url.searchParams.set('page_size', '100')
-  const result = await fetchClassifiedJson(url, { authorization: `Bearer ${apiKey}` }, apiKey, signal)
-  if (!result.ok) return result
-  if (result.payload === null) return { ok: false, reason: 'error', message: '响应不是有效的 JSON' }
-  return { ok: true, models: parseDashScopeImageModelIds(result.payload) }
-}
 
 /** Run one provider probe and classify the outcome; secrets never leave redacted. */
 export async function probeProviderConnection(
@@ -324,21 +251,21 @@ export async function probeComfyUIConnection(
  * signed-in (with the account email) or signed-out guidance.
  */
 export async function probeSubscriptionConnection(
-  provider: 'chatgpt-sub' | 'grok-sub' | 'google-sub',
+  provider: 'grok-sub' | 'google-sub',
   manager: SubscriptionManager,
 ): Promise<ProbeResult> {
-  const vendor = provider === 'chatgpt-sub' ? 'codex' : provider === 'google-sub' ? 'antigravity' : 'grok'
-  const display = provider === 'chatgpt-sub' ? 'ChatGPT' : provider === 'google-sub' ? 'Google' : 'Grok'
+  const vendor = provider === 'google-sub' ? 'antigravity' : 'grok'
+  const display = provider === 'google-sub' ? 'Google' : 'Grok'
   const status = await manager.loginStatus(vendor)
   if (status.state === 'logged-in') return { ok: true }
   if (status.state === 'logged-out') {
     return {
       ok: false,
       reason: 'missing-key',
-      message: `${display} 账号未登录：请在设置卡片中点击“登录”完成授权`,
+      message: `${display} account is not signed in; click Sign in on the settings card to authorise it`,
     }
   }
-  return { ok: false, reason: 'error', message: '登录状态读取失败' }
+  return { ok: false, reason: 'error', message: 'Could not read the sign-in status' }
 }
 
 /** Dependencies the test route needs from the plugin entry. */
@@ -386,9 +313,7 @@ export async function serveTestConnection(req: IncomingMessage, res: ServerRespo
       const apiKey = await deps.resolveKey(active as CloudImageProvider, channel)
       result = active === 'google'
         ? await fetchGoogleImageModels(requestConfig(), apiKey)
-        : active === 'dashscope'
-          ? await fetchDashScopeImageModels(requestConfig(), apiKey)
-          : await fetchOpenAIImageModels(active as 'openai' | 'openai-compat' | 'seedream' | 'xai' | 'zhipu', requestConfig(), apiKey)
+        : await fetchOpenAIImageModels(active as 'openai' | 'openai-compat' | 'xai', requestConfig(), apiKey)
     } catch (error) {
       result = { ok: false, reason: 'error', message: error instanceof Error ? error.message : String(error) }
     }

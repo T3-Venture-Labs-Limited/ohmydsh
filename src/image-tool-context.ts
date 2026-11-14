@@ -1,5 +1,5 @@
 /** Live, credential-free instructions for the conversation model's image tools. */
-import { activeComfyUIWorkflow, resolveComfyUIWorkflows, resolveProvider, withOpenAICompatChannel, withProviderOverrides, type Config } from './config.js'
+import { activeComfyUIWorkflow, resolveComfyUIWorkflows, type Config } from './config.js'
 import { comfyUIWorkflowSlots } from './comfyui-workflow.js'
 
 /** Workflow names listed for the model; a long list is cut so the system prompt stays small. */
@@ -15,7 +15,7 @@ function comfyUIWorkflowLine(config: Config): string[] {
   const listed = workflows.slice(0, MAX_LISTED_WORKFLOWS).map(workflow => `${JSON.stringify(workflow.name)}${slotNote(workflow.json)}`).join(', ')
   const more = workflows.length > MAX_LISTED_WORKFLOWS ? ` (+${String(workflows.length - MAX_LISTED_WORKFLOWS)} more)` : ''
   const active = activeComfyUIWorkflow(config)
-  return [`ComfyUI workflows available for the workflow argument (provider=comfyui): ${listed}${more}; active: ${JSON.stringify(active?.name ?? '')}. Pass workflow only when the user asks for a specific one; the local ComfyUI server may not be running. A workflow marked [N images] runs through edit_image with exactly N source images; only one marked [size] honours size/aspect_ratio.`]
+  return [`ComfyUI workflows available for the workflow argument (provider=comfyui): ${listed}${more}; active: ${JSON.stringify(active?.name ?? '')}. Pass workflow only when the user asks for a specific one; the local ComfyUI server may not be running. A workflow marked [N images] runs through studio_edit with exactly N source images; only one marked [size] honours size/aspect_ratio.`]
 }
 
 /** What a workflow takes from a call, so the model picks generate vs edit and the image count. */
@@ -33,24 +33,12 @@ export function imageToolContext(config: Config, configuredProviders?: readonly 
   const provider = config.provider ?? 'google'
   const configured = configuredProviders === undefined ? undefined : [...configuredProviders]
   if (configured !== undefined && !configured.includes('comfyui') && resolveComfyUIWorkflows(config).length > 0) configured.push('comfyui')
-  let model = 'not configured'
-  let editModel = model
-  try {
-    // Describe the relay channel tool calls run on (configForToolCall), not the legacy flat
-    // fields: those stay empty when only a named channel is set up.
-    const effective = provider === 'openai-compat' ? withOpenAICompatChannel(config) : config
-    const active = resolveProvider(effective)
-    model = active.provider === 'comfyui' ? active.workflow?.name ?? 'workflow selected in settings' : active.model
-    const edit = resolveProvider(withProviderOverrides(effective, undefined, undefined, 'edit'))
-    editModel = edit.provider === 'comfyui' ? edit.workflow?.name ?? model : edit.model
-  } catch { /* Incomplete settings must not break the host system prompt. */ }
   return [
-    `Image tools current default provider: ${provider}; generation model: ${JSON.stringify(model)}; editing model: ${JSON.stringify(editModel)}.`,
-    ...(configured === undefined ? [] : [`Configured image providers (credential saved, subscription logged in, or ComfyUI workflow present): ${configured.length > 0 ? configured.join(', ') : 'none'}. Do not select unlisted providers; configuration presence does not guarantee service reachability.`]),
+    `Studio image and video tools: studio_make (generate, edit, inpaint, outpaint via expand, upscale, animate, restyle, extend), studio_models, studio_job, studio_gallery. Default provider: ${provider}.`,
+    ...(configured === undefined ? [] : [`Configured providers (key saved, subscription signed in, or ComfyUI workflow present): ${configured.length > 0 ? configured.join(', ') : 'none'}. Do not select unlisted providers; configuration does not guarantee the service is reachable.`]),
     ...comfyUIWorkflowLine(config),
-    'Unless the user explicitly requests a different image provider or model, OMIT provider and model from generate_image, generate_images and edit_image. Do not guess a channel or switch channels after an error.',
-    'Omit unused optional arguments entirely; never fill them with empty strings. size and aspect_ratio are alternatives: provide at most one.',
-    'Subscription parameters: chatgpt-sub accepts size OR aspect_ratio, but NOT image_size. grok-sub image_size: 1K or 2K. google-sub image_size: 1K or 4K. Do not copy parameters from another provider.',
-    'Minimal calls: generate_image({"prompt":"a sailboat"}); edit_image({"prompt":"make the sail blue"}). A valid ChatGPT subscription ratio example is {"prompt":"a sailboat","aspect_ratio":"1:1"} with image_size and size omitted.',
+    'Unless the user names a provider or model, OMIT provider and model from studio_make: Studio picks the best configured model for the operation. Call studio_models first only when the user asks for a specific capability (inpaint, upscale, video, first/last frame) or you need the accepted params.',
+    'Omit unused optional arguments entirely; never fill them with empty strings. Results are saved in the Studio gallery; use the returned asset ids as source/references/mask in later calls. Video takes minutes: do not wait unless asked, use studio_job.',
+    'Minimal calls: studio_make({"op":"generate","prompt":"a sailboat"}); studio_make({"op":"edit","prompt":"make the sail blue"}) edits the newest image in the conversation unless source, source_attachment_id or source_path says otherwise.',
   ].join('\n')
 }

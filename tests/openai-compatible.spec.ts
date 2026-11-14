@@ -126,7 +126,7 @@ describe('OpenAI-compatible images', () => {
   it.each([
     { error: 'unsupported response_format' },
     { detail: "response_format b64_json is not permitted" },
-    { error: { message: '不支持 response_format 参数' } },
+    { error: { message: 'response_format is not supported' } },
     { detail: [{ loc: ['body', 'response_format'], msg: 'Extra inputs are not permitted', type: 'extra_forbidden' }] },
   ])('still falls back for an explicit format rejection: %j', async error => {
     const fetchMock = vi.fn().mockResolvedValueOnce(Response.json(error, { status: 422 })).mockResolvedValueOnce(Response.json({ data: [{ b64_json: Buffer.from('edited image').toString('base64') }] }))
@@ -195,14 +195,6 @@ describe('OpenAI-compatible images', () => {
       expect(body.images).toEqual(expected)
       expect(body.image).toBeUndefined()
     }
-  })
-
-  it('downloads Ark URL output with its declared media type', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ url: 'https://image.example/result' }] }), { headers: { 'content-type': 'application/json' } }))
-      .mockResolvedValueOnce(new Response(new Uint8Array([1, 2]), { headers: { 'content-type': 'image/jpeg' } }))
-    vi.stubGlobal('fetch', fetchMock)
-    await expect(generateOpenAICompatibleImage({ provider: 'seedream', apiKey: 'key', baseURL: 'https://ark.example/api/v3', model: 'seedream', prompt: 'a cat', size: '2K', maxBytes: 1024, signal })).resolves.toEqual({ data: new Uint8Array([1, 2]), mediaType: 'image/jpeg' })
   })
 
   it('resolves a relative image URL against the configured base URL', async () => {

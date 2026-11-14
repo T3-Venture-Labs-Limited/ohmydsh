@@ -348,7 +348,7 @@ export async function deleteImageByAttachmentIdFromWorkspace(
   if (options.folder && options.folder.trim()) {
     candidateDirs.add(options.folder.trim())
   }
-  candidateDirs.add('dsh-image-gen')
+  candidateDirs.add('dsh-studio')
   candidateDirs.add('image')
   candidateDirs.add('images')
   candidateDirs.add('')

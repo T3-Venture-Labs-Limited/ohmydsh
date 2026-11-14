@@ -379,7 +379,7 @@ function missingProjectDiagnostic(payload: Record<string, unknown>, blob: Subscr
   }) : []
   const current = recordOf(payload.paidTier)?.id ?? recordOf(payload.currentTier)?.id
   const detail = [...reasons, ...(typeof current === 'string' ? [`tier=${current}`] : []), ...(allowed.length > 0 ? [`allowedTiers=${allowed.join(',')}`] : [])]
-  return `未返回账号项目${detail.length > 0 ? `; ${diagnosticText(detail.join('; '), blob)}` : ''}`
+  return `No account project returned${detail.length > 0 ? `; ${diagnosticText(detail.join('; '), blob)}` : ''}`
 }
 
 /**
@@ -494,7 +494,7 @@ export async function antigravityGenerateImage(options: {
     }
   }
   const discovery = options.projectContext?.source === 'fallback'
-    ? ['项目发现未返回账号项目，已尝试兼容项目。', ...options.projectContext.diagnostics]
+    ? ['Project discovery returned no account project; a compatibility project was tried.', ...options.projectContext.diagnostics]
     : []
   throw new Error(`antigravity image generation failed: ${[...discovery, ...failures].join(' | ')}`)
 }

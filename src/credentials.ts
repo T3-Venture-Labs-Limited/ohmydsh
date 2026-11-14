@@ -24,6 +24,6 @@ export async function requireApiKey(ctx: Context, provider: CloudImageProvider, 
   const value = await resolveApiKey(ctx, provider, keyRef)
   if (value !== undefined) return value
   throw new Error(tool === undefined
-    ? `${PROVIDER_DISPLAY_NAMES[provider]} 尚未配置 API Key，请先到 设置 > 插件 > 图像生成 配置`
+    ? `${PROVIDER_DISPLAY_NAMES[provider]} has no API key yet; add one in Settings > Plugins > Studio`
     : `${tool} requires the ${PROVIDER_DISPLAY_NAMES[provider]} API key; configure it in Settings > Plugins > Image generation.`)
 }

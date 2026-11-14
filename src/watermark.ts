@@ -7,9 +7,9 @@ type Mode = 'generate' | 'edit'
 type WatermarkField = 'watermark' | 'watermark_enabled' | 'parameters.watermark'
 
 export const WATERMARK_OPTIONS: StudioOption[] = [
-  { value: 'default', label: '渠道默认' },
-  { value: 'off', label: '关闭' },
-  { value: 'on', label: '开启' },
+  { value: 'default', label: 'Channel default' },
+  { value: 'off', label: 'Off' },
+  { value: 'on', label: 'On' },
 ]
 
 function configuredField(extra: Record<string, unknown> | undefined): WatermarkField | undefined {
@@ -76,14 +76,14 @@ export function compatGenerationExtraBody(config: Config, selected?: StudioWater
   const extra = config.openaiCompatExtraBody
   if (selected === undefined || selected === 'default') return extra
   const field = compatWatermarkField(config)
-  if (field === undefined) throw new Error('该渠道尚未确认文生图水印支持，请刷新工作台')
+  if (field === undefined) throw new Error('This channel has not confirmed text-to-image watermark support; refresh the workbench')
   return overrideField(extra, field, selected)
 }
 
 export function compatEditExtraBody(config: Config, selected?: StudioWatermark): Record<string, unknown> | undefined {
   if (selected === undefined || selected === 'default') return undefined
   const field = compatWatermarkField(config, 'edit')
-  if (field === undefined) throw new Error('该渠道尚未确认图生图水印支持，请刷新工作台')
+  if (field === undefined) throw new Error('This channel has not confirmed image-edit watermark support; refresh the workbench')
   return overrideField(config.openaiCompatEditExtra, field, selected)
 }
 
@@ -96,12 +96,9 @@ export function watermarkProfile(config: Config, provider: StudioProvider, model
   watermarkOptions?: StudioOption[]
 } {
   const capability = (mode: Mode): StudioWatermarkCapability => {
-    if (provider === 'seedream' || (provider === 'dashscope' && /^qwen-image(?:$|-)/.test(model))) return { status: 'supported' }
     if (provider === 'openai-compat') return compatWatermarkField(config, mode) === undefined
       ? { status: 'unknown', reason: mode === 'edit' && configuredField(config.openaiCompatEditExtra) !== undefined ? 'edit-format' : 'channel-unconfirmed' }
       : { status: 'supported' }
-    if (provider === 'zhipu') return { status: 'unknown', reason: 'account-unconfirmed' }
-    if (provider === 'dashscope') return { status: 'unknown', reason: 'model-unconfirmed' }
     return { status: 'unavailable', reason: 'no-api-control' }
   }
   const generate = capability('generate')

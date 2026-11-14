@@ -3,18 +3,6 @@
  * Completely decoupled from gallery-view and studio-view to prevent circular dependencies.
  */
 
-/** Convert a Blob to a data URL. Used for tldraw image assets, which need a
- *  self-contained src; the session canvas keeps them in memory only (no
- *  persistenceKey, nothing touches disk). */
-export function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(reader.error ?? new Error('blobToDataUrl failed'))
-    reader.readAsDataURL(blob)
-  })
-}
-
 /** Copy an image Blob to the OS clipboard, converting to PNG if required by the browser. */
 export async function copyImageBlob(blob: Blob): Promise<boolean> {
   try {
@@ -86,17 +74,9 @@ export function downloadBlobUrl(url: string, filename: string): void {
   }
 }
 
-/** Human-readable relative time formatter supporting zh and en. */
-export function formatRelativeTime(timestamp: number, lang: 'zh' | 'en'): string {
+/** Human-readable relative time formatter. */
+export function formatRelativeTime(timestamp: number, _lang?: string): string {
   const diff = Math.max(0, Date.now() - timestamp)
-  if (lang === 'zh') {
-    if (diff < 60_000) return '刚刚'
-    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
-    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`
-    if (diff < 30 * 86_400_000) return `${Math.floor(diff / 86_400_000)} 天前`
-    const d = new Date(timestamp)
-    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
-  }
   if (diff < 60_000) return 'Just now'
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`

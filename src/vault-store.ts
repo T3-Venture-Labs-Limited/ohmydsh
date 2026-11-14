@@ -37,7 +37,7 @@ export function resolveDshHome(home?: string): string {
 }
 
 export function resolveVaultDir(home?: string): string {
-  return join(resolveDshHome(home), 'image-gen', 'vault')
+  return join(resolveDshHome(home), 'studio', 'vault')
 }
 
 /** Resolve a configured vault path; relative values stay below the DSH home, not the process cwd. */

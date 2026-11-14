@@ -12,11 +12,6 @@ describe('composer provider pill visibility (opt-in)', () => {
 })
 
 describe('composer provider pill model choices', () => {
-  it('keeps providers without a model list on the single-row provider flow', () => {
-    expect(pillModelOptionsOf('google', { googleModel: 'gemini-3.1-flash-image' })).toEqual([])
-    expect(pillModelOptionsOf('openai', { openaiModel: 'gpt-image-2' })).toEqual([])
-    expect(pillModelOptionsOf('dashscope', { dashscopeModel: 'qwen-image-3.0' })).toEqual([])
-  })
 
   it('normalizes configured model choices without moving an existing default', () => {
     expect(pillModelOptionsOf('openai-compat', {
@@ -34,22 +29,6 @@ describe('composer provider pill model choices', () => {
 })
 
 describe('composer provider pill model resolution', () => {
-  it('falls back to each provider default when no model is stored', () => {
-    expect(pillModelOf('google', undefined)).toBe(DEFAULT_MODELS.google)
-    expect(pillModelOf('openai', {})).toBe(DEFAULT_MODELS.openai)
-    expect(pillModelOf('seedream', { seedreamModel: '' })).toBe(DEFAULT_MODELS.seedream)
-    expect(pillModelOf('dashscope', { dashscopeModel: '' })).toBe(DEFAULT_MODELS.dashscope)
-  })
-
-  it('reads the stored model of each cloud provider', () => {
-    expect(pillModelOf('google', { googleModel: 'gemini-2.5-flash-image' })).toBe('gemini-2.5-flash-image')
-    expect(pillModelOf('openai', { openaiModel: 'gpt-image-1' })).toBe('gpt-image-1')
-    expect(pillModelOf('openai-compat', { openaiCompatModel: 'flux-pro-1.1' })).toBe('flux-pro-1.1')
-    expect(pillModelOf('seedream', { seedreamModel: 'doubao-seedream-4-0' })).toBe('doubao-seedream-4-0')
-    // A retired Seedream model is shown as the replacement that actually runs.
-    expect(pillModelOf('seedream', { seedreamModel: 'doubao-seedream-5-0-260128' })).toBe(DEFAULT_MODELS.seedream)
-    expect(pillModelOf('dashscope', { dashscopeModel: 'wan2.5-t2i' })).toBe('wan2.5-t2i')
-  })
 
   it('shows no model for an unconfigured compat relay instead of inventing one', () => {
     expect(pillModelOf('openai-compat', {})).toBe('')
@@ -105,7 +84,7 @@ describe('composer provider pill ComfyUI workflows (#115)', () => {
   it('names the active workflow on the pill button', () => {
     expect(pillButtonLabel('comfyui', 'ComfyUI', settings)).toBe('ComfyUI · 人像')
     expect(pillButtonLabel('comfyui', 'ComfyUI', {})).toBe('ComfyUI')
-    expect(pillButtonLabel('openai-compat', 'OpenAI 兼容', settings, 'My relay')).toBe('My relay')
+    expect(pillButtonLabel('openai-compat', 'OpenAI-compatible', settings, 'My relay')).toBe('My relay')
     expect(pillButtonLabel('google', 'Gemini', settings)).toBe('Gemini')
   })
 })

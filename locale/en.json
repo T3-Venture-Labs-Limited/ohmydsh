@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Dsh Studio",
+    "description": "A personal image and video studio: generate, edit, inpaint, outpaint, upscale and animate with OpenRouter, Replicate, Google, subscriptions and ComfyUI. Everything lands in a searchable library with lineage and cost. Open it from the Studio sidebar tab.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -1,5 +1,5 @@
 - insert:
-    - id: image-gen
-      name: dsh-image-gen
+    - id: studio
+      name: dsh-studio
       config:
-        provider: google
+        provider: grok-sub

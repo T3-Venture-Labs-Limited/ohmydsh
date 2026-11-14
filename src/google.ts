@@ -51,7 +51,7 @@ export function editGoogleImage(input: GoogleRequestBase & {
       ]
     : [
         ...input.sourceImages.flatMap((sourceImage, index) => [
-          { type: 'text', text: `图 ${index + 1} (Image ${index + 1}):` },
+          { type: 'text', text: `Image ${index + 1}:` },
           {
             type: 'image',
             mime_type: sourceImage.mediaType,

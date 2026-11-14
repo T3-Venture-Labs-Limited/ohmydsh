@@ -4,11 +4,7 @@ import { compatEditFormat } from './watermark.js'
 import type { CompatEditFormat } from './openai-compatible.js'
 
 import {
-  ARK_BACKGROUND_MODES,
-  ARK_OUTPUT_FORMATS,
   DEFAULT_CLOUD_TIMEOUT_MS,
-  DEFAULT_DASHSCOPE_ENDPOINT,
-  DEFAULT_DASHSCOPE_MODEL,
   DEFAULT_COMFYUI_BASE_URL,
   DEFAULT_COMFYUI_TIMEOUT_MS,
   DEFAULT_COMFYUI_WORKFLOW_LABEL,
@@ -16,39 +12,24 @@ import {
   DEFAULT_GOOGLE_MODEL,
   DEFAULT_OPENAI_BASE_URL,
   DEFAULT_OPENAI_MODEL,
-  DEFAULT_SEEDREAM_BASE_URL,
-  DEFAULT_SEEDREAM_MODEL,
-  currentSeedreamModel,
   DEFAULT_SUBSCRIPTION_MODELS,
   DEFAULT_XAI_BASE_URL,
   DEFAULT_XAI_MODEL,
-  DEFAULT_ZHIPU_BASE_URL,
-  DEFAULT_ZHIPU_MODEL,
-  DASHSCOPE_API_KEY_ENV,
   GOOGLE_API_KEY_ENV,
   IMAGE_PROVIDERS,
   OPENAI_API_KEY_ENV,
   OPENAI_COMPAT_API_KEY_ENV,
-  SEEDREAM_API_KEY_ENV,
   XAI_API_KEY_ENV,
-  ZHIPU_API_KEY_ENV,
   activeComfyUIWorkflow,
   resolveComfyUIWorkflows,
   resolveOpenAICompatChannel,
   type OpenAICompatChannel,
-  type ArkBackgroundMode,
-  type ArkOutputFormat,
-  type ArkOutputOptions,
   type ComfyUIWorkflowEntry,
   type ImageProvider,
 } from './shared.js'
 
 export {
-  ARK_BACKGROUND_MODES,
-  ARK_OUTPUT_FORMATS,
   DEFAULT_CLOUD_TIMEOUT_MS,
-  DEFAULT_DASHSCOPE_ENDPOINT,
-  DEFAULT_DASHSCOPE_MODEL,
   DEFAULT_COMFYUI_BASE_URL,
   DEFAULT_COMFYUI_TIMEOUT_MS,
   DEFAULT_COMFYUI_WORKFLOW_LABEL,
@@ -56,31 +37,21 @@ export {
   DEFAULT_GOOGLE_MODEL,
   DEFAULT_OPENAI_BASE_URL,
   DEFAULT_OPENAI_MODEL,
-  DEFAULT_SEEDREAM_BASE_URL,
-  DEFAULT_SEEDREAM_MODEL,
   DEFAULT_XAI_BASE_URL,
   DEFAULT_XAI_MODEL,
-  DEFAULT_ZHIPU_BASE_URL,
-  DEFAULT_ZHIPU_MODEL,
-  DASHSCOPE_API_KEY_ENV,
   GOOGLE_API_KEY_ENV,
   IMAGE_PROVIDERS,
   OPENAI_API_KEY_ENV,
   OPENAI_COMPAT_API_KEY_ENV,
-  SEEDREAM_API_KEY_ENV,
   XAI_API_KEY_ENV,
-  ZHIPU_API_KEY_ENV,
   activeComfyUIWorkflow,
   resolveComfyUIWorkflows,
-  type ArkBackgroundMode,
-  type ArkOutputFormat,
-  type ArkOutputOptions,
   type ComfyUIWorkflowEntry,
   type ImageProvider,
 }
 
 /** Default workspace subfolder that receives generated image files. */
-export const DEFAULT_WORKSPACE_FOLDER = 'dsh-image-gen'
+export const DEFAULT_WORKSPACE_FOLDER = 'dsh-studio'
 
 /** Google tool-level controls. Aligned with gemini-3.1-flash-image's common set. */
 export const ASPECT_RATIOS = ['1:1', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4', '16:9', '9:16', '21:9'] as const
@@ -149,30 +120,8 @@ export interface Config {
    * fixed three. Generation sends the exact configured string.
    */
   openaiCompatSizes?: Record<string, Record<string, string>>
-  seedreamBaseURL?: string
-  seedreamModel?: string
-  /**
-   * Ark `output_format`. Ark defaults to `jpeg`, which is lossy and cannot
-   * carry an alpha channel; `png` is lossless, so it survives later editing
-   * (e.g. background removal) without JPEG ringing around the subject.
-   */
-  seedreamOutputFormat?: ArkOutputFormat
-  /**
-   * Ark `watermark`. Ark defaults to `true`, which bakes an "AI generated"
-   * mark into the bottom-right corner.
-   */
-  seedreamWatermark?: boolean
-  /**
-   * Ark `background`. Only the edit path can honour `transparent`, and only
-   * when every reference image already carries an alpha channel.
-   */
-  seedreamBackground?: ArkBackgroundMode
-  dashscopeEndpoint?: string
-  dashscopeModel?: string
   xaiBaseURL?: string
   xaiModel?: string
-  zhipuBaseURL?: string
-  zhipuModel?: string
   comfyuiBaseURL?: string
   /** Named ComfyUI workflows managed by the Web settings page. */
   comfyuiWorkflows?: ComfyUIWorkflowEntry[]
@@ -197,7 +146,7 @@ export interface Config {
   requestCacheMaxBytes?: number
   /** Override the request-image cache root (empty keeps the DSH_HOME default). */
   requestCacheDir?: string
-  /** Keep the pre-normalization bytes when the attachment layer changes an import or normalizes a generated GIF to a still. */
+  /** Keep the pre-normalization bytes when the attachment layer changes an import . */
   vaultEnabled?: boolean
   /** Override the raw-image vault root (empty keeps the DSH_HOME default). */
   vaultDir?: string
@@ -260,17 +209,8 @@ export const Config = z.object({
   openaiCompatEditFormat: volatile(z.union([z.const('multipart'), z.const('jsonImageUrlArray'), z.const('formReferenceImages'), z.const('siliconflowJson')]).default('multipart')),
   openaiCompatEditExtra: volatile(z.dict(z.any()).default({})),
   openaiCompatSizes: volatile(z.dict(z.dict(z.string())).default({})),
-  seedreamBaseURL: volatile(z.string().default(DEFAULT_SEEDREAM_BASE_URL)),
-  seedreamModel: volatile(z.string().default(DEFAULT_SEEDREAM_MODEL)),
-  seedreamOutputFormat: volatile(z.union(ARK_OUTPUT_FORMATS).default('jpeg')),
-  seedreamWatermark: volatile(z.boolean().default(true)),
-  seedreamBackground: volatile(z.union(ARK_BACKGROUND_MODES).default('opaque')),
-  dashscopeEndpoint: volatile(z.string().default(DEFAULT_DASHSCOPE_ENDPOINT)),
-  dashscopeModel: volatile(z.string().default(DEFAULT_DASHSCOPE_MODEL)),
   xaiBaseURL: volatile(z.string().default(DEFAULT_XAI_BASE_URL)),
   xaiModel: volatile(z.string().default(DEFAULT_XAI_MODEL)),
-  zhipuBaseURL: volatile(z.string().default(DEFAULT_ZHIPU_BASE_URL)),
-  zhipuModel: volatile(z.string().default(DEFAULT_ZHIPU_MODEL)),
   comfyuiBaseURL: volatile(z.string().default(DEFAULT_COMFYUI_BASE_URL)),
   comfyuiWorkflows: volatile(z.array(z.object({ name: z.string(), json: z.string(), presetPrompt: z.string().default('') })).default([])),
   comfyuiActiveWorkflow: volatile(z.string().default('')),
@@ -293,12 +233,8 @@ export function resolveProvider(config: Config):
   | { provider: 'google'; apiKeyEnv: string; model: string; endpoint: string; native: boolean; aspectRatio: AspectRatio; imageSize: ImageSize }
   | { provider: 'openai'; apiKeyEnv: string; model: string; baseURL: string; imageSize: string }
   | { provider: 'openai-compat'; apiKeyEnv: string; model: string; baseURL: string; imageSize: string; editFormat: CompatEditFormat; editExtra: Record<string, unknown> }
-  | { provider: 'seedream'; apiKeyEnv: string; model: string; baseURL: string; imageSize: string; arkOptions: ArkOutputOptions }
-  | { provider: 'dashscope'; apiKeyEnv: string; model: string; endpoint: string; imageSize: string }
   | { provider: 'xai'; apiKeyEnv: string; model: string; baseURL: string; imageSize: string }
-  | { provider: 'zhipu'; apiKeyEnv: string; model: string; baseURL: string; imageSize: string }
   | { provider: 'comfyui'; baseURL: string; workflows: ComfyUIWorkflowEntry[]; workflow?: ComfyUIWorkflowEntry; timeoutMs: number }
-  | { provider: 'chatgpt-sub'; model: string }
   | { provider: 'grok-sub'; model: string }
   | { provider: 'google-sub'; model: string } {
   switch (config.provider ?? 'google') {
@@ -306,36 +242,15 @@ export function resolveProvider(config: Config):
     case 'openai-compat': {
       const baseURL = config.openaiCompatBaseURL?.trim()
       if (baseURL === undefined || baseURL.length === 0) {
-        throw new Error('OpenAI 兼容 provider requires a base URL; set it in Settings > Plugins > Image generation.')
+        throw new Error('OpenAI-compatible provider requires a base URL; set it in Settings > Plugins > Studio.')
       }
       const model = config.openaiCompatModel?.trim()
       if (model === undefined || model.length === 0) {
-        throw new Error('OpenAI 兼容 provider requires a model name; set it in Settings > Plugins > Image generation.')
+        throw new Error('OpenAI-compatible provider requires a model name; set it in Settings > Plugins > Studio.')
       }
       return { provider: 'openai-compat', apiKeyEnv: OPENAI_COMPAT_API_KEY_ENV, model, baseURL, imageSize: '1024x1024', editFormat: compatEditFormat(config), editExtra: config.openaiCompatEditExtra ?? {} }
     }
-    case 'seedream': {
-      const seedreamBackground = config.seedreamBackground ?? 'opaque'
-      return {
-        provider: 'seedream',
-        apiKeyEnv: SEEDREAM_API_KEY_ENV,
-        model: currentSeedreamModel(config.seedreamModel),
-        baseURL: config.seedreamBaseURL ?? DEFAULT_SEEDREAM_BASE_URL,
-        imageSize: '2K',
-        arkOptions: {
-          // Ark rejects `output_format: jpeg` together with `background: transparent`
-          // outright — a JPEG cannot carry the alpha channel the transparent mode
-          // exists to produce. The two controls are independent in the settings UI,
-          // so couple them here rather than letting the combination reach the wire.
-          outputFormat: seedreamBackground === 'transparent' ? 'png' : config.seedreamOutputFormat ?? 'jpeg',
-          watermark: config.seedreamWatermark ?? true,
-          background: seedreamBackground,
-        },
-      }
-    }
-    case 'dashscope': return { provider: 'dashscope', apiKeyEnv: DASHSCOPE_API_KEY_ENV, model: config.dashscopeModel ?? DEFAULT_DASHSCOPE_MODEL, endpoint: config.dashscopeEndpoint ?? DEFAULT_DASHSCOPE_ENDPOINT, imageSize: '1024*1024' }
     case 'xai': return { provider: 'xai', apiKeyEnv: XAI_API_KEY_ENV, model: config.xaiModel ?? DEFAULT_XAI_MODEL, baseURL: config.xaiBaseURL ?? DEFAULT_XAI_BASE_URL, imageSize: '1024x1024' }
-    case 'zhipu': return { provider: 'zhipu', apiKeyEnv: ZHIPU_API_KEY_ENV, model: config.zhipuModel ?? DEFAULT_ZHIPU_MODEL, baseURL: config.zhipuBaseURL ?? DEFAULT_ZHIPU_BASE_URL, imageSize: '1024x1024' }
     case 'comfyui': {
       const workflows = resolveComfyUIWorkflows(config)
       const workflow = activeComfyUIWorkflow(config)
@@ -347,7 +262,6 @@ export function resolveProvider(config: Config):
         timeoutMs: config.comfyuiTimeoutMs ?? DEFAULT_COMFYUI_TIMEOUT_MS,
       }
     }
-    case 'chatgpt-sub': return { provider: 'chatgpt-sub', model: DEFAULT_SUBSCRIPTION_MODELS['chatgpt-sub'] }
     case 'grok-sub': return { provider: 'grok-sub', model: DEFAULT_SUBSCRIPTION_MODELS['grok-sub'] }
     case 'google-sub': return { provider: 'google-sub', model: DEFAULT_SUBSCRIPTION_MODELS['google-sub'] }
     case 'google': return { provider: 'google', apiKeyEnv: GOOGLE_API_KEY_ENV, model: config.googleModel ?? DEFAULT_GOOGLE_MODEL, endpoint: config.googleEndpoint ?? DEFAULT_GOOGLE_ENDPOINT, native: config.googleNative === true, aspectRatio: '1:1', imageSize: '1K' }
@@ -388,12 +302,8 @@ export function withProviderOverrides(config: Config, provider?: ImageProvider, 
     case 'google': return { ...base, googleModel: trimmed }
     case 'openai': return { ...base, openaiModel: trimmed }
     case 'openai-compat': return { ...base, openaiCompatModel: trimmed, ...(mode === 'edit' ? { openaiCompatEditModel: trimmed } : {}) }
-    case 'seedream': return { ...base, seedreamModel: trimmed }
-    case 'dashscope': return { ...base, dashscopeModel: trimmed }
     case 'xai': return { ...base, xaiModel: trimmed }
-    case 'zhipu': return { ...base, zhipuModel: trimmed }
     // Subscription models are fixed by the bridge protocol; the override is ignored.
-    case 'chatgpt-sub': return base
     case 'grok-sub': return base
     case 'google-sub': return base
     case 'comfyui': return base
@@ -437,7 +347,7 @@ export function selectComfyUIWorkflow(
   requested?: string,
 ): ComfyUIWorkflowEntry {
   if (active.workflow === undefined) {
-    throw new Error('ComfyUI image generation requires an imported workflow; import one in Settings > Plugins > Image generation.')
+    throw new Error('ComfyUI image generation requires an imported workflow; import one in Settings > Plugins > Studio.')
   }
   if (typeof requested !== 'string' || requested.trim().length === 0) return active.workflow
   const name = requested.trim()

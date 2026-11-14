@@ -13,7 +13,7 @@ import Settings from '@deepseek-ai/dsh-settings'
 const home = dirname(fileURLToPath(import.meta.url))
 const version = process.argv[2]
 const legacy = version === '3.18.2'
-const pluginURL = import.meta.resolve('dsh-image-gen')
+const pluginURL = import.meta.resolve('dsh-studio')
 if (legacy) {
   // Simulate a profile resolving an older schemastery copy. The actual
   // published 3.18.2 is loaded only by the installed plugin; the host stays 0.2.
@@ -24,7 +24,7 @@ if (legacy) {
     return nextResolve(specifier, context)
   } })
 }
-const plugin = await import('dsh-image-gen')
+const plugin = await import('dsh-studio')
 const profileDir = join(home, `profile-${version}`)
 initProfile(profileDir, ['test-settings-bundle'])
 const bundle = join(profileDir, 'node_modules', 'test-settings-bundle')
@@ -79,7 +79,7 @@ async function waitFor(check) {
 }
 function health() {
   let result
-  const route = routes.get('/plugins/dsh-image-gen/settings-health')
+  const route = routes.get('/plugins/dsh-studio/settings-health')
   assert.ok(route, 'The installed plugin must register diagnostics')
   route.handler({ method: 'GET' }, { setHeader() {}, end: body => { result = JSON.parse(body) } })
   return result
@@ -88,10 +88,10 @@ function health() {
 // the health response comes from the installed plugin's actual HTTP handler.
 globalThis.fetch = async (url, options) => {
   const path = new URL(url, 'http://profile.invalid').pathname
-  if (path === '/plugins/dsh-image-gen/subscription-status') {
+  if (path === '/plugins/dsh-studio/subscription-status') {
     return new Response(JSON.stringify({ statuses: {} }))
   }
-  assert.equal(path, '/plugins/dsh-image-gen/settings-health', 'The test must not call any image or login API')
+  assert.equal(path, '/plugins/dsh-studio/settings-health', 'The test must not call any image or login API')
   assert.equal(options?.method ?? 'GET', 'GET')
   return new Response(JSON.stringify(health()))
 }
@@ -125,12 +125,12 @@ async function card(ctx, provider = 'openai-compat') {
   renderers.add(renderer)
   // The card renders open on the plugin's own page now, so only the provider
   // row still needs a click to expand.
-  const rows = () => renderer.root.findAll(node => node.type === 'div' && node.props.className?.startsWith('dsh-ig-provider-row'))
+  const rows = () => renderer.root.findAll(node => node.type === 'div' && node.props.className?.startsWith('dsh-st-provider-row'))
   const providerLabels = { 'openai-compat': 'OpenAI 兼容', google: 'Google Gemini' }
-  const row = () => rows().find(node => text(node.findByProps({ className: 'dsh-ig-provider-name' })) === providerLabels[provider])
+  const row = () => rows().find(node => text(node.findByProps({ className: 'dsh-st-provider-name' })) === providerLabels[provider])
   const targetRow = row()
-  assert.ok(targetRow, `Missing ${provider}; rendered rows: ${JSON.stringify(rows().map(node => text(node.findByProps({ className: 'dsh-ig-provider-name' }))))}`)
-  await act(async () => { targetRow.findByProps({ className: 'dsh-ig-provider-head' }).props.onClick() })
+  assert.ok(targetRow, `Missing ${provider}; rendered rows: ${JSON.stringify(rows().map(node => text(node.findByProps({ className: 'dsh-st-provider-name' }))))}`)
+  await act(async () => { targetRow.findByProps({ className: 'dsh-st-provider-head' }).props.onClick() })
   const input = type => row().findAllByType('input').find(element => element.props.type === type)
   const field = label => row().findAllByType('label').find(element => text(element).startsWith(label)).findByType('input')
   const save = async () => { await act(async () => { row().findByType('form').props.onSubmit({ preventDefault() {} }) }) }

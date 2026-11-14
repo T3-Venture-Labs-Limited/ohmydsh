@@ -39,61 +39,6 @@ describe('resolveProvider', () => {
     expect(resolveProvider({})).toEqual({ provider: 'google', apiKeyEnv: 'GEMINI_API_KEY', endpoint: DEFAULT_GOOGLE_ENDPOINT, model: DEFAULT_GOOGLE_MODEL, native: false, aspectRatio: '1:1', imageSize: '1K' })
   })
 
-  it('resolves editable OpenAI-compatible profiles independently', () => {
-    expect(resolveProvider({ provider: 'openai' })).toEqual({ provider: 'openai', apiKeyEnv: 'OPENAI_API_KEY', baseURL: DEFAULT_OPENAI_BASE_URL, model: DEFAULT_OPENAI_MODEL, imageSize: '1024x1024' })
-    expect(resolveProvider({ provider: 'seedream' })).toEqual({
-      provider: 'seedream',
-      apiKeyEnv: 'ARK_API_KEY',
-      baseURL: DEFAULT_SEEDREAM_BASE_URL,
-      model: DEFAULT_SEEDREAM_MODEL,
-      imageSize: '2K',
-      arkOptions: { outputFormat: 'jpeg', watermark: true, background: 'opaque' },
-    })
-  })
-
-  it('carries the Seedream output controls through to the resolved profile', () => {
-    expect(resolveProvider({
-      provider: 'seedream',
-      seedreamOutputFormat: 'png',
-      seedreamWatermark: false,
-      seedreamBackground: 'transparent',
-    })).toMatchObject({
-      provider: 'seedream',
-      arkOptions: { outputFormat: 'png', watermark: false, background: 'transparent' },
-    })
-  })
-
-  // Ark rejects `output_format: jpeg` together with `background: transparent` —
-  // a JPEG cannot carry the alpha channel the transparent mode exists to produce.
-  // The settings UI keeps the two controls independent, so the profile couples them.
-  it('forces PNG output when the Seedream background is transparent', () => {
-    expect(resolveProvider({
-      provider: 'seedream',
-      seedreamOutputFormat: 'jpeg',
-      seedreamBackground: 'transparent',
-    })).toMatchObject({
-      arkOptions: { outputFormat: 'png', background: 'transparent' },
-    })
-    // An opaque background leaves the chosen format alone.
-    expect(resolveProvider({
-      provider: 'seedream',
-      seedreamOutputFormat: 'jpeg',
-      seedreamBackground: 'opaque',
-    })).toMatchObject({
-      arkOptions: { outputFormat: 'jpeg', background: 'opaque' },
-    })
-  })
-
-  it('resolves DashScope profile', () => {
-    expect(resolveProvider({ provider: 'dashscope' })).toEqual({
-      provider: 'dashscope',
-      apiKeyEnv: 'DASHSCOPE_API_KEY',
-      endpoint: DEFAULT_DASHSCOPE_ENDPOINT,
-      model: DEFAULT_DASHSCOPE_MODEL,
-      imageSize: '1024*1024',
-    })
-  })
-
   it('resolves a credential-free ComfyUI profile', () => {
     expect(resolveProvider({ provider: 'comfyui' })).toEqual({
       provider: 'comfyui',
@@ -108,7 +53,7 @@ describe('openai-compat provider', () => {
   it('resolves the compat profile with its dedicated credential ref', () => {
     expect(resolveProvider({ provider: 'openai-compat', openaiCompatBaseURL: 'https://relay.example.com/v1', openaiCompatModel: 'flux-pro-1.1' })).toEqual({
       provider: 'openai-compat',
-      apiKeyEnv: 'DSH_IMAGE_GEN_OPENAI_COMPAT_KEY',
+      apiKeyEnv: 'DSH_STUDIO_OPENAI_COMPAT_KEY',
       baseURL: 'https://relay.example.com/v1',
       model: 'flux-pro-1.1',
       imageSize: '1024x1024',
@@ -173,8 +118,8 @@ describe('openai-compat provider', () => {
       }],
     }
     expect(resolveOpenAICompatChannels(config)).toMatchObject([
-      { id: 'default', label: 'Legacy relay', keyRef: 'DSH_IMAGE_GEN_OPENAI_COMPAT_KEY', baseURL: 'https://legacy.example/v1', model: 'legacy-model' },
-      { id: 'relay-b', label: 'Relay B', keyRef: 'DSH_IMAGE_GEN_OPENAI_COMPAT_KEY_RELAY_B', baseURL: 'https://relay-b.example/v1', model: 'relay-b-model' },
+      { id: 'default', label: 'Legacy relay', keyRef: 'DSH_STUDIO_OPENAI_COMPAT_KEY', baseURL: 'https://legacy.example/v1', model: 'legacy-model' },
+      { id: 'relay-b', label: 'Relay B', keyRef: 'DSH_STUDIO_OPENAI_COMPAT_KEY_RELAY_B', baseURL: 'https://relay-b.example/v1', model: 'relay-b-model' },
     ])
     const scoped = withOpenAICompatChannel(config, 'relay-b')
     expect(scoped).toMatchObject({
@@ -188,51 +133,6 @@ describe('openai-compat provider', () => {
     expect(config.openaiCompatModel).toBe('legacy-model')
     expect(resolveOpenAICompatChannel({ ...config, openaiCompatActiveChannel: 'relay-b' }).id).toBe('relay-b')
     expect(() => resolveOpenAICompatChannel(config, 'missing')).toThrow('Unknown OpenAI-compatible channel')
-  })
-})
-
-describe('xai and zhipu providers', () => {
-  it('resolves the xai profile with its dedicated credential ref and defaults', () => {
-    expect(resolveProvider({ provider: 'xai' })).toEqual({
-      provider: 'xai',
-      apiKeyEnv: 'XAI_API_KEY',
-      baseURL: DEFAULT_XAI_BASE_URL,
-      model: DEFAULT_XAI_MODEL,
-      imageSize: '1024x1024',
-    })
-  })
-
-  it('resolves the zhipu profile with its dedicated credential ref and defaults', () => {
-    expect(resolveProvider({ provider: 'zhipu' })).toEqual({
-      provider: 'zhipu',
-      apiKeyEnv: 'ZHIPUAI_API_KEY',
-      baseURL: DEFAULT_ZHIPU_BASE_URL,
-      model: DEFAULT_ZHIPU_MODEL,
-      imageSize: '1024x1024',
-    })
-  })
-
-  it('honours configured endpoint and model overrides', () => {
-    const config = withProviderOverrides(
-      { provider: 'xai', xaiBaseURL: 'https://proxy.example.com/v1', xaiModel: 'grok-imagine-image-2.0' },
-      undefined,
-      'grok-imagine-image-2.0-alt',
-    )
-    expect(resolveProvider(config)).toMatchObject({ provider: 'xai', baseURL: 'https://proxy.example.com/v1', model: 'grok-imagine-image-2.0-alt' })
-  })
-
-  it('routes per-call model overrides to the zhipu field', () => {
-    const config = withProviderOverrides({ provider: 'zhipu' }, undefined, 'glm-image-test')
-    expect(resolveProvider(config)).toMatchObject({ provider: 'zhipu', model: 'glm-image-test' })
-  })
-
-  it('validates both providers through the schema with their defaults', () => {
-    const xai = unwrap(Config({ provider: 'xai' }))
-    expect(xai.xaiBaseURL).toBe(DEFAULT_XAI_BASE_URL)
-    expect(xai.xaiModel).toBe(DEFAULT_XAI_MODEL)
-    const zhipu = unwrap(Config({ provider: 'zhipu' }))
-    expect(zhipu.zhipuBaseURL).toBe(DEFAULT_ZHIPU_BASE_URL)
-    expect(zhipu.zhipuModel).toBe(DEFAULT_ZHIPU_MODEL)
   })
 })
 
@@ -409,13 +309,6 @@ describe('Config Schema validation', () => {
     const enabled = Config({ showProviderPill: true })
     expect(enabled.showProviderPill).toHaveProperty('get')
     expect(unwrap(enabled).showProviderPill).toBe(true)
-  })
-
-  it('validates provider: dashscope without rejection', () => {
-    const validated = unwrap(Config({ provider: 'dashscope' }))
-    expect(validated.provider).toBe('dashscope')
-    expect(validated.dashscopeModel).toBe(DEFAULT_DASHSCOPE_MODEL)
-    expect(validated.dashscopeEndpoint).toBe(DEFAULT_DASHSCOPE_ENDPOINT)
   })
 
   it('validates provider: comfyui and applies local defaults', () => {

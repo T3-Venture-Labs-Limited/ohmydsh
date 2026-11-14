@@ -17,7 +17,7 @@ function harness(settings?: object) {
   }
   apply(ctx as never)
   const read = () => {
-    const route = routes.find(route => route.path === '/plugins/dsh-image-gen/settings-health')
+    const route = routes.find(route => route.path === '/plugins/dsh-studio/settings-health')
     expect(route, 'settings diagnostics must be available even when no form can be served').toBeDefined()
     let body = ''
     route!.handler({ method: 'GET' }, { setHeader: vi.fn(), end: (value: string) => { body = value } })

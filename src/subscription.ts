@@ -9,7 +9,7 @@
  * and everything downstream is shared.
  *
  * Isolation invariants (project rules):
- * - OAuth blobs live under CODEX_OAUTH_1 / GROK_OAUTH_1 refs — never the
+ * - OAuth blobs live under GROK_OAUTH_1 / ANTIGRAVITY_OAUTH_1 refs — never the
  *   API-key refs — and the API-key paths never consult subscription state.
  * - Login/logout changes nothing except one vendor's own blob.
  */
@@ -28,15 +28,15 @@ export function subscriptionToolParameters(provider: SubscriptionProvider, optio
   const requestedSize = options.size?.trim() || undefined
   const ratio = options.aspectRatio?.trim() || undefined
   const imageSize = options.imageSize?.trim() || undefined
-  if (requestedSize !== undefined && ratio !== undefined) throw new Error('size 与 aspect_ratio 请只选一个；无关可选字段请省略，不要填写空字符串')
-  if (ratio !== undefined && !SUBSCRIPTION_CAPABILITIES[provider].ratioOptions.some(option => option.value === ratio)) throw new Error(`${provider} 不支持比例 ${ratio}`)
-  const size = requestedSize ?? (ratio === undefined ? undefined : provider === 'chatgpt-sub' ? SUBSCRIPTION_CAPABILITIES[provider].sizeFor?.(ratio, 'auto') : ratio)
+  if (requestedSize !== undefined && ratio !== undefined) throw new Error('Pass either size or aspect_ratio, not both; omit unrelated optional fields instead of sending empty strings')
+  if (ratio !== undefined && !SUBSCRIPTION_CAPABILITIES[provider].ratioOptions.some(option => option.value === ratio)) throw new Error(`${provider} does not support aspect ratio ${ratio}`)
+  const size = requestedSize ?? (ratio === undefined ? undefined : ratio)
   let quality: string | undefined
   if (imageSize !== undefined) {
     if (provider === 'grok-sub' && (imageSize === '1K' || imageSize === '2K')) quality = imageSize.toLowerCase()
     else if (provider === 'google-sub' && imageSize === '4K') quality = 'hd'
     else if (provider === 'google-sub' && imageSize === '1K') quality = undefined
-    else throw new Error(`${provider} 不支持清晰度 ${imageSize}；${provider === 'chatgpt-sub' ? '请省略 image_size，使用 size 或 aspect_ratio 指定尺寸' : `image_size 仅支持 ${provider === 'grok-sub' ? '1K、2K' : '1K、4K'}`}`)
+    else throw new Error(`${provider} does not support resolution ${imageSize}; image_size only accepts ${provider === 'grok-sub' ? '1K or 2K' : '1K or 4K'}`)
   }
   return { ...(size === undefined ? {} : { size }), ...(quality === undefined ? {} : { quality }) }
 }

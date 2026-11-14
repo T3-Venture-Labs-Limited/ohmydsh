@@ -1,0 +1,1 @@
+{"id":"abc","model":"bria/increase-resolution","status":"succeeded","input":{"desired_increase":2},"output":"https://replicate.delivery/xezq/abc/out.png","error":null,"metrics":{"predict_time":2.1,"total_time":3.4},"urls":{"get":"https://api.replicate.com/v1/predictions/abc"}}

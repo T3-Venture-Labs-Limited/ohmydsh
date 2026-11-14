@@ -103,7 +103,7 @@ function browserEnvironment(): DatalistScrollFixEnvironment | undefined {
   return {
     window: window as unknown as DatalistScrollFixEnvironment['window'],
     document: document as unknown as DatalistScrollFixEnvironment['document'],
-    ownsInput: element => (element as unknown as Element).matches('.dsh-ig-input[list]'),
+    ownsInput: element => (element as unknown as Element).matches('.dsh-st-input[list]'),
     ...(typeof requestAnimationFrame !== 'function' ? {} : {
       schedule: (callback: Listener) => {
         const frame = requestAnimationFrame(() => callback())

@@ -1,22 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { resolveProvider } from '../src/config.js'
 import { compatEditExtraBody, compatEditFormat, compatGenerationExtraBody, compatWatermarkField } from '../src/watermark.js'
-import { studioProfile } from '../src/studio.js'
 import { studioWatermarkCapability } from '../src/shared.js'
 
 const qwen = { provider: 'openai-compat' as const, openaiCompatBaseURL: 'https://workspace-123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1', openaiCompatModel: 'qwen-image-3.0' }
 const sense = { provider: 'openai-compat' as const, openaiCompatBaseURL: 'https://token.sensenova.cn/v1', openaiCompatModel: 'sensenova-u1.5-lite' }
 
 describe('operation-specific watermark contracts', () => {
-  it('exposes native Seedream and Qwen controls without extra-field configuration', () => {
-    for (const provider of ['seedream', 'dashscope'] as const) {
-      const profile = studioProfile({}, provider, false)
-      expect(studioWatermarkCapability(profile, 'generate').status).toBe('supported')
-      expect(studioWatermarkCapability(profile, 'edit').status).toBe('supported')
-    }
-    expect(studioWatermarkCapability(studioProfile({}, 'zhipu', true), 'generate')).toEqual({ status: 'unknown', reason: 'account-unconfirmed' })
-    expect(studioWatermarkCapability(studioProfile({}, 'google', true), 'generate').status).toBe('unavailable')
-  })
   it('recognizes official Qwen workspace endpoints in each documented region', () => {
     for (const region of ['cn-beijing', 'ap-southeast-1', 'us-east-1', 'eu-central-1', 'ap-northeast-1', 'cn-hongkong']) {
       const config = { ...qwen, openaiCompatBaseURL: `https://workspace-123.${region}.maas.aliyuncs.com/compatible-mode/v1/` }

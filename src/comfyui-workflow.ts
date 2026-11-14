@@ -14,7 +14,7 @@ export const COMFYUI_DEFAULT_SIZE = { width: 1024, height: 1024 } as const
  * Pixel sizes for an aspect ratio, about one megapixel in multiples of 64:
  * the buckets SDXL / Flux style models are trained on.
  */
-const COMFYUI_RATIO_SIZES: Readonly<Record<string, { width: number; height: number }>> = {
+export const COMFYUI_RATIO_SIZES: Readonly<Record<string, { width: number; height: number }>> = {
   '1:1': { width: 1024, height: 1024 },
   '4:3': { width: 1152, height: 896 },
   '3:4': { width: 896, height: 1152 },
@@ -147,7 +147,7 @@ export function prepareComfyUIWorkflow(workflowJson: string, prompt: string, see
 export function assertImageCount(imageInputs: number, sourceImages: number): void {
   if (sourceImages === 0) {
     if (imageInputs > 0) {
-      throw new Error(`ComfyUI workflow contains ${String(imageInputs)} ${COMFYUI_IMAGE_PLACEHOLDER} image input(s), which require edit_image with that many source images`)
+      throw new Error(`ComfyUI workflow contains ${String(imageInputs)} ${COMFYUI_IMAGE_PLACEHOLDER} image input(s), which require studio_edit with that many source images`)
     }
     return
   }

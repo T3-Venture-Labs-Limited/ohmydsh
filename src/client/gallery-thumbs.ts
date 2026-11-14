@@ -3,7 +3,7 @@ export const GALLERY_THUMB_MAX_BYTES = 256 * 1024 * 1024
 export const GALLERY_THUMB_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000
 export const GALLERY_THUMB_WIDTH = 320
 
-const THUMB_DB_NAME = 'dsh_image_gen_thumbs'
+const THUMB_DB_NAME = 'dsh_studio_thumbs'
 const THUMB_DB_VERSION = 1
 const THUMB_STORE = 'thumbs'
 
@@ -69,7 +69,7 @@ export async function putGalleryThumb(key: string, blob: Blob): Promise<void> {
       tx.onerror = () => reject(tx.error)
     })
   } catch (err) {
-    console.warn('[dsh-image-gen] Failed to cache gallery thumbnail:', err)
+    console.warn('[dsh-studio] Failed to cache gallery thumbnail:', err)
   }
 }
 

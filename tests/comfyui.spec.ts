@@ -133,7 +133,7 @@ describe('ComfyUI workflow preparation', () => {
 
   it('fails a generation whose workflow still contains an image placeholder', () => {
     expect(() => prepareComfyUIWorkflow(EDIT_WORKFLOW, 'p', 1))
-      .toThrow('require edit_image')
+      .toThrow('require studio_edit')
   })
 
   it('injects width and height as numbers, defaulting to 1024 (#97)', () => {
@@ -295,7 +295,7 @@ describe('ComfyUI image editing', () => {
 
     await expect(editComfyUIImage(editOptions({
       sourceImages: [{ data: new Uint8Array([1]), mediaType: 'image/gif' }],
-    }))).rejects.toThrow('ComfyUI edit_image accepts PNG, JPEG, or WebP source images; got image/gif')
+    }))).rejects.toThrow('ComfyUI studio_edit accepts PNG, JPEG, or WebP source images; got image/gif')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

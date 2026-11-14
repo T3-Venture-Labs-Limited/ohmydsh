@@ -21,7 +21,7 @@ describe('raw image vault store', () => {
     const home = join(tmpdir(), 'dsh-path-test')
     const absolute = join(tmpdir(), 'vault-absolute')
     expect(resolveVaultPath('raw-images', home)).toBe(join(home, 'raw-images'))
-    expect(resolveVaultPath('', home)).toBe(join(home, 'image-gen', 'vault'))
+    expect(resolveVaultPath('', home)).toBe(join(home, 'studio', 'vault'))
     expect(resolveVaultPath(absolute, home)).toBe(absolute)
   })
 

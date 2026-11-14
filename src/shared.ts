@@ -2,7 +2,7 @@
 import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 
 /** Browser route used by the generated-image card. */
-export const IMAGE_ROUTE = '/plugins/dsh-image-gen/image'
+export const IMAGE_ROUTE = '/plugins/dsh-studio/image'
 
 /** Encode a durable image reference for the cacheable GET form of IMAGE_ROUTE. */
 export function encodeImageRef(ref: ImageAttachmentRef): string {
@@ -43,161 +43,54 @@ export function previewUrlFor(ref: ImageAttachmentRef): string {
 /** Content-addressed vault key: the sha256 of the original bytes, validated on both faces. */
 export const VAULT_KEY_PATTERN = /^[a-f0-9]{64}$/
 
-/** Content-addressed raw copy, served when the attachment layer normalized an import or a generated GIF. */
+/** Content-addressed raw copy, served when the attachment layer normalized an import or a generated animation. */
 export function vaultUrlFor(key: string, mediaType?: string): string {
   const base = VAULT_ROUTE + '?key=' + encodeURIComponent(key)
   return mediaType === undefined ? base : base + '&mediaType=' + encodeURIComponent(mediaType)
 }
 /** Browser route that uploads user-picked images as DSH attachments. */
-export const IMPORT_ROUTE = '/plugins/dsh-image-gen/import'
+export const IMPORT_ROUTE = '/plugins/dsh-studio/import'
 /** Browser route used for deleting generated images and workspace files. */
-export const DELETE_ROUTE = '/plugins/dsh-image-gen/delete'
+export const DELETE_ROUTE = '/plugins/dsh-studio/delete'
 /** Same-origin route used by the browser image workbench. */
-export const STUDIO_ROUTE = '/plugins/dsh-image-gen/studio'
-/** Same-origin route for built-in prompt inspiration metadata and images. */
-export const INSPIRATION_ROUTE = '/plugins/dsh-image-gen/inspiration'
+export const STUDIO_ROUTE = '/plugins/dsh-studio/studio'
 /** Browser route used for saving generated images to workspace on demand. */
-export const SAVE_WORKSPACE_ROUTE = '/plugins/dsh-image-gen/save-workspace'
+export const SAVE_WORKSPACE_ROUTE = '/plugins/dsh-studio/save-workspace'
 /** Browser route that streams a ZIP export of the selected gallery images. */
-export const ZIP_ROUTE = '/plugins/dsh-image-gen/zip'
+export const ZIP_ROUTE = '/plugins/dsh-studio/zip'
 /** Browser route that serves host-rendered gallery thumbnails. */
-export const THUMB_ROUTE = '/plugins/dsh-image-gen/thumb'
-export const PREVIEW_ROUTE = '/plugins/dsh-image-gen/preview'
-export const VAULT_ROUTE = '/plugins/dsh-image-gen/vault'
-export const VAULT_REFS_ROUTE = '/plugins/dsh-image-gen/vault-refs'
-export const VAULT_DELETE_ROUTE = '/plugins/dsh-image-gen/vault-delete'
-export const ZIP_PROGRESS_ROUTE = '/plugins/dsh-image-gen/zip/progress'
-export const ZIP_CANCEL_ROUTE = '/plugins/dsh-image-gen/zip/cancel'
-export const STORAGE_STATS_ROUTE = '/plugins/dsh-image-gen/storage-stats'
+export const THUMB_ROUTE = '/plugins/dsh-studio/thumb'
+export const PREVIEW_ROUTE = '/plugins/dsh-studio/preview'
+export const VAULT_ROUTE = '/plugins/dsh-studio/vault'
+export const VAULT_REFS_ROUTE = '/plugins/dsh-studio/vault-refs'
+export const VAULT_DELETE_ROUTE = '/plugins/dsh-studio/vault-delete'
+export const ZIP_PROGRESS_ROUTE = '/plugins/dsh-studio/zip/progress'
+export const ZIP_CANCEL_ROUTE = '/plugins/dsh-studio/zip/cancel'
+export const STORAGE_STATS_ROUTE = '/plugins/dsh-studio/storage-stats'
 /** Browser route the settings card probes provider connectivity through. */
-export const TEST_CONNECTION_ROUTE = '/plugins/dsh-image-gen/test'
+export const TEST_CONNECTION_ROUTE = '/plugins/dsh-studio/test'
 /** Non-secret settings capability probe, available even when the host cannot serve a form. */
-export const SETTINGS_HEALTH_ROUTE = '/plugins/dsh-image-gen/settings-health'
+export const SETTINGS_HEALTH_ROUTE = '/plugins/dsh-studio/settings-health'
 
 export interface SettingsHealth {
   settings: 'unavailable' | 'legacy' | 'live'
   liveSchema: boolean
 }
-/** Browser route the workbench infinite canvas pushes live state through. */
-export const CANVAS_STATE_ROUTE = '/plugins/dsh-image-gen/canvas-state'
-/** Upload a selected canvas original to the host attachment store. */
-export const CANVAS_ASSET_ROUTE = '/plugins/dsh-image-gen/canvas-asset'
-export const SUBSCRIPTION_LOGIN_ROUTE = '/plugins/dsh-image-gen/subscription-login'
-export const SUBSCRIPTION_STATUS_ROUTE = '/plugins/dsh-image-gen/subscription-status'
-
-/** Coarse model-facing kind of one shape on the workbench infinite canvas. */
-export type CanvasNodeKind = 'image' | 'draw' | 'text' | 'note' | 'geo' | 'arrow' | 'frame' | 'other'
-
-/** Every accepted canvas node kind, for validating untrusted pushes. */
-export const CANVAS_NODE_KINDS: readonly CanvasNodeKind[] = ['image', 'draw', 'text', 'note', 'geo', 'arrow', 'frame', 'other']
-
-/**
- * Cap on the selection identity list: the client trims `selection.items` to
- * this size and the canvas-state route rejects pushes carrying more, so the
- * two ends can never drift apart.
- */
-export const CANVAS_MAX_SELECTION_ITEMS = 16
-
-/**
- * Cap on the node inventory: the client trims `nodes` to this size and the
- * canvas-state route rejects pushes carrying more, so the two ends can never
- * drift apart. Sized to keep the model-facing digest compact.
- */
-export const CANVAS_MAX_NODES = 48
-
-/** Same shared-cap contract as CANVAS_MAX_NODES, for the selection kind list. */
-export const CANVAS_MAX_SELECTION_KINDS = 8
-
-/**
- * Cap on the generation prompt copied onto canvas image shapes and into the
- * model-facing summaries. The landing path truncates to this and the
- * canvas-state route rejects longer values, so the two ends can never drift.
- * The gallery keeps the full prompt; this is only the canvas-side digest view.
- */
-export const CANVAS_MAX_PROMPT_CHARS = 120
-
-/** One shape on the workbench infinite canvas, summarized for the model. */
-export interface CanvasNodeSummary {
-  kind: CanvasNodeKind
-  /** Gallery id when the shape is a generated image landed from the bus. */
-  galleryId?: string
-  /** Conversation attachment id for generated images; edit_image can target it directly. */
-  attachmentId?: string
-  /** Complete host reference; remains usable after switching conversations. */
-  attachment?: ImageAttachmentRef
-  /** Human-facing label: image name, geo variant, or similar. */
-  name?: string
-  width?: number
-  height?: number
-  /** Short text preview for text-bearing shapes. */
-  text?: string
-  /**
-   * Truncated generation prompt for landed generated images: the model can
-   * reproduce or precisely vary a canvas image instead of guessing from pixels.
-   */
-  prompt?: string
-  /** Provider id (e.g. "google") the landed image was generated with. */
-  provider?: string
-  /** Model (or ComfyUI workflow label) the landed image was generated with. */
-  model?: string
-}
-
-/** What is currently selected on the canvas. */
-export interface CanvasSelectionSummary {
-  count: number
-  kinds: readonly CanvasNodeKind[]
-  /**
-   * Capped identity list of the selected shapes, using the same summary shape
-   * as canvas nodes: the model learns WHICH images or strokes are selected
-   * (name, attachment id, dimensions), not just how many. Without this, two
-   * selections of the same size and kind are indistinguishable.
-   */
-  items?: readonly CanvasNodeSummary[]
-}
-
-/**
- * One live state push from a browser tldraw instance of the workbench canvas.
- * The browser owns the canvas; the host keeps only this compact mirror, so
- * the conversation agent can reason about (and look at) what the user sees.
- */
-export interface CanvasStatePush {
-  /** Tldraw editor id; distinguishes simultaneously mounted canvases. */
-  clientInstance: string
-  /** False on the final push right before a canvas unmounts. */
-  connected: boolean
-  /** Total shape count on the current page (the node list may be capped). */
-  nodeCount: number
-  /** Capped shape inventory, capped client-side before transport. */
-  nodes?: readonly CanvasNodeSummary[]
-  selection?: CanvasSelectionSummary
-  /**
-   * PNG data-URL screenshot of the current selection, pushed whenever a
-   * selection settles. It shows the selection as it looks on the canvas —
-   * including annotations drawn over generated images — so the model sees the
-   * live canvas state, not just the original conversation attachment.
-   */
-  selectionImage?: string
-  /** Changes whenever the selection or its contents change. */
-  selectionRevision?: string
-  selectionStatus?: 'preparing' | 'ready' | 'error'
-  selectionError?: string
-  /** Monotonic per mounted editor, including its final disconnect. */
-  sequence?: number
-  updatedAt: number
-}
+export const SUBSCRIPTION_LOGIN_ROUTE = '/plugins/dsh-studio/subscription-login'
+export const SUBSCRIPTION_STATUS_ROUTE = '/plugins/dsh-studio/subscription-status'
 
 /** Namespace persisted through DSH Settings. */
-export const IMAGE_GENERATION_NAMESPACE = 'image-generation'
+export const IMAGE_GENERATION_NAMESPACE = 'studio'
 
 /**
  * Loader entry id of this plugin's composition entry (see cordis.patch.yml).
  * DSH 0.1.7 serves a plugin's settings under its entry id as the namespace,
  * so browser-side reads/writes bind `configForms` to this id.
  */
-export const IMAGE_GENERATION_ENTRY_ID = 'image-gen'
+export const IMAGE_GENERATION_ENTRY_ID = 'studio'
 
 /** Supported providers. */
-export const IMAGE_PROVIDERS = ['google', 'openai', 'openai-compat', 'seedream', 'dashscope', 'xai', 'zhipu', 'comfyui', 'chatgpt-sub', 'grok-sub', 'google-sub'] as const
+export const IMAGE_PROVIDERS = ['google', 'openai', 'openai-compat', 'xai', 'comfyui', 'grok-sub', 'google-sub'] as const
 export type ImageProvider = typeof IMAGE_PROVIDERS[number]
 
 /**
@@ -205,7 +98,7 @@ export type ImageProvider = typeof IMAGE_PROVIDERS[number]
  * of an API key. They use no credential reference and never join the
  * cloud/BYOK sets.
  */
-export const SUBSCRIPTION_PROVIDERS = ['chatgpt-sub', 'grok-sub', 'google-sub'] as const
+export const SUBSCRIPTION_PROVIDERS = ['grok-sub', 'google-sub'] as const
 export type SubscriptionProvider = typeof SUBSCRIPTION_PROVIDERS[number]
 
 /** True when the provider generates through a logged-in subscription account. */
@@ -214,7 +107,7 @@ export function isSubscriptionProvider(provider: ImageProvider): provider is Sub
 }
 
 /** Providers supported by the first browser workbench release. */
-export const CLOUD_IMAGE_PROVIDERS = ['google', 'openai', 'openai-compat', 'seedream', 'dashscope', 'xai', 'zhipu'] as const
+export const CLOUD_IMAGE_PROVIDERS = ['google', 'openai', 'openai-compat', 'xai'] as const
 export type CloudImageProvider = typeof CLOUD_IMAGE_PROVIDERS[number]
 
 /** Normalize the relay model list while keeping the legacy default model selectable. */
@@ -274,7 +167,7 @@ export function openAICompatKeyRef(channelId: string): string {
 export function resolveOpenAICompatChannels(source: OpenAICompatChannelSource): OpenAICompatChannel[] {
   const legacy: OpenAICompatChannel = {
     id: DEFAULT_OPENAI_COMPAT_CHANNEL_ID,
-    label: source.openaiCompatLabel?.trim() || 'OpenAI 兼容',
+    label: source.openaiCompatLabel?.trim() || 'OpenAI-compatible',
     keyRef: OPENAI_COMPAT_API_KEY_ENV,
     baseURL: source.openaiCompatBaseURL ?? '',
     model: source.openaiCompatModel ?? '',
@@ -297,8 +190,8 @@ export function resolveOpenAICompatChannels(source: OpenAICompatChannelSource): 
     const storedKeyRef = typeof entry.keyRef === 'string' ? entry.keyRef.trim() : ''
     channels.push({
       id,
-      label: typeof entry.label === 'string' && entry.label.trim().length > 0 ? entry.label.trim() : `OpenAI 兼容 ${index + 2}`,
-      keyRef: /^DSH_IMAGE_GEN_OPENAI_COMPAT_KEY_[A-Z0-9_]+$/.test(storedKeyRef) ? storedKeyRef : openAICompatKeyRef(id),
+      label: typeof entry.label === 'string' && entry.label.trim().length > 0 ? entry.label.trim() : `OpenAI-compatible ${index + 2}`,
+      keyRef: /^DSH_STUDIO_OPENAI_COMPAT_KEY_[A-Z0-9_]+$/.test(storedKeyRef) ? storedKeyRef : openAICompatKeyRef(id),
       baseURL: typeof entry.baseURL === 'string' ? entry.baseURL : '',
       model: typeof entry.model === 'string' ? entry.model : '',
       models: Array.isArray(entry.models) ? entry.models.filter((model): model is string => typeof model === 'string') : [],
@@ -351,21 +244,9 @@ export const DEFAULT_CLOUD_TIMEOUT_MS = 150_000
  * studio route so neither drifts from the other. */
 export const SUBSCRIPTION_TIMEOUT_MS = 300_000
 
-/** OpenAI Images GIF output contract: frame count, per-frame delay, and the
- * longest edge of the sheet all frames are tiled into. */
-export const GIF_FRAME_COUNT_MIN = 2
-export const GIF_FRAME_COUNT_MAX = 16
-export const GIF_FRAME_DURATION_MS_MIN = 20
-export const GIF_FRAME_DURATION_MS_MAX = 2000
-export const GIF_SHEET_MAX_EDGE = 3840
-
-/** A GIF draws every frame in one image call, so it runs longer than a still; the host's HTTP client gives up on response headers after 300 s anyway. */
-export const DEFAULT_GIF_TIMEOUT_MS = 300_000
-
-/** The cloud timeout for a request: a GIF gets the longer GIF default while the cloud timeout is left at its default. */
-export function cloudTimeoutFor(configuredMs: number | undefined, gif: boolean): number {
-  const timeout = configuredMs ?? DEFAULT_CLOUD_TIMEOUT_MS
-  return gif && timeout === DEFAULT_CLOUD_TIMEOUT_MS ? DEFAULT_GIF_TIMEOUT_MS : timeout
+/** The cloud timeout for a request: the configured value, else the default. */
+export function cloudTimeoutFor(configuredMs: number | undefined): number {
+  return configuredMs ?? DEFAULT_CLOUD_TIMEOUT_MS
 }
 
 /**
@@ -382,25 +263,16 @@ export const OPENAI_API_KEY_ENV = 'OPENAI_API_KEY'
  * OPENAI_API_KEY so an official key and a relay key can coexist without
  * overwriting each other.
  */
-export const OPENAI_COMPAT_API_KEY_ENV = 'DSH_IMAGE_GEN_OPENAI_COMPAT_KEY'
-/** Volcengine Ark credential reference. */
-export const SEEDREAM_API_KEY_ENV = 'ARK_API_KEY'
-/** DashScope credential reference. */
-export const DASHSCOPE_API_KEY_ENV = 'DASHSCOPE_API_KEY'
+export const OPENAI_COMPAT_API_KEY_ENV = 'DSH_STUDIO_OPENAI_COMPAT_KEY'
 /** xAI credential reference; matches the official xAI SDK environment name. */
 export const XAI_API_KEY_ENV = 'XAI_API_KEY'
-/** Zhipu credential reference; matches the official Zhipu SDK environment name. */
-export const ZHIPU_API_KEY_ENV = 'ZHIPUAI_API_KEY'
 
 /** The credential reference each cloud provider's API key is stored under. */
 export const CLOUD_CREDENTIAL_REFS: Record<CloudImageProvider, string> = {
   google: GOOGLE_API_KEY_ENV,
   openai: OPENAI_API_KEY_ENV,
   'openai-compat': OPENAI_COMPAT_API_KEY_ENV,
-  seedream: SEEDREAM_API_KEY_ENV,
-  dashscope: DASHSCOPE_API_KEY_ENV,
   xai: XAI_API_KEY_ENV,
-  zhipu: ZHIPU_API_KEY_ENV,
 }
 
 /** The credential reference storing this provider's API key, when it uses one. */
@@ -414,22 +286,17 @@ export function cloudCredentialRef(provider: ImageProvider): string | undefined 
 export const PROVIDER_DISPLAY_NAMES: Record<ImageProvider, string> = {
   google: 'Google Gemini',
   openai: 'OpenAI',
-  'openai-compat': 'OpenAI 兼容',
-  seedream: 'Seedream',
-  dashscope: 'DashScope',
+  'openai-compat': 'OpenAI-compatible',
   xai: 'xAI Grok',
-  zhipu: '智谱 GLM',
   comfyui: 'ComfyUI',
-  'chatgpt-sub': 'ChatGPT 订阅',
-  'grok-sub': 'Grok 订阅',
-  'google-sub': 'Google 订阅',
+  'grok-sub': 'Grok subscription',
+  'google-sub': 'Google subscription',
 }
 
 /** Display names for the subscription providers, separate from the BYOK table. */
 export const SUBSCRIPTION_PROVIDER_DISPLAY_NAMES: Record<SubscriptionProvider, string> = {
-  'chatgpt-sub': 'ChatGPT 订阅',
-  'grok-sub': 'Grok 订阅',
-  'google-sub': 'Google 订阅',
+  'grok-sub': 'Grok subscription',
+  'google-sub': 'Google subscription',
 }
 
 /** One selectable output option exposed by a provider profile. */
@@ -524,15 +391,6 @@ export interface StudioAttachmentReference {
 
 export type StudioReference = StudioEncodedReference | StudioAttachmentReference
 
-/** Animated output for OpenAI-shaped providers; the frame ranges follow the GIF_FRAME_* constants. */
-export interface GifOutputRequest {
-  format: 'gif'
-  frameCount?: number
-  frameDurationMs?: number
-  /** Single-frame size (`WIDTHxHEIGHT`); absent leaves it to the provider, never to the still-image table. */
-  size?: string
-}
-
 /** One browser workbench generation or editing request. */
 export interface StudioGenerateRequest {
   mode: 'generate' | 'edit'
@@ -546,8 +404,6 @@ export interface StudioGenerateRequest {
   resolution?: string
   generationQuality?: string
   watermark?: StudioWatermark
-  /** Animated output; absent keeps the still-image request unchanged. */
-  output?: GifOutputRequest
   reference?: StudioReference
   references?: StudioReference[]
   count?: number | undefined
@@ -580,90 +436,16 @@ export interface StudioGenerateResponse extends StudioGeneratedItem {
 /** Default endpoints and base URLs. */
 export const DEFAULT_GOOGLE_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/interactions'
 export const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1'
-export const DEFAULT_SEEDREAM_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3'
-export const DEFAULT_DASHSCOPE_ENDPOINT = 'https://dashscope.aliyuncs.com/api/v1'
 export const DEFAULT_XAI_BASE_URL = 'https://api.x.ai/v1'
-export const DEFAULT_ZHIPU_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4'
 export const DEFAULT_COMFYUI_BASE_URL = 'http://127.0.0.1:8188'
 export const DEFAULT_COMFYUI_TIMEOUT_MS = 300_000
 export const DEFAULT_COMFYUI_WORKFLOW_LABEL = 'API workflow'
 export const MAX_COMFYUI_WORKFLOW_BYTES = 5 * 1024 * 1024
 
-/** Content types Ark's Seedream endpoint can return. */
-export const ARK_OUTPUT_FORMATS = ['png', 'jpeg'] as const
-/** Whether Ark stamps an "AI generated" watermark on the result. */
-export const ARK_BACKGROUND_MODES = ['opaque', 'transparent'] as const
-export type ArkOutputFormat = typeof ARK_OUTPUT_FORMATS[number]
-export type ArkBackgroundMode = typeof ARK_BACKGROUND_MODES[number]
-
-/**
- * Ark (Seedream) output controls, shared by the generate and edit paths.
- *
- * Every field mirrors an Ark request-body field of the same meaning, and every
- * default below reproduces Ark's own default — so an untouched configuration
- * sends exactly what it sent before these options existed.
- */
-export interface ArkOutputOptions {
-  /** `output_format`. Ark defaults to `jpeg`; `png` is lossless and keeps an alpha channel. */
-  outputFormat?: ArkOutputFormat
-  /** `watermark`. Ark defaults to `true`, which bakes an "AI generated" mark into the image. */
-  watermark?: boolean
-  /** `background`. Ark defaults to `opaque`. */
-  background?: ArkBackgroundMode
-}
-
-/**
- * Map the Ark output controls onto request-body fields.
- *
- * `background` is opt-in per call site because Ark restricts `transparent` to
- * image-to-image with a single alpha-bearing reference and rejects the whole
- * request otherwise:
- *
- *   text-to-image + transparent → 400 InvalidParameter
- *     "transparent background requires exactly one input image"
- *
- * So the generation endpoint must never carry it, and that caller passes
- * `{ background: false }`. `background: opaque` is never emitted anywhere: it
- * is already Ark's default, so sending it would change nothing while adding a
- * field only the edit path can act on.
- */
-export function arkOutputBody(
-  options: ArkOutputOptions | undefined,
-  { background = true }: { background?: boolean } = {},
-): Record<string, unknown> {
-  if (options === undefined) return {}
-  const body: Record<string, unknown> = {}
-  if (options.outputFormat !== undefined) body.output_format = options.outputFormat
-  if (options.watermark !== undefined) body.watermark = options.watermark
-  if (background && options.background === 'transparent') body.background = 'transparent'
-  return body
-}
-
 /** Default model names. */
 export const DEFAULT_GOOGLE_MODEL = 'gemini-3.1-flash-image'
 export const DEFAULT_OPENAI_MODEL = 'gpt-image-2.6-flare'
-export const DEFAULT_SEEDREAM_MODEL = 'doubao-seedream-5-0-pro-260628'
-
-/**
- * Seedream models Volcano Ark retires on 2026-11-24 (batch 10), mapped to the
- * model that takes their requests. A saved settings value naming one of them
- * (the plugin's own former default among them) would start failing that day.
- */
-const RETIRED_SEEDREAM_MODELS: Readonly<Record<string, string>> = {
-  'doubao-seedream-5-0-260128': DEFAULT_SEEDREAM_MODEL,
-  'doubao-seedream-5-0-lite-260128': DEFAULT_SEEDREAM_MODEL,
-  'doubao-seedream-4-5-251128': DEFAULT_SEEDREAM_MODEL,
-}
-
-/** The Seedream model a request should use: a retired one is replaced, anything else is kept. */
-export function currentSeedreamModel(model: string | undefined): string {
-  const trimmed = model?.trim()
-  if (trimmed === undefined || trimmed.length === 0) return DEFAULT_SEEDREAM_MODEL
-  return RETIRED_SEEDREAM_MODELS[trimmed] ?? trimmed
-}
-export const DEFAULT_DASHSCOPE_MODEL = 'qwen-image-3.0'
 export const DEFAULT_XAI_MODEL = 'grok-imagine-image-2.0'
-export const DEFAULT_ZHIPU_MODEL = 'glm-image'
 
 /** One named ComfyUI API-format workflow imported through settings. */
 export interface ComfyUIWorkflowEntry {
@@ -737,7 +519,6 @@ export function mergeComfyUIPrompt(preset: string | undefined, user: string): st
 
 /** Default models for the subscription channels; fixed by the bridge protocol. */
 export const DEFAULT_SUBSCRIPTION_MODELS: Record<SubscriptionProvider, string> = {
-  'chatgpt-sub': 'gpt-image-2.6-flare',
   'grok-sub': 'grok-imagine-image-2.0',
   'google-sub': 'gemini-3.1-flash-image',
 }
@@ -747,12 +528,8 @@ export const DEFAULT_MODELS: Record<ImageProvider, string> = {
   openai: DEFAULT_OPENAI_MODEL,
   // Relays expose arbitrary model ids; there is no sensible default to offer.
   'openai-compat': '',
-  seedream: DEFAULT_SEEDREAM_MODEL,
-  dashscope: DEFAULT_DASHSCOPE_MODEL,
   xai: DEFAULT_XAI_MODEL,
-  zhipu: DEFAULT_ZHIPU_MODEL,
   comfyui: DEFAULT_COMFYUI_WORKFLOW_LABEL,
-  'chatgpt-sub': DEFAULT_SUBSCRIPTION_MODELS['chatgpt-sub'],
   'grok-sub': DEFAULT_SUBSCRIPTION_MODELS['grok-sub'],
   'google-sub': DEFAULT_SUBSCRIPTION_MODELS['google-sub'],
 }
@@ -765,10 +542,7 @@ export const DEFAULT_MODELS: Record<ImageProvider, string> = {
 export const API_KEY_CONSOLE_URLS: Partial<Record<ImageProvider, string>> = {
   google: 'https://aistudio.google.com/apikey',
   openai: 'https://platform.openai.com/api-keys',
-  seedream: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
-  dashscope: 'https://bailian.console.aliyun.com/',
   xai: 'https://console.x.ai/team/default/api-keys',
-  zhipu: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys',
 }
 
 export const DEFAULT_BASE_URLS: Record<ImageProvider, string> = {
@@ -776,13 +550,9 @@ export const DEFAULT_BASE_URLS: Record<ImageProvider, string> = {
   openai: DEFAULT_OPENAI_BASE_URL,
   // Relay addresses are user-specific; empty until the compat row is filled in.
   'openai-compat': '',
-  seedream: DEFAULT_SEEDREAM_BASE_URL,
-  dashscope: DEFAULT_DASHSCOPE_ENDPOINT,
   xai: DEFAULT_XAI_BASE_URL,
-  zhipu: DEFAULT_ZHIPU_BASE_URL,
   comfyui: DEFAULT_COMFYUI_BASE_URL,
   // Subscription channels call an in-process service, never a URL.
-  'chatgpt-sub': '',
   'grok-sub': '',
   'google-sub': '',
 }

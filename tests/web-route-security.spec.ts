@@ -63,7 +63,7 @@ describe('plugin web route admission', () => {
   })
   it.each([401, 403] as const)('applies host rejection %i to every registered route before dispatch', async rejection => {
     const { routes, requestRejection } = harness(rejection)
-    expect(routes.length).toBeGreaterThan(8)
+    expect(routes.length).toBeGreaterThanOrEqual(5)
     const statuses: Array<{ path: string; status: number }> = []
     for (const route of routes) {
       const res = response()

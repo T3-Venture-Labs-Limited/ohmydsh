@@ -7,36 +7,6 @@ import * as plugin from '../src/client/index.js'
 import { imageRef } from '../src/client/image-ref.js'
 import { IMAGE_RESULT_NODE_KIND } from '../src/client/image-result-node.js'
 
-function snapshotStore<T>(initial: T) {
-  let value = initial
-  const listeners = new Set<() => void>()
-  return { getSnapshot: () => value, subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } },
-    set(next: T) { value = next; for (const fn of listeners) fn() }, listeners }
-}
-
-it('connects a late uiSession service and cleans up both session subscriptions on disposal', async () => {
-  const h = clientHarness({ connection: {}, remote: { credentials: { describe: vi.fn(), set: vi.fn() } } })
-  const list = snapshotStore({ current: 's1' })
-  const source = () => snapshotStore({ entries: [], change: { kind: 'append', entries: [] } })
-  const sources = { s1: source(), s2: source() }
-  const binding = vi.fn((id: keyof typeof sources) => ({ eventSource: sources[id] }))
-  h.ctx.provide('sessions', { list, binding })
-  const fiber = h.ctx.plugin(plugin)
-  await fiber.await()
-  await vi.waitFor(() => expect(sources.s1.listeners.size).toBe(1))
-  const current = snapshotStore<{ key?: string }>({ key: 's2' })
-  h.ctx.provide('uiSession', { adapter: { current } })
-  await vi.waitFor(() => expect(binding).toHaveBeenLastCalledWith('s2'))
-  expect(sources.s1.listeners.size).toBe(0)
-  expect(sources.s2.listeners.size).toBe(1)
-  current.set({})
-  expect(sources.s2.listeners.size).toBe(0)
-  await fiber.dispose()
-  expect(list.listeners.size).toBe(0)
-  expect(current.listeners.size).toBe(0)
-  expect(sources.s1.listeners.size).toBe(0)
-})
-
 const imageResultNodeShape = expect.objectContaining({
   kind: IMAGE_RESULT_NODE_KIND,
   target: 'chat',
@@ -116,39 +86,6 @@ function clientHarness(options: {
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('DSH client compatibility', () => {
-  it('renders every legacy batch image and suppresses duplicate tool cards after promotion', () => {
-    const meta = { kind: 'dsh-image-gen-batch', images: ['first', 'second'].map(name => ({
-      kind: 'dsh-image-gen',
-      attachment: { attachmentId: `sha256:${name}`, mediaType: 'image/png', bytes: 12, width: 32, height: 24 },
-      prompt: name, provider: 'google', model: 'gemini', output: '2:3',
-    })) }
-    const block = { kind: 'tool-result', meta }
-    const legacy = renderToStaticMarkup(createElement(plugin.GeneratedImagesCard, { block, promoted: false } as never))
-    expect(legacy.match(/<section class="dsh-ig-result"/g)).toHaveLength(2)
-    const promoted = renderToStaticMarkup(createElement(plugin.GeneratedImagesCard, { block, promoted: true } as never))
-    expect(promoted).not.toContain('<section')
-  })
-
-  it('renders a GIF result with its badge and without a canvas outside a browser', () => {
-    const results = [{
-      attachment: { attachmentId: 'sha256:gif', mediaType: 'image/webp', bytes: 12, width: 32, height: 24 },
-      prompt: 'a waving cat', provider: 'openai-compat', model: 'relay', output: 'auto',
-      original: { key: 'a'.repeat(64), bytes: 500, mediaType: 'image/gif' },
-    }]
-    const markup = renderToStaticMarkup(createElement(plugin.PromotedImageResultNode, { node: { data: { results } } } as never))
-    expect(markup).toContain('dsh-ig-gif-badge')
-    expect(markup).not.toContain('<canvas')
-    const still = renderToStaticMarkup(createElement(plugin.PromotedImageResultNode, { node: { data: { results: [{ ...results[0], original: undefined }] } } } as never))
-    expect(still).not.toContain('dsh-ig-gif-badge')
-  })
-
-  it('shows a completed batch failure instead of an endless image loader', () => {
-    const block = { kind: 'tool-result', content: [{ type: 'text', text: 'Generated 0 of 1 images. failed: quota' }] }
-    const rendered = renderToStaticMarkup(createElement(plugin.GeneratedImagesCard, { block, promoted: true } as never))
-    expect(rendered).toContain('failed: quota')
-    expect(rendered).not.toContain('dsh-ig-loading')
-  })
-
   it('activates on npm DSH 0.1.1-rc.2 and adapts connection credentials', async () => {
     const describeCredential = vi.fn(async () => ({
       result: { ok: true, value: { credentials: { GEMINI_API_KEY: { configured: true } } } },
@@ -194,7 +131,7 @@ describe('DSH client compatibility', () => {
     // DSH 0.1.5/0.1.6: no configForms service exists, so plugin settings
     // still bind through settingsScope. Image placement no longer reads ui-chat.
     expect(fiber.state).toBe(2)
-    expect(harness.legacyBind).toHaveBeenCalledWith({ namespace: 'image-generation' })
+    expect(harness.legacyBind).toHaveBeenCalledWith({ namespace: 'studio' })
     expect(harness.legacyBind).not.toHaveBeenCalledWith({ namespace: 'ui-chat' })
     const injectSettingsCard = harness.registrations.get('plugins.bundle.config')
     expect(() => injectSettingsCard?.()).not.toThrow()
@@ -244,109 +181,6 @@ describe('DSH client compatibility', () => {
     // host caches inject results, so identity must not change per render.
     expect(harness.injectedCredentials()).not.toBe(credentials)
     expect(harness.settingsFace()?.credentialsAvailable?.()).toBe(true)
-
-    await fiber.dispose()
-  })
-
-  it('promotes image results only when modern DSH exposes uiConversation events', async () => {
-    const registerEvent = vi.fn((_definition: unknown) => vi.fn())
-    const harness = clientHarness({
-      connection: {},
-      remote: { credentials: { describe: vi.fn(), set: vi.fn() } },
-      uiConversation: { events: { register: registerEvent } },
-    })
-
-    const fiber = harness.ctx.plugin(plugin)
-    await fiber.await()
-
-    expect(registerEvent).toHaveBeenCalledWith(imageResultNodeShape)
-    const definition = registerEvent.mock.calls[0]?.[0] as {
-      buildViewNode(context: unknown): { anchorSeq: number } | null
-    }
-    // Image results keep their own event position without reading ui-chat.
-    expect(definition.buildViewNode({
-      key: 'image:1', id: '1', matches: [],
-      state: { results: [{ seq: 4 }] },
-    })).toMatchObject({ anchorSeq: 4, location: { kind: 'session' } })
-    expect(harness.slotInjections.some(injection => injection.name === 'conversation.chat.node')).toBe(true)
-
-    for (const injection of harness.slotInjections.filter(candidate => candidate.name === 'tool.call.toolview')) {
-      injection.factory()
-    }
-    const toolRegistrations = harness.slotRegistrations.filter(({ options }) =>
-      options.name === 'tool.call.toolview')
-    expect(toolRegistrations.map(({ options }) => options.key)).toEqual(['generate_image', 'generate_images', 'edit_image'])
-    for (const { options } of toolRegistrations) {
-      expect((options.inject as () => unknown)()).toMatchObject({ promoted: true })
-    }
-
-    await fiber.dispose()
-  })
-
-  it.each([
-    ['compact', 4],
-    ['standard', 4],
-    ['detailed', 4],
-    ['verbose', 4],
-  ] as const)('keeps image results outside process folding in %s mode', async (transcriptView, anchorSeq) => {
-    const registerEvent = vi.fn((_definition: unknown) => vi.fn())
-    const harness = clientHarness({
-      connection: {},
-      remote: { credentials: { describe: vi.fn(), set: vi.fn() } },
-      uiConversation: { events: { register: registerEvent } },
-      transcriptView,
-    })
-    const fiber = harness.ctx.plugin(plugin)
-    await fiber.await()
-
-    const definition = registerEvent.mock.calls[0]?.[0] as {
-      buildViewNode(context: unknown): { anchorSeq: number; location: unknown } | null
-    }
-    expect(definition.buildViewNode({
-      key: 'image:1', id: '1', matches: [],
-      state: { results: [{ seq: 4 }] },
-    })).toMatchObject({ anchorSeq, location: { kind: 'session' } })
-
-    await fiber.dispose()
-  })
-
-  it('keeps the legacy tool card when modern conversation events are absent', async () => {
-    const harness = clientHarness({ connection: {}, remote: { credentials: { describe: vi.fn(), set: vi.fn() } } })
-
-    const fiber = harness.ctx.plugin(plugin)
-    await fiber.await()
-
-    expect(harness.slotInjections.some(injection => injection.name === 'conversation.chat.node')).toBe(false)
-    for (const injection of harness.slotInjections.filter(candidate => candidate.name === 'tool.call.toolview')) {
-      injection.factory()
-    }
-    for (const { options } of harness.slotRegistrations.filter(({ options }) => options.name === 'tool.call.toolview')) {
-      expect((options.inject as () => unknown)()).toMatchObject({ promoted: false })
-    }
-
-    await fiber.dispose()
-  })
-
-  it('activates promotion when uiConversation is provided after plugin startup', async () => {
-    const registerEvent = vi.fn(() => vi.fn())
-    const harness = clientHarness({ connection: {}, remote: { credentials: { describe: vi.fn(), set: vi.fn() } } })
-
-    const fiber = harness.ctx.plugin(plugin)
-    await fiber.await()
-    expect(registerEvent).not.toHaveBeenCalled()
-
-    harness.ctx.provide('uiConversation', { events: { register: registerEvent } })
-    await vi.waitFor(() => {
-      expect(registerEvent).toHaveBeenCalledWith(imageResultNodeShape)
-    })
-    expect(harness.slotInjections.some(injection => injection.name === 'conversation.chat.node')).toBe(true)
-
-    for (const injection of harness.slotInjections.filter(candidate => candidate.name === 'tool.call.toolview')) {
-      injection.factory()
-    }
-    for (const { options } of harness.slotRegistrations.filter(({ options }) => options.name === 'tool.call.toolview')) {
-      expect((options.inject as () => unknown)()).toMatchObject({ promoted: true })
-    }
 
     await fiber.dispose()
   })
@@ -424,7 +258,7 @@ describe('DSH client compatibility', () => {
         seq: 1,
         time: 1000,
         callId: 'call-1',
-        call: { name: 'generate_image', argsRaw: '{}' },
+        call: { name: 'studio_generate', argsRaw: '{}' },
         callTime: 900,
         content: [{ type: 'text' as const, text: 'Generated one image' }],
         isError: false,
@@ -445,7 +279,7 @@ describe('DSH client compatibility', () => {
         seq: 2,
         time: 2000,
         callId: 'call-2',
-        call: { name: 'generate_image', argsRaw: '{}' },
+        call: { name: 'studio_generate', argsRaw: '{}' },
         callTime: 1900,
         content: [
           { type: 'text' as const, text: 'Generated one image' },
@@ -460,7 +294,7 @@ describe('DSH client compatibility', () => {
     it('returns undefined while tool is running or when no image exists', () => {
       const runningCall = {
         callId: 'call-3',
-        name: 'generate_image',
+        name: 'studio_generate',
         argsRaw: '{}',
         turn: 1,
         step: 1,
@@ -474,7 +308,7 @@ describe('DSH client compatibility', () => {
         seq: 4,
         time: 4000,
         callId: 'call-4',
-        call: { name: 'generate_image', argsRaw: '{}' },
+        call: { name: 'studio_generate', argsRaw: '{}' },
         callTime: 3900,
         content: [{ type: 'text' as const, text: 'no image' }],
         isError: false,

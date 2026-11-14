@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Automation models",
+    "description": "Runs scheduled tasks, sentinel wake-ups and other automations on a cheaper model (default Claude Sonnet 5.5, low effort). The session's own model is switched for the automation turn only and restored when it ends. Pick a default per source and override the model per scheduled task on the Automation models page. Other plugins register their own sources through the automationModels service.",
+    "detail": "docs/DETAIL.md"
+  }
+}

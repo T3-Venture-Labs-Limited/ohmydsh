@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ThemeController } from '../src/client/controller.ts'
 import type { ControllerDeps, OmarchyWire } from '../src/client/controller.ts'
 import { PALETTE_KEYS } from '../src/shared/omarchy.ts'
@@ -31,47 +31,83 @@ class FakeStream {
 }
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
-function rig(initialChoice?: string, user = false, shared?: { host: object; doc?: unknown }) {
+interface RigOpts { hostname?: string; shared?: { host: object; doc?: unknown } }
+function rig(initialChoice?: string, opts: RigOpts = {}) {
+  const shared = opts.shared
   const pushHost = shared?.host ?? {}
-  let preference = 'system'
-  const listeners = new Set<(s: { preference: string }) => void>()
-  const emit = () => { for (const l of listeners) l({ preference }) }
+  let scheme: 'light' | 'dark' = 'light'
+  const listeners = new Set<(s: { preference: string; active: { colorScheme: 'light' | 'dark' } }) => void>()
+  const emit = () => { for (const l of listeners) l({ preference: 'system', active: { colorScheme: scheme } }) }
   const layers = new Map<string, Record<string, { light: string; dark: string }>>()
-  const shells = new Set<string>()
   const storage = new Map<string, string>(initialChoice === undefined ? [] : [['dsh-theme.choice', initialChoice]])
-  const persisted: string[] = []
-  const deps: ControllerDeps = {
+  const setTheme = vi.fn()
+  const deps = {
     theme: {
-      getTheme: () => ({ preference }),
-      setTheme: (id) => { if (id !== 'system' && !shells.has(id) && !['light', 'dark'].includes(id)) throw new Error('unregistered'); preference = id; if (['light', 'dark', 'system'].includes(id)) persisted.push(id); emit() },
-      register: (d) => { shells.add(d.id); return () => { shells.delete(d.id); if (preference === d.id) { preference = 'system'; emit() } } },
-      overrideTokens: (s, t) => { layers.set(s, t); emit(); return () => { layers.delete(s); emit() } },
+      getTheme: () => ({ preference: 'system', active: { colorScheme: scheme } }),
+      setTheme,
+      register: vi.fn(),
+      overrideTokens: (s: string, t: Record<string, { light: string; dark: string }>) => { layers.set(s, t); emit(); return () => { layers.delete(s); emit() } },
     },
-    onThemeChange: (l) => { listeners.add(l); return () => { listeners.delete(l) } },
-    storage: { getItem: (k) => storage.get(k) ?? null, setItem: (k, v) => { storage.set(k, v) } },
+    onThemeChange: (l: never) => { listeners.add(l); return () => { listeners.delete(l) } },
+    storage: { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => { storage.set(k, v) } },
     open: FakeStream.open,
     push: { host: pushHost },
+    hostname: opts.hostname ?? '127.0.0.1',
     ...(shared?.doc === undefined ? {} : { doc: shared.doc as never }),
-    userInitiated: () => user,
-  }
+  } as unknown as ControllerDeps
   const c = new ThemeController(deps)
-  return { c, layers, shells, get preference() { return preference }, setPref: (p: string) => { preference = p; emit() }, persisted, storage }
+  return { c, layers, setTheme, register: deps.theme as unknown as { register: ReturnType<typeof vi.fn> }, storage, setScheme: (m: 'light' | 'dark') => { scheme = m; emit() } }
 }
 
 describe('ThemeController', () => {
-  it('follows Omarchy: layer + shell theme flip, light/dark never persisted', async () => {
+  describe('default choice by host', () => {
+    it.each(['127.0.0.1', 'localhost', '::1', '[::1]', '127.1.2.3', 'LOCALHOST'])('%s is this computer: follows Omarchy', (h) => {
+      expect(rig(undefined, { hostname: h }).c.getSnapshot().choice).toBe('omarchy')
+    })
+    it.each(['100.93.77.123', 'superdao.tail1234.ts.net', '192.168.1.121', 'example.com', undefined])('%s is another device: stock', (h) => {
+      const r = rig(undefined, h === undefined ? { hostname: '' } : { hostname: h })
+      expect(r.c.getSnapshot().choice).toBe('stock')
+    })
+    it('a tailnet host with no stored choice opens no stream and applies nothing', async () => {
+      FakeStream.last = undefined
+      const r = rig(undefined, { hostname: '100.93.77.123' })
+      r.c.start(); await tick()
+      expect(FakeStream.last).toBeUndefined()
+      expect(r.layers.size).toBe(0)
+    })
+    it('a stored choice wins over the host default, both ways', () => {
+      expect(rig('dracula', { hostname: '100.93.77.123' }).c.getSnapshot().choice).toBe('dracula')
+      expect(rig('omarchy', { hostname: '100.93.77.123' }).c.getSnapshot().choice).toBe('omarchy')
+      expect(rig('stock', { hostname: '127.0.0.1' }).c.getSnapshot().choice).toBe('stock')
+    })
+    it('an unknown stored value falls back to the host default', () => {
+      expect(rig('nonsense', { hostname: '127.0.0.1' }).c.getSnapshot().choice).toBe('omarchy')
+      expect(rig('nonsense', { hostname: '10.0.0.5' }).c.getSnapshot().choice).toBe('stock')
+    })
+  })
+  it('follows Omarchy through the token layer only: no setTheme, no shell themes', async () => {
     const r = rig('omarchy')
     const stop = r.c.start()
     await tick()
     expect(FakeStream.last).toBeDefined()
     await FakeStream.last!.push(wire('1', 'dark', '#121212', '#e68e0d'))
     expect(r.layers.get('dsh-theme')?.['--dsw-alias-bg-base']?.dark).toBe('#121212')
-    expect(r.preference).toBe('omarchy-dark')
     await FakeStream.last!.push(wire('2', 'light', '#eff1f5', '#1e66f5'))
-    expect(r.preference).toBe('omarchy-light')
     expect(r.layers.get('dsh-theme')?.['--dsw-alias-bg-base']?.light).toBe('#eff1f5')
-    expect(r.persisted).toEqual([])
     stop()
+    expect(r.setTheme).not.toHaveBeenCalled()
+    expect(r.register.register).not.toHaveBeenCalled()
+  })
+  it('fills BOTH slots with the Omarchy palette whatever the rendered scheme is', async () => {
+    const r = rig('omarchy')
+    r.c.start()
+    await FakeStream.last!.push(wire('1', 'dark', '#121212', '#e68e0d'))
+    const layer = r.layers.get('dsh-theme')!
+    expect(Object.keys(layer).length).toBeGreaterThan(30)
+    for (const modes of Object.values(layer)) expect(modes.light).toBe(modes.dark)
+    expect(layer['--dsw-alias-bg-base']).toEqual({ light: '#121212', dark: '#121212' })
+    await FakeStream.last!.push(wire('2', 'light', '#eff1f5', '#1e66f5'))
+    expect(r.layers.get('dsh-theme')?.['--dsw-alias-bg-base']).toEqual({ light: '#eff1f5', dark: '#eff1f5' })
   })
   it('ignores a repeated generation and invalid payloads', async () => {
     const r = rig('omarchy')
@@ -84,61 +120,49 @@ describe('ThemeController', () => {
     expect(r.layers.size).toBe(0)
     expect(r.c.getSnapshot().status).toBe('unavailable')
   })
-  it('disposing restores the stock look and the user preference exactly', async () => {
+  it('disposing removes the layer and closes the stream, without touching Appearance', async () => {
     const r = rig('omarchy')
-    r.setPref('light')
     const stop = r.c.start()
     await FakeStream.last!.push(wire('1', 'dark', '#121212', '#e68e0d'))
-    expect(r.preference).toBe('omarchy-dark')
     stop()
     expect(r.layers.size).toBe(0)
-    expect(r.shells.size).toBe(0)
-    expect(r.preference).toBe('light')
+    expect(r.setTheme).not.toHaveBeenCalled()
     await tick()
     expect(FakeStream.last?.closed).toBe(true)
   })
-  it('switching to Stock removes the layer and restores the preference', async () => {
+  it('switching to Stock removes the layer', async () => {
     const r = rig('omarchy')
     r.c.start()
     await FakeStream.last!.push(wire('1', 'dark', '#121212', '#e68e0d'))
     r.c.setChoice('stock')
     expect(r.layers.size).toBe(0)
-    expect(r.preference).toBe('system')
+    expect(r.setTheme).not.toHaveBeenCalled()
   })
-  it('a manual Appearance change pauses following and hands the look back', async () => {
+  it('Appearance changes never pause or change following, and never trigger a write', async () => {
     const r = rig('omarchy')
     r.c.start()
     await FakeStream.last!.push(wire('1', 'dark', '#121212', '#e68e0d'))
-    r.setPref('light')
-    expect(r.layers.size).toBe(0)
-    expect(r.c.getSnapshot().paused).toBe(true)
-    expect(r.c.getSnapshot().choice).toBe('stock')
-    expect(r.preference).toBe('light')
-    expect(r.storage.get('dsh-theme.choice')).toBe('stock')
+    const layer = r.layers.get('dsh-theme')
+    r.setScheme('dark'); r.setScheme('light'); r.setScheme('dark')
+    await tick()
+    expect(r.c.getSnapshot().choice).toBe('omarchy')
+    expect(r.layers.get('dsh-theme')).toBe(layer)
+    expect(r.storage.get('dsh-theme.choice')).toBe('omarchy')
+    expect(r.setTheme).not.toHaveBeenCalled()
   })
-  it('re-selecting the baseline preference by hand pauses; a Host echo of it does not', async () => {
-    const echo = rig('omarchy', false)
-    echo.c.start()
-    await FakeStream.last!.push(wire('1', 'dark', '#121212', '#e68e0d'))
-    echo.setPref('system')
-    await Promise.resolve()
-    expect(echo.c.getSnapshot().paused).toBe(false)
-    expect(echo.preference).toBe('omarchy-dark')
-    const click = rig('omarchy', true)
-    click.c.start()
-    await FakeStream.last!.push(wire('1', 'dark', '#121212', '#e68e0d'))
-    click.setPref('system')
-    expect(click.c.getSnapshot().paused).toBe(true)
-    expect(click.layers.size).toBe(0)
-  })
-  it('our own layer publish is never mistaken for a user change, even while the user is clicking', async () => {
-    const r = rig('stock', true)
-    r.setPref('dark')
+  it('tracks the rendered scheme so the page can hint when it disagrees with the palette', async () => {
+    const r = rig('omarchy')
     r.c.start()
-    r.c.setChoice('catppuccin-mocha')
-    expect(r.c.getSnapshot()).toMatchObject({ choice: 'catppuccin-mocha', paused: false })
-    expect(r.layers.size).toBe(1)
-    expect(r.preference).toBe('omarchy-dark')
+    await FakeStream.last!.push(wire('1', 'dark', '#121212', '#e68e0d'))
+    expect(r.c.getSnapshot()).toMatchObject({ scheme: 'light', applied: { mode: 'dark' } })
+    r.setScheme('dark')
+    expect(r.c.getSnapshot().scheme).toBe('dark')
+  })
+  it('setTheme is never called while switching choices and palettes', async () => {
+    const r = rig('stock')
+    r.c.start()
+    r.c.setChoice('catppuccin-mocha'); r.c.setChoice('solarized-light'); r.c.setChoice('omarchy'); r.c.setChoice('stock')
+    expect(r.setTheme).not.toHaveBeenCalled()
   })
   it('bundled palettes apply without a stream', async () => {
     FakeStream.last = undefined
@@ -146,9 +170,9 @@ describe('ThemeController', () => {
     r.c.start()
     expect(FakeStream.last).toBeUndefined()
     expect(r.layers.get('dsh-theme')?.['--dsw-alias-bg-base']?.dark).toBe('#282a36')
-    expect(r.preference).toBe('omarchy-dark')
     r.c.setChoice('solarized-light')
-    expect(r.preference).toBe('omarchy-light')
+    expect(r.layers.get('dsh-theme')?.['--dsw-alias-bg-base']?.light).toBe('#fdf6e3')
+    expect(r.setTheme).not.toHaveBeenCalled()
   })
   it('flipping the status-colour switch re-applies the layer', async () => {
     const r = rig('dracula')
@@ -168,7 +192,7 @@ describe('ThemeController', () => {
     it('holds no stream while the page is hidden and reopens it when visible', async () => {
       FakeStream.opened = 0
       const doc = new Doc(); doc.set('hidden')
-      const r = rig('omarchy', false, { host: {}, doc })
+      const r = rig('omarchy', { shared: { host: {}, doc } })
       const stop = r.c.start()
       await tick()
       expect(FakeStream.opened).toBe(0)
@@ -183,7 +207,7 @@ describe('ThemeController', () => {
     it('two mounts of the plugin on one page share a single stream', async () => {
       FakeStream.opened = 0
       const host = {}; const doc = new Doc()
-      const a = rig('omarchy', false, { host, doc }); const b = rig('omarchy', false, { host, doc })
+      const a = rig('omarchy', { shared: { host, doc } }); const b = rig('omarchy', { shared: { host, doc } })
       const stopA = a.c.start(); const stopB = b.c.start()
       await tick()
       expect(FakeStream.opened).toBe(1)

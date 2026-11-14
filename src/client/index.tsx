@@ -1,5 +1,6 @@
 // Browser half. The controller (palette maths + token layer) is tiny and runs on the boot path; the settings page is a
-// lazy chunk loaded on first render. One disposer (ctx.effect) removes the token layer, the shell themes and the stream.
+// lazy chunk loaded on first render. One disposer (ctx.effect) removes the token layer and the stream.
+// Nothing here writes the Appearance preference (it is shared by every browser signed in to the Host).
 import { Suspense, lazy } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import { ThemeController } from './controller.ts'
@@ -31,7 +32,7 @@ export function apply(ctx: Context): void {
     storage: typeof localStorage === 'undefined' ? undefined : localStorage,
     doc: typeof document === 'undefined' ? undefined : document,
   })
-  // The single revert path: layer, shell themes, stream, listeners and the user's own light/dark preference.
+  // The single revert path: layer, stream and listeners.
   ctx.effect(() => controller.start(), 'dsh-theme: follow/palette layer')
 
   c.slots.inject('settings.section', () => c.slots.register({

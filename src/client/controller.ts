@@ -1,16 +1,17 @@
 // Theme controller: the whole runtime behaviour, free of React and the kit so it stays on the (tiny) boot path.
 //
 //   choice 'stock'     nothing applied
-//   choice 'omarchy'   palette streamed from the Host (Omarchy colors.toml)
+//   choice 'omarchy'   palette streamed from the Host (Omarchy colors.toml); the default only on the machine running Omarchy
 //   choice <palette>   a bundled community palette (data generator, src/artwork/palettes.ts)
 //
-// Applying = one token layer via ctx.theme.overrideTokens (source 'dsh-theme') + a registered shell theme
-// (omarchy-dark / omarchy-light) selected with setTheme. Custom theme ids are never persisted by DSH, so the user's
-// own light/dark/system preference stays intact. Everything is undone by one disposer.
+// Applying = one token layer via ctx.theme.overrideTokens (source 'dsh-theme'), local to this page and never persisted,
+// with the palette in BOTH the light and the dark slot. This plugin never calls setTheme: the Appearance preference is one
+// value shared by every browser signed in to the Host, so writing it from here would also recolour a phone.
+// Everything is undone by one disposer.
 import { isHex } from '../shared/color.ts'
 import { PALETTE_KEYS } from '../shared/omarchy.ts'
 import type { Colors, Mode, OmarchyPalette } from '../shared/omarchy.ts'
-import { paletteTokens, shellThemeId, toLayer } from '../shared/tokens.ts'
+import { paletteTokens, toLayer } from '../shared/tokens.ts'
 import type { TokenOptions } from '../shared/tokens.ts'
 import { paletteById, PALETTES } from '../artwork/palettes.ts'
 import { subscribePush } from '../kit/push/client.ts'
@@ -41,26 +42,24 @@ export interface ControllerState {
   status: Status
   /** Omarchy theme currently followed (name/mode), when known. */
   omarchy: { name: string; mode: Mode; generation: string; colors: Colors } | undefined
-  /** True after a manual Appearance change stopped following. */
-  paused: boolean
+  /** Colour scheme DSH currently renders (Appearance resolved), when known. */
+  scheme: Mode | undefined
   /** Colours of the palette currently applied, for the preview swatches. */
   applied: { mode: Mode; colors: Colors } | undefined
 }
 
 /** The slice of ctx.theme used here (matches ThemeRuntime). */
 export interface ThemeFace {
-  getTheme(): { preference: string }
-  setTheme(id: string): void
-  register(def: { id: string; colorScheme: Mode; tokens: Record<string, string> }): () => void
+  getTheme(): { preference: string; active?: { colorScheme: Mode } }
   overrideTokens(source: string, tokens: Record<string, { light: string; dark: string }>): () => void
 }
 
 export interface ControllerDeps {
-  /** Test seam: whether the current preference change comes from user input. Defaults to checking the dispatching DOM event. */
-  userInitiated?: (() => boolean) | undefined
   theme: ThemeFace
+  /** Host name of the page; Omarchy is followed by default only when it is this computer. Defaults to location.hostname. */
+  hostname?: string | undefined
   /** Subscribe to `theme/change`; returns a disposer. */
-  onThemeChange(listener: (snapshot: { preference: string }) => void): () => void
+  onThemeChange(listener: (snapshot: { preference: string; active?: { colorScheme: Mode } }) => void): () => void
   storage?: Pick<Storage, 'getItem' | 'setItem'> | undefined
   /** Open the live stream (items are wire snapshots); it must end when the signal aborts. Omit to fall back to snapshot fetches. */
   open?: ((signal: AbortSignal) => AsyncIterable<unknown>) | undefined
@@ -83,23 +82,17 @@ export class ThemeController {
   private state: ControllerState
   private readonly listeners = new Set<() => void>()
   private readonly offs: (() => void)[] = []
-  private shells: (() => void)[] = []
   private offLayer: (() => void) | undefined
   private unsubscribe: (() => void) | undefined
-  private engaged = false
-  private expect = ''
-  private baseline = ''
   private disposed = false
-  /** True while we write the layer / shell theme ourselves, so our own theme/change events are not read as user input. */
-  private writing = false
 
   constructor(private readonly deps: ControllerDeps) {
     const stored = read(deps.storage, KEY_CHOICE)
-    const choice = stored !== undefined && (stored === 'stock' || stored === 'omarchy' || paletteById(stored) !== undefined) ? stored : 'omarchy'
+    const choice = stored !== undefined && (stored === 'stock' || stored === 'omarchy' || paletteById(stored) !== undefined) ? stored : defaultChoice(deps.hostname ?? pageHostname())
     this.state = {
       choice,
       semanticColors: read(deps.storage, KEY_SEMANTIC) === 'omarchy' ? 'omarchy' : 'dsh',
-      status: 'idle', omarchy: undefined, paused: false, applied: undefined,
+      status: 'idle', omarchy: undefined, scheme: deps.theme.getTheme().active?.colorScheme, applied: undefined,
     }
   }
 
@@ -116,11 +109,7 @@ export class ThemeController {
 
   // ---- lifecycle ----
   start(): () => void {
-    this.shells = [
-      this.deps.theme.register({ id: 'omarchy-dark', colorScheme: 'dark', tokens: {} }),
-      this.deps.theme.register({ id: 'omarchy-light', colorScheme: 'light', tokens: {} }),
-    ]
-    this.offs.push(this.deps.onThemeChange((s) => { this.onPreference(s.preference) }))
+    this.offs.push(this.deps.onThemeChange((s) => { this.onScheme(s.active?.colorScheme) }))
     const doc = this.deps.doc
     if (doc !== undefined) {
       const resync = (): void => { if (doc.visibilityState !== 'hidden') void this.refetch() }
@@ -136,10 +125,8 @@ export class ThemeController {
     if (this.disposed) return
     this.disposed = true
     this.closeStream()
-    this.disengage(true)
+    this.disengage()
     for (const off of this.offs.splice(0)) off()
-    // Disposing an active shell theme would reset the preference, so shells go last (after the restore above).
-    for (const off of this.shells.splice(0)) off()
     this.listeners.clear()
   }
 
@@ -147,7 +134,7 @@ export class ThemeController {
   setChoice(choice: Choice): void {
     if (choice !== 'stock' && choice !== 'omarchy' && paletteById(choice) === undefined) return
     write(this.deps.storage, KEY_CHOICE, choice)
-    this.set({ choice, paused: false })
+    this.set({ choice })
     this.connect()
     this.sync()
   }
@@ -162,7 +149,7 @@ export class ThemeController {
   private sync(): void {
     if (this.disposed) return
     const palette = this.resolve()
-    if (palette === undefined) { this.disengage(true); this.set({ applied: undefined }); return }
+    if (palette === undefined) { this.disengage(); this.set({ applied: undefined }); return }
     this.engage(palette)
   }
 
@@ -181,50 +168,21 @@ export class ThemeController {
   }
 
   private engage(palette: OmarchyPalette): void {
-    const theme = this.deps.theme
-    if (!this.engaged) {
-      const current = theme.getTheme().preference
-      this.baseline = current === 'omarchy-dark' || current === 'omarchy-light' ? (this.baseline || 'system') : current
-      this.engaged = true
-    }
-    this.writing = true
-    try {
-      this.offLayer?.()
-      this.offLayer = theme.overrideTokens(SOURCE, toLayer(paletteTokens(palette, { semanticColors: this.state.semanticColors })))
-      this.expect = shellThemeId(palette.mode)
-      theme.setTheme(this.expect)
-    } finally { this.writing = false }
-    this.set({ applied: palette })
+    this.offLayer?.()
+    this.offLayer = this.deps.theme.overrideTokens(SOURCE, toLayer(paletteTokens(palette, { semanticColors: this.state.semanticColors })))
+    this.set({ applied: palette, scheme: this.deps.theme.getTheme().active?.colorScheme ?? this.state.scheme })
   }
 
-  /** Remove the layer; restore the user's own preference unless they already changed it. */
-  private disengage(restore: boolean): void {
-    if (!this.engaged) return
-    this.engaged = false
-    this.writing = true
-    try {
-      this.offLayer?.()
-      this.offLayer = undefined
-      const theme = this.deps.theme
-      if (restore && (theme.getTheme().preference === 'omarchy-dark' || theme.getTheme().preference === 'omarchy-light')) {
-        try { theme.setTheme(this.baseline || 'system') } catch { /* baseline theme vanished: system default applies */ }
-      }
-    } finally { this.writing = false }
-    this.expect = ''
+  /** Remove the layer. The Appearance preference was never touched, so there is nothing else to restore. */
+  private disengage(): void {
+    this.offLayer?.()
+    this.offLayer = undefined
   }
 
-  private onPreference(preference: string): void {
-    if (!this.engaged || this.writing || preference === this.expect) return
-    if (preference === this.baseline && !(this.deps.userInitiated ?? userInitiated)()) {
-      // DSH re-adopted the persisted preference after an unrelated settings write (no user input on the stack); take it back.
-      queueMicrotask(() => { if (this.engaged && !this.disposed) this.deps.theme.setTheme(this.expect) })
-      return
-    }
-    // The user picked a different Appearance: pause following and hand the whole look back.
-    write(this.deps.storage, KEY_CHOICE, 'stock')
-    this.disengage(false)
-    this.closeStream()
-    this.set({ choice: 'stock', paused: true, applied: undefined })
+  /** Track the rendered colour scheme, used only for the "does not match your Omarchy theme" hint. */
+  private onScheme(scheme: Mode | undefined): void {
+    if (scheme === undefined || scheme === this.state.scheme) return
+    this.set({ scheme })
   }
 
   /**
@@ -276,10 +234,17 @@ export class ThemeController {
   }
 }
 
-/** True while a trusted user input event (the Appearance click) is being dispatched, as opposed to a Host settings echo. */
-function userInitiated(): boolean {
-  const event = (globalThis as { event?: { isTrusted?: boolean } }).event
-  return event?.isTrusted === true
+/** Omarchy runs on this computer only: follow it by default when the page is served from a loopback address. */
+export function isLoopbackHost(hostname: string | undefined): boolean {
+  if (hostname === undefined) return false
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  return h === 'localhost' || h === '::1' || /^127(\.\d{1,3}){3}$/.test(h)
+}
+export function defaultChoice(hostname: string | undefined): Choice {
+  return isLoopbackHost(hostname) ? 'omarchy' : 'stock'
+}
+function pageHostname(): string | undefined {
+  return (globalThis as { location?: { hostname?: string } }).location?.hostname
 }
 
 function parse(text: string): unknown {

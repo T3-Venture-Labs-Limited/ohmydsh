@@ -56,7 +56,12 @@ export default function SettingsPage({ t, controller }: { t: T; controller: Them
           {status !== undefined && (
             <SettingsRow title={t('statusTitle')} description={status} />
           )}
-          {state.paused && <SettingsRow title={t('pausedTitle')} description={t('pausedDescription')} />}
+          {state.applied !== undefined && state.scheme !== undefined && state.scheme !== state.applied.mode && (
+            <SettingsRow
+              title={t('schemeTitle')}
+              description={t(state.applied.mode === 'light' ? 'schemeHintLight' : 'schemeHintDark')}
+            />
+          )}
           {state.applied !== undefined && (
             <SettingsRow title={t('previewLabel')}>
               <span role="img" aria-label={t('previewLabel')} style={{ display: 'inline-flex', gap: 4 }}>

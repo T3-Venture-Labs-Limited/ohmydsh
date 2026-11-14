@@ -2,7 +2,7 @@
 
 # Theme: Follow Omarchy
 
-DSH takes its colours from the theme your Omarchy desktop is using, and re-colours itself the moment you switch Omarchy themes (about a quarter of a second after `omarchy theme set`). Light themes flip DSH to light; dark themes to dark. Open **Settings → Theme**.
+DSH takes its colours from the theme your Omarchy desktop is using, and re-colours itself the moment you switch Omarchy themes (about a quarter of a second after `omarchy theme set`). Open **Settings → Theme**.
 
 ## Colour source
 
@@ -18,7 +18,8 @@ The page shows which Omarchy theme is being followed and swatches of the colours
 
 - **Status colours stay DSH's** (errors, warnings, success) by default, because some Omarchy themes assign those colour keys to other hues. Turn on *Use Omarchy status colours* to follow Omarchy there too.
 - **Primary buttons use your Omarchy accent.** DSH's own brand colour is left alone.
-- **Your own Appearance setting is never changed.** If you pick Light, Dark or System in *Settings → General → Appearance* while following, DSH stops following and shows "Following paused". Choose Follow Omarchy again to resume.
+- **Meant for this computer.** *Follow Omarchy* is on by default only in the browser on the machine that runs Omarchy. Other devices (your phone, a tablet) open with Stock and follow their own light/dark mode; pick a palette there if you want one. The choice is saved per browser.
+- **Your own Appearance setting is never changed.** Omarchy normally sets your desktop to light or dark too, so Appearance *System* matches. If it doesn't, Settings → Theme tells you to set Appearance to System, or to Dark/Light to match; the plugin never changes it for you.
 - **Text stays readable.** Palette text colours are nudged to a minimum contrast against the background when an Omarchy theme would be too faint.
 - **Disable or Stock removes everything** with a single step: no stylesheet or setting is left behind.
 - If Omarchy is not installed, Follow Omarchy says so and DSH stays stock.

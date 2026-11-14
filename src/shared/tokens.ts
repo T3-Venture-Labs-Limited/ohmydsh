@@ -2,7 +2,7 @@
 // Only `--dsw-alias-*` / `--dsw-specific-*` / `--shiki-token-*` names that exist in tools/dsw-defined.txt are produced;
 // `--dsw-static-*` scales are never touched, so a DSH release that renames statics cannot corrupt the layer.
 import { alpha, contrast, ensureContrast, mix, onColor } from './color.ts'
-import type { Mode, OmarchyPalette } from './omarchy.ts'
+import type { OmarchyPalette } from './omarchy.ts'
 
 export interface TokenOptions {
   /** `dsh` keeps DSH's own error/warn/success reds/ambers/greens (default); `omarchy` uses the palette's red/yellow/green. */
@@ -11,7 +11,7 @@ export interface TokenOptions {
 
 export const DEFAULT_TOKEN_OPTIONS: TokenOptions = { semanticColors: 'dsh' }
 
-/** Plain `{ token: value }` map for one palette; both light and dark layer values are identical (the palette is one mode). */
+/** Plain `{ token: value }` map for one palette (toLayer puts it in both the light and the dark slot). */
 export type FlatTokens = Record<string, string>
 
 const A = '--dsw-alias-'
@@ -120,10 +120,6 @@ export function toLayer(tokens: FlatTokens): Record<string, { light: string; dar
   const out: Record<string, { light: string; dark: string }> = {}
   for (const [name, value] of Object.entries(tokens)) out[name] = { light: value, dark: value }
   return out
-}
-
-export function shellThemeId(mode: Mode): 'omarchy-dark' | 'omarchy-light' {
-  return mode === 'light' ? 'omarchy-light' : 'omarchy-dark'
 }
 
 /** Lowest text/background contrast across the primary text tiers (test and diagnostics helper). */

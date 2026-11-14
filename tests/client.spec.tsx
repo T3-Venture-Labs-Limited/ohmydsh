@@ -13,10 +13,10 @@ function fakeCtx() {
   const layers = new Map<string, unknown>()
   let preference = 'system'
   const shells = new Set<string>()
+  const setTheme = vi.fn((id: string) => { preference = id })
   const theme = {
     getTheme: () => ({ preference }),
-    setTheme: (id: string) => { preference = id },
-    register: (d: { id: string }) => { shells.add(d.id); return () => { shells.delete(d.id) } },
+    setTheme,
     overrideTokens: (s: string, t: unknown) => { layers.set(s, t); return () => { layers.delete(s) } },
   }
   const ctx = {
@@ -30,7 +30,7 @@ function fakeCtx() {
     slots,
     theme,
   }
-  return { ctx, dicts, registered, disposers, layers, shells }
+  return { ctx, dicts, registered, disposers, layers, shells, setTheme }
 }
 
 describe('client apply', () => {
@@ -43,13 +43,13 @@ describe('client apply', () => {
     expect(dicts.get(locale.ns)).toEqual(locale.en)
     expect(registered.map((r) => r.name)).toEqual(['settings.section'])
   })
-  it('one disposer removes the layer and the shell themes', () => {
-    const { ctx, disposers, layers, shells } = fakeCtx()
+  it('registers no shell themes and never writes Appearance; one disposer ends the controller', () => {
+    const { ctx, disposers, layers, shells, setTheme } = fakeCtx()
     apply(ctx as never)
-    expect(shells.size).toBe(2)
-    for (const d of disposers) d()
     expect(shells.size).toBe(0)
+    for (const d of disposers) d()
     expect(layers.size).toBe(0)
+    expect(setTheme).not.toHaveBeenCalled()
   })
 })
 

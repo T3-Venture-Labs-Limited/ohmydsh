@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Langfuse tracing",
+    "description": "Sends every agent turn to Langfuse as one trace: model calls with token usage and timing, tool calls, subagents, approvals and compaction. Adds an Open trace button under assistant messages. Keys come from LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY; secrets are redacted before export.",
+    "detail": "docs/DETAIL.md"
+  }
+}

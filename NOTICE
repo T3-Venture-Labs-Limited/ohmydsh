@@ -1,0 +1,47 @@
+dsh-langfuse
+Copyright (c) 2026 Superdao (deestax)
+
+This product includes code and design ported from pi-observability-plugin
+(https://github.com/langfuse/pi-observability-plugin, package
+@langfuse/pi-observability-plugin 0.1.2), Copyright (c) 2026 Langfuse GmbH,
+licensed under the MIT License.
+
+What was taken: the secret-redaction rules and the redact-and-cap capture routine
+(src/host/redact.ts), the usage and cost key spellings for Langfuse
+(src/host/present.ts), and the design of an isolated OpenTelemetry tracer
+provider that is never installed globally (src/host/runtime.ts).
+
+What was changed: the host integration is new. Spans come from DSH's durable
+session event log and the llm/stream tap instead of pi hooks, and the redaction
+rules were extended (vendor tokens, JWTs, PEM blocks, generic token/secret
+values).
+
+The upstream MIT notice, which must stay with copies of the ported code:
+
+    MIT License
+
+    Copyright (c) 2026 Langfuse GmbH
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+UI controls (src/kit/) are adapted, via dsh-kit (https://github.com/deestax/dsh-kit), from
+@deepseek-ai/dsh-client-ui-primitives (https://github.com/deepseek-ai/deepseek-harness, packages/client/ui-primitives),
+MIT License, Copyright (c) 2026 DeepSeek: markup, sizes and behaviour of Button, Switch, SegmentedControl, Input, Modal
+and Tooltip, and the modal-layer and tooltip-placement helpers. The MIT permission notice is identical to the one in
+this repository's LICENSE file and applies to those portions as well.

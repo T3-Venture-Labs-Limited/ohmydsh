@@ -19,15 +19,15 @@ assert.deepEqual(manifest.dependencies, {
   'parallel-web': '1.3.0',
 })
 assert.deepEqual(manifest.peerDependencies, {
-  '@deepseek-ai/cordis': '4.0.1',
-  '@deepseek-ai/dsh-launch-environment': '0.1.0-rc.6',
-  '@deepseek-ai/dsh-web': '0.1.0-rc.6',
+  '@deepseek-ai/cordis': '^4.0.1',
+  '@deepseek-ai/dsh-launch-environment': '>=0.2.0-0 <0.3.0',
+  '@deepseek-ai/dsh-web': '>=0.2.0-0 <0.3.0',
 })
-for (const [name, version] of Object.entries(manifest.peerDependencies)) {
-  assert.equal(manifest.devDependencies[name], version, `${name} must have a matching exact development dependency`)
+assert.equal(manifest.engines.dsh, '>=0.2.0-0 <0.3.0')
+for (const name of Object.keys(manifest.peerDependencies)) {
+  assert.ok(manifest.devDependencies[name], `${name} must have a development dependency`)
 }
-assert.equal(manifest.devDependencies['@deepseek-ai/dsh'], '0.1.0-rc.6')
-assert.equal(manifest.devDependencies['@deepseek-ai/cordis-plugin-include'], '1.0.6')
+assert.equal(manifest.devDependencies['@deepseek-ai/cordis-plugin-include'], '1.1.0')
 assert.equal(manifest.devDependencies['js-yaml'], '4.2.0')
 assert.equal(manifest.devDependencies['@deepseek-ai/dsh-invariants'], undefined)
 assert.equal(manifest.exports['./invariant'], undefined)
@@ -47,7 +47,7 @@ assert.deepEqual(patch, [
   {
     id: 'web',
     name: '@deepseek-ai/dsh-web',
-    config: { searchProvider: 'parallel' },
+    config: { searchProvider: 'parallel', fetchProvider: 'parallel' },
   },
   {
     insert: [
@@ -61,8 +61,8 @@ assert.deepEqual(patch, [
 
 const built = await import(new URL(`../lib/index.js?check=${Date.now()}`, import.meta.url))
 assert.equal('default' in built, false, 'the Cordis namespace plugin must not have a default export')
-assert.equal('fetch' in built, false, 'the search-only package must not export fetch')
-assert.equal('registerFetchProvider' in built, false, 'the search-only package must not export a fetch registrar')
+assert.equal('fetch' in built, false, 'the package must not export a fetch function; the provider is registered, not exported')
+assert.equal('registerFetchProvider' in built, false, 'the package must not export a fetch registrar')
 assert.equal(built.PARALLEL_PROVIDER_ID, 'parallel')
 
 process.stdout.write('manifest, patch, and public export surface are valid\n')

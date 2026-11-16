@@ -4,13 +4,13 @@ Thank you for improving the Parallel Search provider for DeepSeek Harness.
 
 ## Scope
 
-Version one is intentionally a native, search-only DSH provider. Changes should
+This package is intentionally a native DSH provider for search and fetch. Changes should
 preserve the existing `web_search` tool and the provider-neutral `ctx.web`
 boundary.
 
 The following are not part of this package's current scope:
 
-- a `web_fetch` provider or Parallel Extract adapter;
+- a model-facing extract tool beyond the built-in `web_fetch`;
 - a second model-facing or MCP tool;
 - configurable API endpoints or retries;
 - answer, session, model, location, freshness, or source-filter options; and
@@ -74,7 +74,7 @@ native `tool-web` row.
 ## Live end-to-end test
 
 The normal test suite is credentialless. `pnpm run test:e2e` is opt-in because
-it sends one real request to Parallel Search and may consume account balance.
+it sends one real request each to Parallel Search and Parallel Extract and may consume account balance.
 Export `PARALLEL_API_KEY` in the shell first, then run:
 
 ```sh

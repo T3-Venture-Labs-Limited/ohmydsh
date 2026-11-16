@@ -1,8 +1,12 @@
-# Parallel Search for DeepSeek Harness
+# Parallel Search and Extract for DeepSeek Harness
 
 This plugin makes DeepSeek Harness's built-in `web_search` tool use
-[Parallel Search](https://docs.parallel.ai/search/search-quickstart). It does
-not add a new tool or provide `web_fetch`.
+[Parallel Search](https://docs.parallel.ai/search/search-quickstart) and its
+built-in `web_fetch` tool use the
+[Parallel Extract API](https://docs.parallel.ai/extract/extract-quickstart)
+(page content as markdown). It does not add a new tool. Parallel fetches pages
+server-side, so `web_fetch` through this provider cannot reach intranet or
+local addresses, and each fetch counts against your Parallel usage.
 
 It currently supports `@deepseek-ai/dsh@0.1.0-rc.6` on Node.js `^22.19.0 || >=24.0.0`.
 DeepSeek Harness is still a developer preview, so later versions may
@@ -56,7 +60,8 @@ npx --yes @deepseek-ai/dsh@0.1.0-rc.6 \
   grep -E 'searchProvider: parallel|web-search-parallel'
 ```
 
-You should see `searchProvider: parallel` and a `web-search-parallel` entry.
+You should see `searchProvider: parallel`, `fetchProvider: parallel` and a
+`web-search-parallel` entry.
 Seeing the built-in `web-search-deepseek` plugin as well is normal—the
 `searchProvider` setting decides which provider handles searches.
 
@@ -88,17 +93,32 @@ edit `~/.dsh/profiles/web/cordis.patch.yml`:
 | `mode` | Parallel's `advanced` default | `turbo`, `basic`, or `advanced` search |
 | `maxCharsTotal` | `25000` | Total excerpt characters returned to Harness |
 | `maxCharsPerResult` | no limit | Excerpt characters kept for each result |
+| `maxFetchChars` | `100000` | Characters of page content `web_fetch` returns before truncating |
 
 Keep `PARALLEL_API_KEY` in the environment rather than putting it in this file,
 which is stored as readable text.
 
+## Pinning both providers
+
+The bundle's patch row sets `searchProvider: parallel` and
+`fetchProvider: parallel` on the `web` entry. A patch row with the same `id`
+**replaces that entry's whole `config`**, so if you write your own `web` row,
+list both fields. Leaving `fetchProvider` out makes DeepSeek Harness fail
+`web_fetch` with `multiple usable web providers are registered ... configure one
+explicitly` whenever more than one fetch provider is usable (for example the
+built-in `http` and `deepseek-fetch-api` providers).
+
 ## If something goes wrong
+
+- **`web_fetch` says multiple usable web providers are registered:** the `web`
+  row lost `fetchProvider`. Set `fetchProvider: parallel` (see above).
 
 - **`dsh` is not found:** use the `npx @deepseek-ai/dsh` commands above.
 - **Port 3080 is already in use:** stop the older Harness process before
   starting another one.
 - **The provider is still `deepseek-official`:** restart Harness and check
-  whether your `cordis.patch.yml` contains a later `searchProvider` override.
+  whether your `cordis.patch.yml` contains a later `searchProvider` or
+  `fetchProvider` override.
 - **pnpm reports missing DSH peer dependencies:** this warning is expected for
   this Git install. Harness supplies those packages from the profile runtime.
 - **Harness answers without searching:** the configured model decides when to

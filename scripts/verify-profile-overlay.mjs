@@ -45,7 +45,7 @@ for (const rows of [before, removed]) {
 assert.deepEqual(one(after, 'web'), {
   id: 'web',
   name: '@deepseek-ai/dsh-web',
-  config: { searchProvider: 'parallel' },
+  config: { searchProvider: 'parallel', fetchProvider: 'parallel' },
 })
 assert.deepEqual(one(after, 'web-search-parallel'), {
   id: 'web-search-parallel',

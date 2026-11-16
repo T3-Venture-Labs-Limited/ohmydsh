@@ -1,7 +1,12 @@
+# A patch row with an existing id replaces that entry's whole `config`, so list
+# every web setting this bundle owns. Keep both providers pinned: with no
+# `fetchProvider`, DSH reports WEB_PROVIDER_AMBIGUOUS whenever more than one
+# fetch provider is usable.
 - id: web
   name: '@deepseek-ai/dsh-web'
   config:
     searchProvider: parallel
+    fetchProvider: parallel
 
 - insert:
     - id: web-search-parallel

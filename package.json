@@ -1,6 +1,6 @@
 {
   "name": "@parallel-web/dsh-web-search-parallel",
-  "description": "Parallel Search provider bundle for the DeepSeek Harness web capability seam",
+  "description": "Parallel Search and Extract provider bundle for the DeepSeek Harness web capability seam",
   "version": "0.1.0",
   "author": "Parallel <support@parallel.ai>",
   "license": "MIT",
@@ -8,7 +8,8 @@
   "sideEffects": false,
   "packageManager": "pnpm@11.7.0",
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.0-0 <0.3.0"
   },
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -36,6 +37,8 @@
     "deepseek-harness",
     "dsh-plugin",
     "parallel-search",
+    "parallel-extract",
+    "web-fetch",
     "web-search"
   ],
   "dsh": {
@@ -55,20 +58,19 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "4.0.1",
-    "@deepseek-ai/dsh-launch-environment": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-web": "0.1.0-rc.6"
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-launch-environment": ">=0.2.0-0 <0.3.0",
+    "@deepseek-ai/dsh-web": ">=0.2.0-0 <0.3.0"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.1",
     "parallel-web": "1.3.0"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.1",
-    "@deepseek-ai/cordis-plugin-include": "1.0.6",
-    "@deepseek-ai/dsh": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-launch-environment": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-web": "0.1.0-rc.6",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/cordis-plugin-include": "1.1.0",
+    "@deepseek-ai/dsh-launch-environment": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-web": "0.2.2-rc.2",
     "@types/node": "26.2.0",
     "js-yaml": "4.2.0",
     "oxlint": "1.76.0",

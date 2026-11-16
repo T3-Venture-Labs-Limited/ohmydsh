@@ -2,6 +2,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import Parallel from 'parallel-web'
+import { readFileSync } from 'node:fs'
+import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import yaml from 'js-yaml'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as parallelPlugin from '../src/index.ts'
 
@@ -22,7 +25,29 @@ function mockSearch(results: Array<{
   })
 }
 
+describe('Parallel bundle patch row', () => {
+  it('pins both web providers in one row so a same-id replace cannot drop either', () => {
+    const patch = yaml.load(
+      readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8'),
+      { schema: entryListSchema },
+    ) as Array<Record<string, unknown>>
+    const rows = patch.filter(row => row.id === 'web')
+    expect(rows).toEqual([{
+      id: 'web',
+      name: '@deepseek-ai/dsh-web',
+      config: { searchProvider: 'parallel', fetchProvider: 'parallel' },
+    }])
+  })
+})
+
 describe('Parallel plugin config', () => {
+  it('accepts a fetch character cap and rejects invalid ones', () => {
+    expect(parallelPlugin.Config({ maxFetchChars: 5_000 })).toMatchObject({ maxFetchChars: 5_000 })
+    for (const value of [0, -1, 1.5]) {
+      expect(() => parallelPlugin.Config({ maxFetchChars: value })).toThrow()
+    }
+  })
+
   it('materializes the default total character budget in the schema', () => {
     expect(parallelPlugin.Config({})).toEqual({
       maxCharsTotal: parallelPlugin.DEFAULT_MAX_CHARS_TOTAL,
@@ -50,7 +75,65 @@ describe('Parallel plugin config', () => {
   })
 })
 
+function mockExtract(result: Record<string, unknown> = { full_content: 'page body' }) {
+  return vi.spyOn(Parallel.prototype, 'extract').mockResolvedValue({
+    results: [{ url: 'https://example.test/', excerpts: [], ...result }],
+    errors: [],
+    extract_id: 'extract_test',
+    session_id: 'session_test',
+  } as never)
+}
+
 describe('Parallel plugin registration', () => {
+  it('registers both providers, lists them, and selects parallel for each', async () => {
+    mockSearch()
+    const extract = mockExtract({ title: 'T', full_content: 'page body' })
+    const ctx = new Context()
+    await ctx.plugin(WebRuntime, { searchProvider: 'parallel', fetchProvider: 'parallel' })
+    const fiber = await ctx.plugin(parallelPlugin, { apiKey: 'parallel_test_plugin' })
+    expect(ctx.web.listProviders()).toMatchObject({
+      search: [{ id: 'parallel' }],
+      fetch: [{ id: 'parallel' }],
+    })
+    await expect(ctx.web.fetch({ url: 'https://example.test/' })).resolves.toMatchObject({
+      statusCode: 200,
+      body: { kind: 'text', content: 'page body' },
+    })
+    expect(extract).toHaveBeenCalledOnce()
+    expect(extract.mock.calls[0]?.[0]).toEqual({
+      urls: ['https://example.test/'],
+      advanced_settings: { full_content: true },
+    })
+    await fiber.dispose()
+    expect(ctx.web.listProviders()).toMatchObject({ search: [], fetch: [] })
+    await expect(ctx.web.fetch({ url: 'https://example.test/' }))
+      .rejects.toMatchObject({ code: 'WEB_PROVIDER_CONFIGURED_MISSING' })
+  })
+
+  it('fetch provider is unavailable without a key and makes no network call', async () => {
+    const extract = mockExtract()
+    const ctx = new Context()
+    ctx.provide('launchEnvironment', createLaunchEnvironmentSnapshot([]))
+    await ctx.plugin(WebRuntime, { fetchProvider: 'parallel' })
+    await ctx.plugin(parallelPlugin, {})
+    await expect(ctx.web.fetch({ url: 'https://example.test/' }))
+      .rejects.toMatchObject({ code: 'WEB_PROVIDER_CONFIGURED_UNAVAILABLE' })
+    expect(extract).not.toHaveBeenCalled()
+  })
+
+  it('uses the launch-environment key for fetch', async () => {
+    const extract = mockExtract()
+    const ctx = new Context()
+    ctx.provide('launchEnvironment', createLaunchEnvironmentSnapshot([{
+      source: 'process',
+      values: { PARALLEL_API_KEY: 'parallel_test_environment' },
+    }]))
+    await ctx.plugin(WebRuntime, { fetchProvider: 'parallel' })
+    await ctx.plugin(parallelPlugin, {})
+    await ctx.web.fetch({ url: 'https://example.test/' })
+    expect(extract).toHaveBeenCalledOnce()
+  })
+
   it('registers, selects, and disposes through the real WebRuntime', async () => {
     mockSearch()
     const ctx = new Context()
@@ -115,7 +198,7 @@ describe('Parallel plugin registration', () => {
     })
   })
 
-  it('has a search-only namespace export surface', () => {
+  it('has a namespace export surface without fetch functions', () => {
     expect('default' in parallelPlugin).toBe(false)
     expect('fetch' in parallelPlugin).toBe(false)
     expect('registerFetchProvider' in parallelPlugin).toBe(false)

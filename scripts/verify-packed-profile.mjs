@@ -38,7 +38,7 @@ const cordis = await import(pathToFileURL(resolutions['@deepseek-ai/cordis']).hr
 const web = await import(pathToFileURL(resolutions['@deepseek-ai/dsh-web']).href)
 
 const ctx = new cordis.Context()
-await ctx.plugin(web.default, { searchProvider: 'parallel' })
+await ctx.plugin(web.default, { searchProvider: 'parallel', fetchProvider: 'parallel' })
 const fiber = await ctx.plugin(plugin, { apiKey: 'parallel_test_packed_profile' })
 
 const controller = new AbortController()

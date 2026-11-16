@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Agent browser takeover",
+    "description": "Adds an \"Agent browser\" tab to the right sidebar showing this conversation's browser live. Take control to sign in or solve a captcha, then hand it back; the agent's browser tools pause while you drive, and the agent can call browser_request_human to ask for you. Every conversation gets its own browser, so agents in different projects can browse in parallel; each new browser starts with your saved logins, and handing back after signing in saves that login for all later browsers. Requires dsh-agent-browser and dsh-better-sidebar.",
+    "detail": "docs/DETAIL.md"
+  }
+}

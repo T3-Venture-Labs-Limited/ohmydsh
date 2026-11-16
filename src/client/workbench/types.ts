@@ -42,6 +42,8 @@ export interface AssetQuery {
   tag?: string
   model?: string
   favorite?: boolean
+  /** Only assets that came out of a chat (collected from an agent tool result, or made by a Studio tool inside a session). */
+  fromChats?: boolean
   collection?: string
   parent?: string
 }
@@ -54,3 +56,6 @@ export interface ModelExample { title?: string; summary?: string; pageUrl: strin
 
 export const ACTIVE_STATES: readonly JobState[] = ['queued', 'submitting', 'running', 'finalizing']
 export const isActive = (state: JobState): boolean => ACTIVE_STATES.includes(state)
+
+export interface AgentMediaSummary { imported: number; alreadyThere: number; skipped: number; failed: number; filesScanned: number; sessionsScanned?: number; at: number }
+export interface ChatRef { id: string; title?: string }

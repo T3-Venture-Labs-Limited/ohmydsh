@@ -171,7 +171,7 @@ async function expandAsset(core: StudioCore, req: IncomingMessage, res: ServerRe
 }
 
 /** /assets, /assets/:id, /assets/:id/(file|thumb|poster|lineage|tags|collections), /tags, /collections, /spend, /stats */
-export async function serveAssetApi(core: StudioCore, req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
+export async function serveAssetApi(core: StudioCore, req: IncomingMessage, res: ServerResponse, path: string, agent?: { sessionTitle(id: string): Promise<string | undefined> }): Promise<void> {
   const u = url(req); const method = req.method ?? 'GET'
   const mutating = method !== 'GET' && method !== 'HEAD'
   if (mutating && !sameOrigin(req)) return fail(res, 403, 'origin-rejected')
@@ -183,6 +183,8 @@ export async function serveAssetApi(core: StudioCore, req: IncomingMessage, res:
       set('query', p.get('q') ?? undefined); set('kind', (p.get('kind') as 'image' | 'video' | null) ?? undefined); set('tag', p.get('tag') ?? undefined)
       set('modelId', p.get('model') ?? undefined); set('collection', p.get('collection') ?? undefined); set('provider', p.get('provider') ?? undefined); set('parentOf', p.get('parent') ?? undefined)
       if (p.get('favorite') === '1') q.favorite = true
+      if (p.get('fromChats') === '1') q.fromChats = true
+      const src = p.get('source'); if (src === 'agent' || src === 'generated' || src === 'import' || src === 'render' || src === 'derived') q.source = src
       if (p.get('since') !== null) q.since = Number(p.get('since')); if (p.get('until') !== null) q.until = Number(p.get('until'))
       return json(res, 200, core.db.queryAssets(q))
     }
@@ -210,7 +212,11 @@ export async function serveAssetApi(core: StudioCore, req: IncomingMessage, res:
       if (sub === 'file' || sub === 'thumb' || sub === 'poster') return serveAsset(core, req, res, id, sub)
       const asset = core.db.getAsset(id)
       if (asset === undefined) return fail(res, 404, 'not-found')
-      if (sub === undefined && method === 'GET') return json(res, 200, { asset, parents: core.db.parents(id), children: core.db.children(id), collections: core.db.collectionsOf(id) })
+      if (sub === undefined && method === 'GET') {
+        // The chat this asset came from (agent capture, or a Studio tool call inside a session), with its current title when the host can tell.
+        const chat = asset.sessionId === undefined ? undefined : { id: asset.sessionId, ...(await agent?.sessionTitle(asset.sessionId).catch(() => undefined).then(t => (t === undefined ? {} : { title: t })) ?? {}) }
+        return json(res, 200, { asset, parents: core.db.parents(id), children: core.db.children(id), collections: core.db.collectionsOf(id), ...(chat === undefined ? {} : { chat }) })
+      }
       if (sub === 'lineage' && method === 'GET') return json(res, 200, core.db.lineage(id))
       if (sub === undefined && method === 'PATCH') {
         const b = (await readJson(req)) as Record<string, unknown>

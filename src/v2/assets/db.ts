@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { AssetEdge, AssetRecord, EdgeRole, JobRecord, JobState, MediaKind, OperationRequest } from '../contracts.js'
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 const MIGRATIONS: readonly string[] = [
   `
@@ -45,6 +45,28 @@ const MIGRATIONS: readonly string[] = [
   CREATE TABLE catalog_cache(key TEXT PRIMARY KEY, fetched_at INTEGER NOT NULL, payload TEXT NOT NULL);
   CREATE VIRTUAL TABLE assets_fts USING fts5(prompt, title, tags, notes, content='', contentless_delete=1, tokenize='unicode61 remove_diacritics 2');
   `,
+  // v2: the `agent` source (media the gallery collected from agent tool results) and its origin; SQLite cannot alter a CHECK, so the table is rebuilt keeping rowids (the FTS index is keyed by rowid).
+  `
+  CREATE TABLE assets_v2(
+    id TEXT PRIMARY KEY, sha256 TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('image','video')),
+    ext TEXT NOT NULL, mime TEXT NOT NULL, bytes INTEGER NOT NULL,
+    width INTEGER, height INTEGER, duration_ms INTEGER, fps REAL, has_audio INTEGER, codec TEXT, poster_sha TEXT,
+    created_at INTEGER NOT NULL, source TEXT NOT NULL CHECK(source IN ('generated','import','render','derived','agent')),
+    job_id TEXT, op TEXT, provider TEXT, model_id TEXT, prompt TEXT, negative_prompt TEXT, params_json TEXT, seed INTEGER,
+    cost_usd REAL, title TEXT, favorite INTEGER NOT NULL DEFAULT 0, rating INTEGER, deleted_at INTEGER,
+    session_id TEXT, workspace_path TEXT, notes TEXT, origin_json TEXT
+  );
+  INSERT INTO assets_v2(rowid,id,sha256,kind,ext,mime,bytes,width,height,duration_ms,fps,has_audio,codec,poster_sha,created_at,source,job_id,op,provider,model_id,prompt,negative_prompt,params_json,seed,cost_usd,title,favorite,rating,deleted_at,session_id,workspace_path,notes) SELECT rowid,id,sha256,kind,ext,mime,bytes,width,height,duration_ms,fps,has_audio,codec,poster_sha,created_at,source,job_id,op,provider,model_id,prompt,negative_prompt,params_json,seed,cost_usd,title,favorite,rating,deleted_at,session_id,workspace_path,notes FROM assets;
+  DROP TABLE assets;
+  ALTER TABLE assets_v2 RENAME TO assets;
+  CREATE INDEX assets_created ON assets(created_at DESC);
+  CREATE INDEX assets_kind_created ON assets(kind, created_at DESC);
+  CREATE INDEX assets_favorite ON assets(favorite) WHERE favorite = 1;
+  CREATE INDEX assets_model ON assets(model_id);
+  CREATE INDEX assets_sha ON assets(sha256);
+  CREATE INDEX assets_source_created ON assets(source, created_at DESC);
+  CREATE INDEX assets_session ON assets(session_id) WHERE session_id IS NOT NULL;
+  `,
 ]
 
 export interface AssetQuery {
@@ -58,6 +80,10 @@ export interface AssetQuery {
   until?: number
   parentOf?: string
   collection?: string
+  /** Only assets of this source (e.g. `agent`). */
+  source?: AssetRecord['source']
+  /** Assets that came out of a chat: collected from an agent tool result, or made by a Studio tool call with a session. */
+  fromChats?: boolean
   includeDeleted?: boolean
   limit?: number
   offset?: number
@@ -102,14 +128,14 @@ export class StudioDb {
   // ---------- assets ----------
   insertAsset(asset: AssetRecord, edges: readonly AssetEdge[] = []): void {
     this.transaction(() => {
-      this.stmt(`INSERT INTO assets(id,sha256,kind,ext,mime,bytes,width,height,duration_ms,fps,has_audio,codec,poster_sha,created_at,source,job_id,op,provider,model_id,prompt,negative_prompt,params_json,seed,cost_usd,title,favorite,rating,deleted_at,session_id,workspace_path,notes)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      this.stmt(`INSERT INTO assets(id,sha256,kind,ext,mime,bytes,width,height,duration_ms,fps,has_audio,codec,poster_sha,created_at,source,job_id,op,provider,model_id,prompt,negative_prompt,params_json,seed,cost_usd,title,favorite,rating,deleted_at,session_id,workspace_path,notes,origin_json)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
         asset.id, asset.sha256, asset.kind, asset.ext, asset.mime, asset.bytes,
         asset.width ?? null, asset.height ?? null, asset.durationMs ?? null, asset.fps ?? null, asset.hasAudio === undefined ? null : asset.hasAudio ? 1 : 0, asset.codec ?? null, asset.posterSha ?? null,
         asset.createdAt, asset.source, asset.jobId ?? null, asset.op ?? null, asset.provider ?? null, asset.modelId ?? null,
         asset.prompt ?? null, asset.negativePrompt ?? null, asset.params === undefined ? null : JSON.stringify(asset.params), asset.seed ?? null,
         asset.costUsd ?? null, asset.title ?? null, asset.favorite ? 1 : 0, asset.rating ?? null, asset.deletedAt ?? null,
-        asset.sessionId ?? null, asset.workspacePath ?? null, asset.notes ?? null)
+        asset.sessionId ?? null, asset.workspacePath ?? null, asset.notes ?? null, asset.origin === undefined ? null : JSON.stringify(asset.origin))
       for (const edge of edges) this.addEdge(edge)
       for (const tag of asset.tags) this.stmt('INSERT OR IGNORE INTO tags(asset_id,tag) VALUES(?,?)').run(asset.id, tag)
       this.reindex(asset.id)
@@ -208,6 +234,8 @@ export class StudioDb {
     if (q.includeDeleted !== true) where.push('a.deleted_at IS NULL')
     if (q.kind !== undefined) { where.push('a.kind=?'); args.push(q.kind) }
     if (q.favorite === true) where.push('a.favorite=1')
+    if (q.source !== undefined) { where.push('a.source=?'); args.push(q.source) }
+    if (q.fromChats === true) where.push("(a.source='agent' OR a.session_id IS NOT NULL)")
     if (q.tag !== undefined) { where.push('EXISTS(SELECT 1 FROM tags t WHERE t.asset_id=a.id AND t.tag=?)'); args.push(q.tag.toLowerCase()) }
     if (q.modelId !== undefined) { where.push('a.model_id=?'); args.push(q.modelId) }
     if (q.provider !== undefined) { where.push('a.provider=?'); args.push(q.provider) }
@@ -311,6 +339,7 @@ export class StudioDb {
     if (row.session_id !== null) opt.sessionId = row.session_id
     if (row.workspace_path !== null) opt.workspacePath = row.workspace_path
     if (row.notes !== null) opt.notes = row.notes
+    if (row.origin_json !== null) { try { opt.origin = JSON.parse(row.origin_json) } catch { /* unreadable origin: show the asset without it */ } }
     return asset
   }
 }
@@ -320,7 +349,7 @@ interface Row {
   fps: number | null; has_audio: number | null; codec: string | null; poster_sha: string | null; created_at: number; source: AssetRecord['source']
   job_id: string | null; op: string | null; provider: string | null; model_id: string | null; prompt: string | null; negative_prompt: string | null
   params_json: string | null; seed: number | null; cost_usd: number | null; title: string | null; favorite: number; rating: number | null; deleted_at: number | null
-  session_id: string | null; workspace_path: string | null; notes: string | null
+  session_id: string | null; workspace_path: string | null; notes: string | null; origin_json: string | null
 }
 interface EdgeRow { child_id: string; parent_id: string; role: EdgeRole; ord: number }
 const toEdge = (r: EdgeRow): AssetEdge => ({ childId: r.child_id, parentId: r.parent_id, role: r.role, ord: r.ord })

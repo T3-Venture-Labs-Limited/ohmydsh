@@ -1,6 +1,6 @@
 // Typed fetch client for the Studio v2 host API (docs/API.md). Same-origin, no polling anywhere.
 import type {
-  AssetEdge, AssetQuery, AssetRecord, EstimateResult, HfOpen, HfStatus, JobView, ModelDescriptor, ModelExample, OperationRequest, SpendRow,
+  AssetEdge, AssetQuery, AssetRecord, AgentMediaSummary, ChatRef, EstimateResult, HfOpen, HfStatus, JobView, ModelDescriptor, ModelExample, OperationRequest, SpendRow,
 } from './types.js'
 
 export const BASE = '/plugins/dsh-studio/v2'
@@ -46,7 +46,9 @@ export const api = {
 
   assets: (query: AssetQuery, page: { limit: number; offset: number }) =>
     call<{ items: AssetRecord[]; total: number }>(`/assets${qs({ ...query, limit: page.limit, offset: page.offset })}`),
-  asset: (id: string) => call<{ asset: AssetRecord; parents: AssetEdge[]; children: AssetEdge[]; collections?: string[] }>(`/assets/${id}`),
+  asset: (id: string) => call<{ asset: AssetRecord; parents: AssetEdge[]; children: AssetEdge[]; collections?: string[]; chat?: ChatRef }>(`/assets/${id}`),
+  agentMediaStatus: () => call<{ running: boolean; last: AgentMediaSummary | null; count: number }>('/agent-media/status'),
+  agentMediaBackfill: () => call<{ summary: AgentMediaSummary }>('/agent-media/backfill', { method: 'POST' }),
   lineage: (id: string) => call<{ nodes: AssetRecord[]; edges: AssetEdge[] }>(`/assets/${id}/lineage`),
   patchAsset: (id: string, patch: { title?: string | null; favorite?: boolean; rating?: number | null; notes?: string | null }) =>
     call<{ asset: AssetRecord }>(`/assets/${id}`, jsonInit('PATCH', patch)),

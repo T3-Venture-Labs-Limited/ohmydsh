@@ -30,6 +30,8 @@ interface Bus {
   listeners: Set<(intent: StudioIntent) => void>
   /** Registered by the boot bundle: reveals the Studio surface (the right-sidebar tab). */
   opener: ((intent: StudioIntent) => void) | undefined
+  /** Registered by the boot bundle when the workspace navigation service exists: opens a chat by session id. */
+  chatOpener?: ((sessionId: string) => void) | undefined
 }
 
 const bus = (): Bus => sharedState<Bus>('studioBus', () => ({ pending: undefined, listeners: new Set(), opener: undefined }))
@@ -50,4 +52,8 @@ export const studioBus = {
     return () => { b.listeners.delete(listener) }
   },
   setOpener(opener: ((intent: StudioIntent) => void) | undefined): void { bus().opener = opener },
+  /** Open a chat (the "Open chat" action on assets collected from agent tool results). */
+  openChat(sessionId: string): boolean { const open = bus().chatOpener; if (open === undefined) return false; open(sessionId); return true },
+  canOpenChat(): boolean { return bus().chatOpener !== undefined },
+  setChatOpener(opener: ((sessionId: string) => void) | undefined): void { bus().chatOpener = opener },
 }

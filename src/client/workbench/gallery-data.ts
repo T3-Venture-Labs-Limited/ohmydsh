@@ -20,6 +20,7 @@ export function matches(asset: AssetRecord, query: AssetQuery): boolean {
   if (asset.deletedAt !== undefined) return false
   if (query.kind !== undefined && asset.kind !== query.kind) return false
   if (query.favorite === true && !asset.favorite) return false
+  if (query.fromChats === true && asset.source !== 'agent' && asset.sessionId === undefined) return false
   if (query.tag !== undefined && !asset.tags.includes(query.tag)) return false
   if (query.model !== undefined && asset.modelId !== query.model) return false
   if (query.q !== undefined && query.q.trim() !== '') return false // text/collection/parent filters are resolved server-side

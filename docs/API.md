@@ -359,6 +359,16 @@ The browser shim reads IndexedDB `dsh_image_gen_db` (store `gallery_history`; th
 - `GET /import-legacy/status` → `{ vaultFiles, importedItems, vaultDirs }` (what is left in the old vault, how many gallery records are already imported).
 Suggested client flow: read all records from IndexedDB → send in chunks of 25 with a progress bar → send favorite prompts once → call `/import-legacy/vault` until `remaining` is 0 → show the summary (imported / already there / missing).
 
+## Agent media (images and videos agents make in any chat)
+
+Studio watches the durable `session/event` feed. For every successful `tool/result` of a tool that is not one of Studio's own (`studio_*`) and not a viewer tool (`read*`, screenshots, browser tools, web tools): each `image` content part with an attachment is stored, and a line `Saved video to <path>` (video_generate) is imported when the path resolves, through symlinks, to a regular video file (`.mp4 .webm .mov .mkv`, ≤ 512 MB, recognised by its bytes) inside `<DSH_HOME>/plugins/subscriptions/{videos,images}` or the session's workspace. Network URLs are never fetched. Assets get `source:"agent"`, tags `agent` and the tool name, the call's `prompt`, `provider` and `model`, the `sessionId`, the session's `workspacePath` and `origin: { tool, provider?, model? }`. Content addressed: a file already in the gallery is "already there", and a hash that was collected once is never collected again (a deleted asset stays deleted). Gated by the setting `agent.capture` (`"0"` = off, anything else = on).
+
+- `GET /assets?fromChats=1` → only assets that came out of a chat (`source:"agent"` or any asset with a `sessionId`). `GET /assets?source=agent` → only agent-collected media.
+- `GET /assets/:id` additionally returns `chat: { id, title? }` when the asset has a `sessionId` (title read from the session log when the host can).
+- `GET /agent-media/status` → `{ running, last: { imported, alreadyThere, skipped, failed, filesScanned, sessionsScanned?, at } | null, count }`.
+- `POST /agent-media/backfill` → `{ summary }` (same shape as `last`). Reads existing chats' tool results (when the host exposes `sessionQuery`) and the subscriptions `images`/`videos` folders. Idempotent, single-flight, never moves or deletes a file. It also runs once automatically ~20 s after the first start with this version.
+- `PUT /settings {"agent.capture":"0"|"1"}`.
+
 ## Rules the UI must follow
 1. Build controls from `ModelDescriptor.params/inputs/capabilities`; hide a param whose `when` is unmet. `async:"job"` models (video) never block the UI: show the job card and follow the SSE stream.
 2. Show `estimateUsd` before the user submits and `costUsd` (with `costSource`) after. No spend caps exist; do not invent any.

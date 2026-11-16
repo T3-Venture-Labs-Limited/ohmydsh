@@ -66,6 +66,13 @@ export class BlobStore {
     return { sha256, path, created: true }
   }
 
+  /** SHA-256 of a file, streamed. */
+  async hashFile(path: string): Promise<string> {
+    const hash = createHash('sha256')
+    for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer)
+    return hash.digest('hex')
+  }
+
   async putFile(sourcePath: string, ext: string): Promise<{ sha256: string; path: string; created: boolean; bytes: number }> {
     const hash = createHash('sha256'); let bytes = 0
     for await (const chunk of createReadStream(sourcePath)) { hash.update(chunk as Buffer); bytes += (chunk as Buffer).length }

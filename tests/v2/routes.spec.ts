@@ -241,10 +241,12 @@ describe('model examples route', () => {
 describe('settings and provider info', () => {
   it('validates and persists non-secret settings, same-origin only', async () => {
     const put = (body: unknown, headers: Record<string, string> = {}): Promise<Response> => fetch(`${base}/settings`, { method: 'PUT', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) })
-    expect((await (await fetch(`${base}/settings`)).json() as { settings: Record<string, string> }).settings).toEqual({ 'replicate.pinned': '', 'hyperframes.cli': '', 'hyperframes.npx': '' })
+    expect((await (await fetch(`${base}/settings`)).json() as { settings: Record<string, string> }).settings).toEqual({ 'replicate.pinned': '', 'hyperframes.cli': '', 'hyperframes.npx': '', 'agent.capture': '' })
     const ok = await put({ 'replicate.pinned': 'a/b c/d', 'hyperframes.cli': '/opt/hf/bin/hyperframes' })
     expect(ok.status).toBe(200); expect((await ok.json() as { settings: Record<string, string> }).settings['replicate.pinned']).toBe('a/b c/d')
     expect((await put({ nope: 'x' })).status).toBe(400)
+    expect((await put({ 'agent.capture': '2' })).status).toBe(400)
+    expect((await put({ 'agent.capture': '0' })).status).toBe(200)
     expect((await put({ 'hyperframes.npx': '2' })).status).toBe(400)
     expect((await put({ 'hyperframes.cli': 'a\nb' })).status).toBe(400)
     expect((await put({ 'replicate.pinned': 5 })).status).toBe(400)

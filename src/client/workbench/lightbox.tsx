@@ -12,13 +12,14 @@ import { IconChevronLeft, IconChevronRight, IconDownload, IconFilm, IconImage, I
 import { labelOf } from './live.js'
 import { useStore } from './store.js'
 import { CopyButton, StarToggle, errorText } from './ui.js'
-import type { AssetEdge, AssetRecord } from './types.js'
+import type { AssetEdge, AssetRecord, ChatRef } from './types.js'
+import { studioBus } from '../studio-bus.js'
 import { IconClose } from '../../kit/icons.js'
 import { useRef } from 'react'
 import { MaskEditor } from './mask-editor.js'
 import { Modal } from '../../kit/index.js'
 
-interface Detail { asset: AssetRecord; parents: AssetEdge[]; children: AssetEdge[]; collections: string[]; nodes: AssetRecord[]; edges: AssetEdge[] }
+interface Detail { chat?: ChatRef | undefined; asset: AssetRecord; parents: AssetEdge[]; children: AssetEdge[]; collections: string[]; nodes: AssetRecord[]; edges: AssetEdge[] }
 
 export function Lightbox({ assetId, siblings, onClose, onNavigate }: { assetId: string; siblings: readonly string[]; onClose: () => void; onNavigate: (id: string) => void }) {
   useKitStyles()
@@ -38,7 +39,7 @@ export function Lightbox({ assetId, siblings, onClose, onNavigate }: { assetId: 
     try {
       const [one, graph] = await Promise.all([api.asset(assetId), api.lineage(assetId)])
       cacheAssets([one.asset, ...graph.nodes])
-      setDetail({ asset: one.asset, parents: one.parents, children: one.children, collections: one.collections ?? [], nodes: graph.nodes, edges: graph.edges })
+      setDetail({ chat: one.chat, asset: one.asset, parents: one.parents, children: one.children, collections: one.collections ?? [], nodes: graph.nodes, edges: graph.edges })
       setError(undefined)
     } catch (e) { setError(errorText(e)) }
   }, [assetId])
@@ -112,9 +113,13 @@ export function Lightbox({ assetId, siblings, onClose, onNavigate }: { assetId: 
                 {asset.negativePrompt !== undefined && <><h3 className="st-section-title">{t('negativePrompt')}</h3><p className="st-lb__prompt">{asset.negativePrompt}</p></>}
               </div>)}
               <dl className="st-kv">
-                <dt>{t('model')}</dt><dd>{asset.modelId === undefined ? t('unknownModel') : labelOf(asset.modelId)}</dd>
-                <dt>{t('source')}</dt><dd>{asset.source}{asset.op !== undefined ? ` · ${asset.op}` : ''}</dd>
+                <dt>{t('model')}</dt><dd>{asset.modelId !== undefined ? labelOf(asset.modelId) : asset.origin?.model ?? (asset.origin !== undefined ? (asset.origin.provider ?? '—') : t('unknownModel'))}</dd>
+                <dt>{t('source')}</dt><dd>{asset.origin !== undefined ? t('madeByTool', { tool: asset.origin.tool }) : asset.source}{asset.op !== undefined ? ` · ${asset.op}` : ''}</dd>
                 <dt>{t('size')}</dt><dd>{asset.width !== undefined ? `${String(asset.width)}×${String(asset.height ?? '')} · ` : ''}{video ? `${duration(asset.durationMs)} · ` : ''}{bytes(asset.bytes)}</dd>
+                {asset.sessionId !== undefined && <><dt>{t('fromChat')}</dt><dd>
+                  <span>{detail === undefined ? '…' : detail.chat?.title ?? t('untitledChat')}</span>
+                  {studioBus.canOpenChat() && <> <button type="button" className="st-link" onClick={() => { onClose(); studioBus.openChat(asset.sessionId!) }}>{t('openChat')}</button></>}
+                </dd></>}
                 <dt>{t('created')}</dt><dd>{when(asset.createdAt)}</dd>
                 {asset.costUsd !== undefined && <><dt>{t('cost')}</dt><dd>{usd(asset.costUsd)}</dd></>}
                 {asset.seed !== undefined && <><dt>{t('seed')}</dt><dd>{asset.seed}</dd></>}

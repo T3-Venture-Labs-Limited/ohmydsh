@@ -18,6 +18,9 @@ import { registerV2Tools } from './tools/tools.js'
 import type { AssetRecord, ProviderId } from './contracts.js'
 import { resolveReferenceImages } from '../reference-image.js'
 import { saveImageToWorkspace } from '../workspace-save.js'
+import { AgentCapture } from './agent-capture.js'
+import { BACKFILL_KEY, readBackfillMarker, runBackfill, type BackfillSummary, type SessionHistory } from './agent-backfill.js'
+import type { AgentMediaApi } from './routes/agent-media.js'
 
 export const OPENROUTER_KEY_REF = 'OPENROUTER_API_KEY'
 export const REPLICATE_KEY_REF = 'REPLICATE_API_TOKEN'
@@ -48,6 +51,14 @@ export async function resolveKey(ctx: Context, ref: string): Promise<string | un
     if (env !== undefined && env.length > 0) return env
   }
   return undefined
+}
+
+/** Loose faces of the host services the agent capture reads. All optional: without them capture still works, just with less provenance. */
+interface SessionLike { id: string; header?: { cwd?: string } }
+interface SessionQueryLike {
+  listSessions(): Promise<{ header: { id: string; cwd?: string } }[]>
+  readSession(id: string): Promise<{ session: { cwd?: string }; events: readonly { type: string; time?: number; data?: unknown }[] }>
+  readTitle?(id: string): Promise<{ title?: string } | undefined>
 }
 
 export function wireV2(ctx: Context, options: WireOptions): StudioCore {
@@ -87,6 +98,50 @@ export function wireV2(ctx: Context, options: WireOptions): StudioCore {
     workflows: () => { const c = cfg(); const all = resolveComfyUIWorkflows(c); const active = activeComfyUIWorkflow(c); return active === undefined ? all : [active, ...all.filter(w => w.name !== active.name)] },
   }))
 
+  // Agent media: every image/video a tool makes in ANY chat lands in the gallery (setting `agent.capture`, default on).
+  // No database yet means nobody has switched it off: stay on without creating the file just to look.
+  const captureEnabled = (): boolean => !existsSync(join(core.root, DB_FILE)) || core.db.getSetting('agent.capture') !== '0'
+  const capture = new AgentCapture({
+    core, enabled: captureEnabled, logger: ctx.logger, ...(options.home === undefined ? {} : { home: options.home }),
+    readAttachment: async ref => (await ctx.attachments.readImage(ref)).data,
+  })
+  ctx.effect(() => () => { capture.dispose() }, 'dsh-studio: agent media capture')
+  // The feed is the durable session event stream (the same one dsh-langfuse reads). A host without it simply captures nothing.
+  if (typeof (ctx as { on?: unknown }).on === 'function') {
+    ctx.on('session/event', (session: unknown, event: unknown) => { capture.onEvent(session as SessionLike, event as { type: string; time?: number; data?: unknown }) })
+  }
+  // `sessionQuery` is an optional service: Cordis throws when a service is read without an inject, so it is picked up only when it exists.
+  let sessionQueryService: SessionQueryLike | undefined
+  if (typeof (ctx as { inject?: unknown }).inject === 'function') {
+    ctx.inject(['sessionQuery'], (queryCtx: Context) => {
+      sessionQueryService = (queryCtx as unknown as { sessionQuery?: SessionQueryLike }).sessionQuery
+      return () => { sessionQueryService = undefined }
+    })
+  }
+  const sessionQuery = (): SessionQueryLike | undefined => sessionQueryService
+  const history = (): SessionHistory | undefined => {
+    const q = sessionQuery()
+    if (q === undefined) return undefined
+    return {
+      list: async () => (await q.listSessions()).map(r => ({ id: String(r.header.id), ...(r.header.cwd === undefined ? {} : { cwd: r.header.cwd }) })),
+      read: async id => { const log = await q.readSession(id); return { ...(log.session.cwd === undefined ? {} : { cwd: log.session.cwd }), events: log.events } },
+    }
+  }
+  let backfilling: Promise<BackfillSummary> | undefined
+  const agentApi: AgentMediaApi = {
+    running: () => backfilling !== undefined,
+    backfill: () => (backfilling ??= Promise.resolve().then(() => runBackfill(core, capture, { ...(options.home === undefined ? {} : { home: options.home }), history: history() })).finally(() => { backfilling = undefined })),
+    sessionTitle: async id => { try { return (await sessionQuery()?.readTitle?.(id))?.title } catch { return undefined } },
+  }
+  // First start with this version: one automatic backfill, after the host has settled. The marker makes it run once; the gallery menu reruns it.
+  const firstBackfill = setTimeout(() => {
+    if (!captureEnabled() || readBackfillMarker(core) !== undefined || core.db.getSetting(BACKFILL_KEY) !== undefined) return
+    // A timer callback must never throw: an uncaught exception here would take the whole host down.
+    try { void agentApi.backfill().then(r => { ctx.logger.info(`dsh-studio: collected agent media from existing chats and folders (${String(r.imported)} new, ${String(r.alreadyThere)} already there, ${String(r.skipped)} skipped)`) }).catch((error: unknown) => { ctx.logger.warn(`dsh-studio: agent media backfill failed: ${error instanceof Error ? error.message.slice(0, 200) : 'unknown error'}`) }) } catch { /* never throw out of a timer */ }
+  }, 20_000)
+  firstBackfill.unref()
+  ctx.effect(() => () => { clearTimeout(firstBackfill) }, 'dsh-studio: agent media first backfill')
+
   // Resume persisted jobs once the registry is populated. Runs after the first tick so settings are loaded.
   const resume = setTimeout(() => {
     // Nothing to resume unless a database already exists: do not create one just to find it empty.
@@ -102,7 +157,7 @@ export function wireV2(ctx: Context, options: WireOptions): StudioCore {
   const hyperframes = new HyperframesManager(core, { logger: ctx.logger, cliPath: () => core.db.getSetting('hyperframes.cli'), allowNpx: () => core.db.getSetting('hyperframes.npx') === '1' })
   ctx.effect(() => () => { void hyperframes.dispose() }, 'dsh-studio: hyperframes previews')
   ctx.inject(['webServer'], (webCtx: Context) => {
-    const handler = createV2Handler(core, hyperframes, { readAttachment: async ref => (await ctx.attachments.readImage(ref)).data, ...(options.home === undefined ? {} : { home: options.home }) })
+    const handler = createV2Handler(core, hyperframes, { readAttachment: async ref => (await ctx.attachments.readImage(ref)).data, ...(options.home === undefined ? {} : { home: options.home }) }, agentApi)
     webCtx.effect(() => webCtx.webServer.register(options.withAdmission({ kind: 'prefix', path: ROUTE_BASE, handler: (req, res) => handler(req, res) })), 'dsh-studio: v2 routes')
   })
 

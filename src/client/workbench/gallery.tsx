@@ -9,6 +9,7 @@ import { IconCheck, IconDownload, IconFolder, IconPlus, IconSelect, IconTrash } 
 import { KindBadge, MediaThumb, StarToggle, errorText } from './ui.js'
 import { liveStore, sortedJobs } from './live.js'
 import { LegacyImport } from './legacy-import.js'
+import { AgentMediaImport } from './agent-import.js'
 import { useStore } from './store.js'
 import { isActive, type AssetQuery, type AssetRecord, type SpendRow } from './types.js'
 import { useModels } from './live.js'
@@ -51,6 +52,7 @@ export function GalleryView({ compact = false }: { compact?: boolean }) {
   const wb = useWorkbench()
   const [kind, setKind] = useState<KindFilter>('all')
   const [favorite, setFavorite] = useState(false)
+  const [fromChats, setFromChats] = useState(false)
   const [q, setQ] = useState('')
   const [qApplied, setQApplied] = useState('')
   const [tag, setTag] = useState('')
@@ -76,9 +78,9 @@ export function GalleryView({ compact = false }: { compact?: boolean }) {
   useEffect(refreshMeta, [refreshMeta])
 
   const query = useMemo<AssetQuery>(() => ({
-    ...(kind === 'all' ? {} : { kind }), ...(favorite ? { favorite: true } : {}), ...(qApplied.trim() === '' ? {} : { q: qApplied.trim() }),
+    ...(kind === 'all' ? {} : { kind }), ...(favorite ? { favorite: true } : {}), ...(fromChats ? { fromChats: true } : {}), ...(qApplied.trim() === '' ? {} : { q: qApplied.trim() }),
     ...(tag === '' ? {} : { tag }), ...(model === '' ? {} : { model }), ...(collection === '' ? {} : { collection }),
-  }), [kind, favorite, qApplied, tag, model, collection])
+  }), [kind, favorite, fromChats, qApplied, tag, model, collection])
   const data = useGalleryData(query)
   const ids = useMemo(() => data.items.map(i => i.id), [data.items])
   const sentinel = useRef<HTMLDivElement>(null)
@@ -134,7 +136,7 @@ export function GalleryView({ compact = false }: { compact?: boolean }) {
   }
 
   const modelOptions = [{ value: '', label: t('anyModel') }, ...models.models.filter(m => data.items.some(i => i.modelId === m.id) || m.id === model).map(m => ({ value: m.id, label: m.label }))]
-  const filtersActive = kind !== 'all' || favorite || q !== '' || tag !== '' || model !== '' || collection !== ''
+  const filtersActive = kind !== 'all' || favorite || fromChats || q !== '' || tag !== '' || model !== '' || collection !== ''
 
   return (
     <div
@@ -156,7 +158,8 @@ export function GalleryView({ compact = false }: { compact?: boolean }) {
         <div className="st-filters__row">
           <SegmentedControl<KindFilter> id="st-kind" label="Media kind" value={kind} onChange={setKind} options={[{ value: 'all', label: t('all') }, { value: 'image', label: t('images') }, { value: 'video', label: t('videos') }]} />
           <button type="button" className="st-chip" aria-pressed={favorite} onClick={() => { setFavorite(v => !v) }}>★ {t('favorites')}</button>
-          {filtersActive && <button type="button" className="st-chip" onClick={() => { setKind('all'); setFavorite(false); setQ(''); setTag(''); setModel(''); setCollection('') }}>{t('clear')}</button>}
+          <button type="button" className="st-chip" aria-pressed={fromChats} onClick={() => { setFromChats(v => !v) }}>{t('fromChats')}</button>
+          {filtersActive && <button type="button" className="st-chip" onClick={() => { setKind('all'); setFavorite(false); setFromChats(false); setQ(''); setTag(''); setModel(''); setCollection('') }}>{t('clear')}</button>}
         </div>
         {!compact && (
           <div className="st-filters__row">
@@ -184,6 +187,7 @@ export function GalleryView({ compact = false }: { compact?: boolean }) {
         <span>{data.total > 0 ? t('nOfTotal', { n: data.items.length, total: data.total }) : ''}{stats !== undefined && !filtersActive ? ` · ${bytes(stats.bytes)} stored` : ''}</span>
         <span className="st-row">
           {data.hasMore && <Button size="sm" onClick={data.more} disabled={data.loading}>{t('loadMore')}</Button>}
+          <AgentMediaImport onDone={() => { void data.reload(); refreshMeta() }} />
           <LegacyImport onDone={() => { void data.reload(); refreshMeta() }} />
           <label className="st-link"><input type="file" accept="image/*,video/*" multiple className="st-sr-only" onChange={(e) => { if (e.target.files !== null) void importFiles(e.target.files); e.target.value = '' }} />{busy ?? t('importFiles')}</label>
         </span>

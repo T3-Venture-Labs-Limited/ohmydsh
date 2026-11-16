@@ -4,7 +4,12 @@ export const en = {
   tabCreate: 'Create', tabGallery: 'Gallery', tabStyles: 'Styles', tabVideo: 'Video edit',
   loading: 'Loading Studio…',
   // gallery
-  searchPrompts: 'Search prompts, tags, notes', all: 'All', images: 'Images', videos: 'Videos', favorites: 'Favourites',
+  searchPrompts: 'Search prompts, tags, notes', all: 'All', images: 'Images', videos: 'Videos', favorites: 'Favourites', fromChats: 'From chats',
+  fromChat: 'From chat', openChat: 'Open chat', untitledChat: 'Untitled chat', chatGone: 'Chat not available', madeByTool: 'Made by {tool}',
+  importAgent: 'Import agent images and videos', importAgentBusy: 'Importing…', importAgentTitle: 'Import agent images and videos',
+  importAgentHint: 'Looks through your existing chats and the agent media folders and adds everything the agent generated that is not in the gallery yet. Nothing is moved or deleted.',
+  importAgentRun: 'Import now', importAgentDone: 'Import finished', importedN: 'Imported', alreadyThereN: 'Already there', skippedN: 'Skipped', failedN: 'Failed',
+  scannedChats: 'Chats scanned', scannedFiles: 'Files scanned', lastRun: 'Last run',
   anyTag: 'Any tag', anyModel: 'Any model', anyCollection: 'Any collection', spend: 'Spend', select: 'Select', selectedN: '{n} selected',
   clear: 'Clear', downloadZip: 'Download ZIP', addTag: 'Add tag', addToCollection: 'Add to collection', deleteSelected: 'Delete',
   newCollection: 'New collection…', collectionName: 'Collection name', create: 'Create', cancel: 'Cancel',

@@ -4,7 +4,7 @@ import { ROUTE_BASE } from '../../src/v2/routes/index.js'
 import { createV2Handler } from '../../src/v2/routes/index.js'
 
 const doc = readFileSync(new URL('../../docs/API.md', import.meta.url), 'utf8')
-const routesSource = ['assets', 'jobs', 'models', 'index'].map(n => readFileSync(new URL(`../../src/v2/routes/${n}.ts`, import.meta.url), 'utf8')).join('\n')
+const routesSource = ['assets', 'jobs', 'models', 'index', 'agent-media'].map(n => readFileSync(new URL(`../../src/v2/routes/${n}.ts`, import.meta.url), 'utf8')).join('\n')
 
 describe('docs/API.md stays in sync with the routes', () => {
   it('names the base path and every route literal the handlers implement', () => {

@@ -327,6 +327,15 @@ export function apply(ctx: Context): void {
     notifyCredentialsUpdated()
   })
 
+  // "Open chat" on assets collected from chats: the workspace navigation service every DSH shell provides (same call dsh-notify-me and
+  // dsh-pwa use). Without it the button simply does not show.
+  ;(ctx as unknown as { inject(names: string[], fn: (scope: { get(name: string): unknown }) => void | (() => void)): void }).inject(['uiWorkspace'], (scope) => {
+    const ui = scope.get('uiWorkspace') as { openSession?: (id: string) => void } | undefined
+    if (typeof ui?.openSession !== 'function') return
+    studioBus.setChatOpener((id) => { ui.openSession!(id) })
+    return () => { studioBus.setChatOpener(undefined) }
+  })
+
   // 3. v2 tool cards (studio_make / studio_job / studio_gallery): live job progress and asset thumbnails from the host API.
   for (const key of ['studio_make', 'studio_job', 'studio_gallery']) {
     ctx.slots.inject('tool.call.toolview', () => register({

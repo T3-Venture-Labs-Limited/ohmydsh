@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 const BASE = '/plugins/dsh-studio/v2'
 
 interface ProviderInfo { id: string; configured: boolean; label?: string; keyRef?: string; getKeyUrl?: string; covers?: string }
-interface V2Settings { 'replicate.pinned': string; 'hyperframes.cli': string; 'hyperframes.npx': '0' | '1' | '' }
+interface V2Settings { 'replicate.pinned': string; 'hyperframes.cli': string; 'hyperframes.npx': '0' | '1' | ''; 'agent.capture': '0' | '1' | '' }
 
 export interface CredentialsLike {
   set(ref: string, value: string): Promise<{ ok: boolean; error?: { message?: string } }>
@@ -65,6 +65,13 @@ export function V2ProvidersSettings({ credentials, writable, credentialsAvailabl
       reloadProviders()
     } catch { /* ignore */ }
   }
+  const toggleCapture = async (on: boolean): Promise<void> => {
+    setSettings(prev => (prev === undefined ? prev : { ...prev, 'agent.capture': on ? '1' : '0' }))
+    try { await getJson('/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ 'agent.capture': on ? '1' : '0' }) }) } catch (error) {
+      setSettings(prev => (prev === undefined ? prev : { ...prev, 'agent.capture': on ? '0' : '1' }))
+      setSettingsMessage({ text: error instanceof Error ? error.message : 'Could not save.', error: true })
+    }
+  }
   const saveSettings = async (): Promise<void> => {
     try {
       const r = await getJson<{ settings: V2Settings }>('/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ 'replicate.pinned': pinned.trim(), 'hyperframes.cli': cli.trim() }) })
@@ -92,6 +99,15 @@ export function V2ProvidersSettings({ credentials, writable, credentialsAvailabl
           </form>
         )
       })}
+      {settings !== undefined && (
+        <div className="dsh-st-field">
+          <label className="dsh-st-check-row">
+            <input type="checkbox" checked={settings['agent.capture'] !== '0'} onChange={(event) => { void toggleCapture(event.target.checked) }} disabled={!writable} />
+            <span className="dsh-st-label">Save images and videos the agent makes in any chat to the gallery</span>
+          </label>
+          <span className="dsh-st-hint">Covers image_generate, video_generate and any other tool that returns an image. Each item shows which chat it came from. Turning this off only stops new items; nothing is removed.</span>
+        </div>
+      )}
       {settings !== undefined && (
         <form className="dsh-st-field" onSubmit={(event) => { event.preventDefault(); void saveSettings() }}>
           <label className="dsh-st-field">

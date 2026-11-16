@@ -184,7 +184,7 @@ export interface AssetRecord {
   codec?: string
   posterSha?: string
   createdAt: number
-  source: 'generated' | 'import' | 'render' | 'derived'
+  source: 'generated' | 'import' | 'render' | 'derived' | 'agent'
   jobId?: string
   op?: Operation
   provider?: ProviderId
@@ -201,8 +201,12 @@ export interface AssetRecord {
   sessionId?: string
   workspacePath?: string
   notes?: string
+  /** Set on assets the gallery collected from an agent tool result (source `agent`): which tool made it and the provider/model the agent asked for. */
+  origin?: AssetOrigin
   tags: readonly string[]
 }
+
+export interface AssetOrigin { tool: string; provider?: string; model?: string }
 
 export type EdgeRole = 'source' | 'reference' | 'mask' | 'first_frame' | 'last_frame' | 'video' | 'upscale-of' | 'extend-of'
 

@@ -74,3 +74,35 @@ describe('studio_make through the real plugin entry point', () => {
     await expect(tools.get('studio_make')!.execute({ op: 'edit', prompt: 'x' }, empty)).rejects.toThrow(/requires an image in the current conversation/)
   })
 })
+
+describe('agent media capture through the real plugin entry point', () => {
+  it('registers a session/event listener and a foreign tool result with an image attachment lands in the gallery within a moment, while studio_* results do not', async () => {
+    let listener: ((session: unknown, event: unknown) => void) | undefined
+    const bytes = new Uint8Array(await png([12, 200, 90])); stored.set('sha256:agent-img', { data: bytes, mediaType: 'image/png' })
+    const reg = new Map<string, Tool>()
+    const ctx = {
+      tools: { register: (t: Tool) => { reg.set(t.name, t) } }, effect: (setup: () => unknown) => setup(), get: () => undefined,
+      on: (name: string, fn: (s: unknown, e: unknown) => void) => { if (name === 'session/event') listener = fn; return () => undefined },
+      credentials: { resolve: vi.fn(async () => undefined) },
+      inject: (services: readonly string[], cb: (owner: unknown) => void) => { if (services.includes('settings')) cb({ settings: { installSection: vi.fn() } }) },
+      attachments: { imageLimits: { maxImageBytes: 10 * 1024 * 1024, mediaTypes: ['image/png'] }, readImage: async (r: { attachmentId: string }) => { const s = stored.get(String(r.attachmentId)); if (s === undefined) throw new Error('gone'); return { ref: r, data: s.data } }, saveImage: vi.fn() },
+      logger: { warn: vi.fn(), info: vi.fn() },
+    } as unknown as Context
+    apply(ctx, {} as never)
+    expect(listener).toBeTypeOf('function')
+    const session = { id: 'chat-42', header: { cwd: workspace } }
+    const now = Date.now()
+    listener!(session, { type: 'tool/call', time: now, data: { callId: 'k1', name: 'image_generate', arguments: JSON.stringify({ prompt: 'a green door', provider: 'gpt' }) } })
+    listener!(session, { type: 'tool/result', time: now + 5, data: { message: { toolCallId: 'k1', isError: false, content: [{ type: 'text', text: 'Saved 1 image(s)' }, { type: 'image', attachment: { attachmentId: 'sha256:agent-img', mediaType: 'image/png', bytes: bytes.length, width: 64, height: 48 } }] } } })
+    listener!(session, { type: 'tool/call', time: now + 6, data: { callId: 'k2', name: 'studio_make', arguments: '{}' } })
+    listener!(session, { type: 'tool/result', time: now + 7, data: { message: { toolCallId: 'k2', isError: false, content: [{ type: 'image', attachment: { attachmentId: 'sha256:agent-img', mediaType: 'image/png', bytes: bytes.length, width: 64, height: 48 } }] } } })
+    const gallery = await reg.get('studio_gallery')!.execute({ action: 'list' } as never, { signal: new AbortController().signal, agent: { session: { id: 'x', header: {} } } }).catch(() => undefined)
+    void gallery
+    const { createCore } = await import('../../src/v2/core.js')
+    const core = createCore({ home })
+    await vi.waitFor(() => { expect(core.db.queryAssets({ source: 'agent' }).total).toBe(1) }, { timeout: 3000 })
+    expect(core.db.queryAssets({ source: 'agent' }).items[0]).toMatchObject({ sessionId: 'chat-42', prompt: 'a green door', origin: { tool: 'image_generate', provider: 'gpt' } })
+    expect(core.db.queryAssets({}).total).toBe(1)
+    await core.close()
+  })
+})

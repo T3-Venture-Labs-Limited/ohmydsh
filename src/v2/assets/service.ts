@@ -1,8 +1,8 @@
 /** Ingests produced files into the content-addressed store and the SQLite index. */
 import { randomBytes } from 'node:crypto'
-import { writeFile, mkdir, rm } from 'node:fs/promises'
+import { writeFile, mkdir, rm, open } from 'node:fs/promises'
 import { join } from 'node:path'
-import { AdapterError, type AssetEdge, type AssetRecord, type AssetRef, type EdgeRole, type MediaKind, type Operation, type ProducedFile, type ProviderId } from '../contracts.js'
+import { AdapterError, type AssetEdge, type AssetOrigin, type AssetRecord, type AssetRef, type EdgeRole, type MediaKind, type Operation, type ProducedFile, type ProviderId } from '../contracts.js'
 import { BlobStore, extForMime, sniffMediaType } from './blobs.js'
 import { StudioDb } from './db.js'
 import { makePoster, makeThumb, probeFile, probeImage } from './media.js'
@@ -36,6 +36,7 @@ export interface IngestMeta {
   createdAt?: number
   favorite?: boolean
   workspacePath?: string
+  origin?: AssetOrigin
 }
 
 export const MAX_ASSET_BYTES = 2 * 1024 * 1024 * 1024
@@ -58,6 +59,18 @@ export class AssetService {
     const kind: MediaKind = mime.startsWith('video/') ? 'video' : 'image'
     const stored = await this.blobs.put(bytes, ext)
     return this.record({ sha256: stored.sha256, path: stored.path, ext, mime, kind, bytes: bytes.byteLength }, bytes, meta)
+  }
+
+  /** Store a local video file without loading it into memory (hash, then copy once). Throws for anything that is not a recognised video. */
+  async ingestFile(path: string, meta: IngestMeta): Promise<AssetRecord> {
+    const handle = await open(path, 'r')
+    let head: Uint8Array
+    try { const buf = Buffer.alloc(512); const { bytesRead } = await handle.read(buf, 0, 512, 0); head = new Uint8Array(buf.subarray(0, bytesRead)) } finally { await handle.close() }
+    const mime = sniffMediaType(head)
+    const ext = mime === undefined ? undefined : extForMime(mime)
+    if (mime === undefined || ext === undefined || !mime.startsWith('video/')) throw new AdapterError('invalid', 'Not a recognised video file')
+    const stored = await this.blobs.putFile(path, ext)
+    return this.record({ sha256: stored.sha256, path: stored.path, ext, mime, kind: 'video', bytes: stored.bytes }, undefined, meta)
   }
 
   /** Download a produced file (never trusting the URL), then store it. */
@@ -115,6 +128,7 @@ export class AssetService {
       ...(meta.params === undefined ? {} : { params: meta.params }), ...(meta.seed === undefined ? {} : { seed: meta.seed }),
       ...(meta.costUsd === undefined ? {} : { costUsd: meta.costUsd }), ...(meta.sessionId === undefined ? {} : { sessionId: meta.sessionId }),
       ...(meta.title === undefined ? {} : { title: meta.title }), ...(meta.workspacePath === undefined ? {} : { workspacePath: meta.workspacePath }),
+      ...(meta.origin === undefined ? {} : { origin: meta.origin }),
     }
     const edges: AssetEdge[] = (meta.parents ?? []).map((p, i) => ({ childId: id, parentId: p.assetId, role: p.role, ord: p.ord ?? i }))
     this.db.insertAsset(asset, edges)

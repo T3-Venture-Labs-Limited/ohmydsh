@@ -137,10 +137,22 @@ export function apply(ctx: Context): void {
     event: { id: e.eventId, slug: e.triggerSlug, toolkit: e.toolkit, bytes: bytesOf(e) }, status, ...extra,
   })
 
+  /** dsh-triggers (optional): automations with a Composio source get every event; they own their own log and limits. */
+  const triggers = (): { ingest(e: { source: 'composio'; triggerSlug: string; triggerInstanceId?: string; eventId: string; data: Record<string, unknown> }): Promise<{ matched: number }> } | undefined => get('triggers')
+
   async function onEvent(event: NormalizedEvent): Promise<void> {
     if (!remember(event.eventId)) return // duplicate
+    let viaTriggers = 0
+    const t = triggers()
+    if (t !== undefined) {
+      try { viaTriggers = (await t.ingest({ source: 'composio', triggerSlug: event.triggerSlug, triggerInstanceId: event.triggerId, eventId: event.eventId, data: event.data })).matched }
+      catch (error) { log.warn(`composio: triggers ingest failed: ${String(error)}`) }
+    }
     const matching = store.data.routes.filter((r) => r.triggerInstanceId === event.triggerId)
-    if (matching.length === 0) { log.warn(`composio: dropped event ${event.eventId.slice(0, 12)} for unknown trigger ${event.triggerId.slice(0, 12)}`); return }
+    if (matching.length === 0) {
+      if (viaTriggers === 0) log.warn(`composio: no route or Triggers automation for event ${event.eventId.slice(0, 12)} (trigger ${event.triggerId.slice(0, 12)})`)
+      return
+    }
     for (const r of matching) {
       const recipe = store.data.recipes.find((x) => x.id === r.recipeId)
       if (recipe === undefined) { await store.log(row(r, r.recipeId, event, 'skipped', { reason: 'recipe-missing' })); continue }
@@ -184,6 +196,24 @@ export function apply(ctx: Context): void {
       }, 'composio: tools')
     } catch (error) { log.warn(`composio: could not attach tools: ${String(error)}`) }
   }) as never), 'composio: agent hook')
+
+  // ---------- service for dsh-triggers ----------
+  // Triggers automations with a Composio source create/remove their trigger instance through this. Routes on the
+  // Composio page and Triggers automations can share one instance (Composio de-duplicates identical configs), so an
+  // instance is deleted only when neither side still uses it.
+  ctx.provide('composio', {
+    /** Connected accounts per toolkit (for pickers). */
+    connections: () => service.connections(),
+    /** Trigger types a toolkit offers. */
+    triggerTypes: (toolkit: string) => api.triggerTypes(toolkit),
+    /** Create (upsert) a trigger instance; returns its `ti_*` id. */
+    ensureTrigger: (slug: string, connectedAccountId: string, config: Record<string, unknown> = {}) => api.createTrigger(slug, connectedAccountId, config),
+    /** Delete a trigger instance unless a Composio-page route still uses it. */
+    releaseTrigger: async (instanceId: string) => { if (!instanceStillUsed(store.data.routes, instanceId)) await api.deleteTrigger(instanceId) },
+    setTriggerEnabled: (instanceId: string, enabled: boolean) => api.setTriggerStatus(instanceId, enabled ? 'enable' : 'disable'),
+    /** Listener state, so Triggers can warn when events cannot arrive. */
+    listenerState: () => listener.current,
+  })
 
   // ---------- automation-models source ----------
   ctx.inject(['automationModels'], (c: Context) => {

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Triggers",
+    "description": "Event automations for DSH: a webhook call, a new file in a folder, or a Composio event starts a new chat (or wakes one chat) with a prompt built from the event. A Triggers page in the sidebar lists every automation, its webhook URL and secret, a prompt preview and test button, and every run with a link to its chat. Event data is passed as fenced, untrusted text; runs default to read-only files and read-only tools.",
+    "detail": "docs/DETAIL.md"
+  }
+}

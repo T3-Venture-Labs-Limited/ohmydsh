@@ -1,7 +1,7 @@
 // Typed calls to the host routes (same-origin POST JSON, document-relative so a reverse-proxy prefix keeps working).
 export interface Route { provider: string; model: string; reasoningEffort?: string }
-export interface Account { id?: string; wordId: string; alias: string | null; status: string }
-export interface Toolkit { slug: string; name: string; accounts: Account[]; hasExpired: boolean }
+export interface Account { id?: string; wordId: string; alias: string | null; displayName?: string | null; status: string }
+export interface Toolkit { slug: string; name: string; logo?: string | null; accounts: Account[]; hasExpired: boolean }
 export interface Recipe {
   id: string; name: string; promptTemplate: string; cwd?: string; agentPreset?: string; model: Route | null
   allowToolkits: string[]; allowTools: string[]; sandbox: 'read-only' | 'workspace-write'; payload: { maxChars?: number; include?: string[] }

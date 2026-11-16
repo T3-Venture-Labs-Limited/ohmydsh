@@ -15,6 +15,7 @@ import { createUserMessage, type ContextFormed } from '@deepseek-ai/dsh-llm'
 import { ComposioApi, ApiError } from './host/api.ts'
 import { ComposioCli } from './host/cli.ts'
 import { ComposioService } from './host/service.ts'
+import { ToolkitCatalog } from './host/catalog.ts'
 import { composioTools } from './host/tools.ts'
 import { gate, type RunPolicy } from './host/risk.ts'
 import { PinStore, TurnPins, type PinnableAgent } from './host/pin.ts'
@@ -67,7 +68,7 @@ export function apply(ctx: Context): void {
   const store = new ComposioStore(dir)
   const cli = new ComposioCli({ outputDir: join(dir, 'outputs') })
   const api = new ComposioApi()
-  const service = new ComposioService(cli, api)
+  const service = new ComposioService(cli, api, new ToolkitCatalog(api, join(dir, 'toolkits.json')))
   const svc = ctx as unknown as Services
   const get = <T>(key: string): T | undefined => (ctx as unknown as { get(k: string): T | undefined }).get(key)
 

@@ -7,13 +7,20 @@ export class ApiError extends Error {
 
 export interface AccountRow {
   id: string; wordId: string; alias: string | null; status: string; statusReason: string | null; disabled: boolean
-  toolkit: string; toolkitName: string; authScheme: string | null; composioManaged: boolean; createdAt: string | null
+  displayName: string | null; toolkit: string; toolkitName: string; authScheme: string | null; composioManaged: boolean; createdAt: string | null
 }
 export interface TriggerType { slug: string; name: string; description: string; type: string; instructions: string; config: unknown }
 export interface TriggerInstance { id: string; slug: string; connectedAccountId: string | null; disabled: boolean }
 
 type Fetch = typeof fetch
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null)
+/** The one non-secret identity field some providers store next to the tokens (`displayName`, or `user.email`/`user.name`). */
+export function humanName(data: Record<string, unknown>): string | null {
+  // Composio masks some values as "REDACTED"; that is not a name.
+  const usable = (v: string | null): string | null => (v !== null && v.trim() !== '' && !/^\*+$|^redacted$/i.test(v.trim()) ? v.trim().slice(0, 80) : null)
+  const user = rec(data['user'])
+  return usable(str(data['displayName'])) ?? usable(str(user['email'])) ?? usable(str(user['name']))
+}
 const rec = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null ? v as Record<string, unknown> : {})
 
 export class ComposioApi {
@@ -47,10 +54,11 @@ export class ComposioApi {
       const json = rec(await this.request('GET', `/api/v3.1/connected_accounts?limit=100${cursor === null ? '' : `&cursor=${encodeURIComponent(cursor)}`}`))
       for (const raw of Array.isArray(json['items']) ? json['items'] : []) {
         const i = rec(raw); const toolkit = rec(i['toolkit']); const auth = rec(i['auth_config'])
-        // `data` (tokens) is deliberately never copied.
+        // `data` holds the tokens: only the provider's human-readable account name is read from it (a short allowlist), nothing else.
+        const data = rec(i['data'])
         out.push({
           id: str(i['id']) ?? '', wordId: str(i['word_id']) ?? '', alias: str(i['alias']), status: str(i['status']) ?? 'UNKNOWN', statusReason: str(i['status_reason']),
-          disabled: i['is_disabled'] === true, toolkit: str(toolkit['slug']) ?? '', toolkitName: str(toolkit['name']) ?? str(toolkit['slug']) ?? '',
+          disabled: i['is_disabled'] === true, displayName: humanName(data), toolkit: str(toolkit['slug']) ?? '', toolkitName: str(toolkit['name']) ?? str(toolkit['slug']) ?? '',
           authScheme: str(auth['auth_scheme']), composioManaged: auth['is_composio_managed'] === true, createdAt: str(i['created_at']),
         })
       }

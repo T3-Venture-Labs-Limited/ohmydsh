@@ -3,6 +3,8 @@
  * "user actions" guidance). Everything returns compact, capped data.
  */
 import { ComposioApi, type AccountRow } from './api.ts'
+import { ToolkitCatalog } from './catalog.ts'
+import { prettifySlug } from '../shared/names.ts'
 import { ComposioCli, CliError } from './cli.ts'
 import { riskOf, type Risk } from './risk.ts'
 
@@ -10,13 +12,14 @@ export const MAX_TEXT = 12_000
 const clip = (text: string, n = MAX_TEXT): string => (text.length <= n ? text : `${text.slice(0, n)}\n…[truncated ${String(text.length - n)} chars]`)
 
 export interface ToolSummary { slug: string; name: string; description: string; toolkit: string; risk: Risk }
-export interface ToolkitRow { slug: string; name: string; accounts: { id?: string; wordId: string; alias: string | null; status: string }[]; hasExpired: boolean }
+export interface AccountSummary { id?: string; wordId: string; alias: string | null; displayName: string | null; status: string }
+export interface ToolkitRow { slug: string; name: string; logo: string | null; accounts: AccountSummary[]; hasExpired: boolean }
 
 const rec = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null ? v as Record<string, unknown> : {})
 
 export class ComposioService {
   private tagCache = new Map<string, { at: number; tags: Map<string, string[]> }>()
-  constructor(readonly cli: ComposioCli, readonly api: ComposioApi) {}
+  constructor(readonly cli: ComposioCli, readonly api: ComposioApi, readonly catalog: ToolkitCatalog = new ToolkitCatalog(api)) {}
 
   /** whoami + login health. Never throws. */
   async health(): Promise<{ ok: boolean; email?: string; org?: string; error?: string }> {
@@ -26,17 +29,18 @@ export class ComposioService {
     } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
   }
 
-  /** Accounts grouped by toolkit (REST for ids + auth info; `data` is never copied). */
+  /** Accounts grouped by toolkit (REST for ids + auth info; tokens are never copied). Names and logos come from the toolkit catalog. */
   async connections(): Promise<ToolkitRow[]> {
-    const rows = await this.api.connectedAccounts()
-    const by = new Map<string, ToolkitRow & { _name: string }>()
+    const [rows, catalog] = await Promise.all([this.api.connectedAccounts(), this.catalog.get()])
+    const by = new Map<string, ToolkitRow>()
     for (const a of rows) {
-      const t = by.get(a.toolkit) ?? { slug: a.toolkit, name: a.toolkitName || a.toolkit, _name: a.toolkitName, accounts: [], hasExpired: false }
-      t.accounts.push({ id: a.id, wordId: a.wordId, alias: a.alias, status: a.status })
+      const info = catalog.get(a.toolkit)
+      const t = by.get(a.toolkit) ?? { slug: a.toolkit, name: info?.name ?? (a.toolkitName !== '' && a.toolkitName !== a.toolkit ? a.toolkitName : prettifySlug(a.toolkit)), logo: info?.logo ?? null, accounts: [], hasExpired: false }
+      t.accounts.push({ id: a.id, wordId: a.wordId, alias: a.alias, displayName: a.displayName, status: a.status })
       if (a.status !== 'ACTIVE' && a.status !== 'INITIALIZING') t.hasExpired = true
       by.set(a.toolkit, t)
     }
-    return [...by.values()].map(({ _name, ...t }) => t).sort((a, b) => a.slug.localeCompare(b.slug))
+    return [...by.values()].sort((a, b) => a.slug.localeCompare(b.slug))
   }
   accountsRaw(): Promise<AccountRow[]> { return this.api.connectedAccounts() }
 
@@ -56,7 +60,7 @@ export class ComposioService {
     const items = Array.isArray(raw) ? raw : []
     return items.map((i) => {
       const r = rec(i); const tags = Array.isArray(r['tags']) ? r['tags'].filter((t): t is string => typeof t === 'string') : []
-      return { slug: String(r['slug'] ?? ''), name: String(r['name'] ?? ''), description: String(r['description'] ?? '').slice(0, 220), toolkit, risk: riskOf(tags) }
+      return { slug: String(r['slug'] ?? ''), name: String(r['name'] ?? ''), description: String(r['description'] ?? '').slice(0, 600), toolkit, risk: riskOf(tags) }
     })
   }
 

@@ -1,0 +1,540 @@
+/**
+ * Composer tool-row pill: switch the default image provider without leaving
+ * the chat. Registered into the official 'conversation.input.right' slot; the
+ * write path is the same `provider` settings field the settings card uses, so
+ * the two views can never disagree.
+ */
+import { Fragment, useEffect, useRef, useState } from 'react'
+import {
+  CLOUD_IMAGE_PROVIDERS,
+  DEFAULT_MODELS,
+  IMAGE_PROVIDERS,
+  SUBSCRIPTION_PROVIDERS,
+  SUBSCRIPTION_STATUS_ROUTE,
+  activeComfyUIWorkflow,
+  cloudCredentialRef,
+  resolveComfyUIWorkflows,
+  isSubscriptionProvider,
+  resolveOpenAICompatChannel,
+  resolveOpenAICompatChannels,
+  resolveOpenAICompatModels,
+  type CloudImageProvider,
+  type ComfyUIWorkflowEntry,
+  type OpenAICompatChannel,
+  type ImageProvider,
+  type SubscriptionProvider,
+} from '../shared.js'
+import type { SettingsScope } from './index.js'
+import type { LocaleService } from './locale-service.js'
+import { writeSetting } from './settings-write.js'
+
+/** Settings fields the pill reads; a structural subset of the full settings shape. */
+export interface PillSettings {
+  provider?: ImageProvider
+  googleModel?: string
+  openaiModel?: string
+  openaiCompatLabel?: string
+  openaiCompatModel?: string
+  openaiCompatModels?: readonly string[]
+  openaiCompatChannels?: readonly OpenAICompatChannel[]
+  openaiCompatActiveChannel?: string
+  seedreamModel?: string
+  dashscopeModel?: string
+  xaiModel?: string
+  zhipuModel?: string
+  comfyuiWorkflows?: readonly ComfyUIWorkflowEntry[]
+  comfyuiActiveWorkflow?: string
+  comfyuiWorkflowJson?: string
+  comfyuiWorkflowName?: string
+  /** Opt-in toggle persisted by the settings card; the pill stays hidden until enabled. */
+  showProviderPill?: boolean
+}
+
+/** Minimal credential face the pill needs; structurally satisfied by the settings card's remote. */
+interface PillCredentials {
+  describe(refs: string[]): Promise<{ ok: boolean; value?: Readonly<Record<string, { configured?: boolean }>> }>
+}
+
+/** Notifies the pill whenever any credential reference changes on the host. */
+interface PillCredentialEvents { listen(callback: () => void): () => void }
+
+/** Business face injected at registration time by the client entry. */
+export interface ProviderPillFace {
+  scope: SettingsScope<PillSettings>
+  credentials: PillCredentials
+  locale?: LocaleService | undefined
+  credentialEvents?: PillCredentialEvents | undefined
+}
+
+const PILL_DICT = {
+  en: {
+    pillLabel: 'Image',
+    menuTitle: 'Image model',
+    keyConfigured: 'Key configured',
+    keyMissing: 'No key',
+    noKeyNeeded: 'No key needed',
+    noWorkflow: 'No workflow',
+    subNoKey: 'Subscription',
+    subSignedIn: 'Signed in',
+    subSignedOut: 'Signed out',
+    subStatusUnknown: 'Unknown',
+    readOnly: 'Image settings are read-only; switch them in the config source',
+    switchFailed: 'Switch failed',
+    writeRejected: 'Setting was not saved. Please try again',
+  },
+} as const
+
+type PillDictKey = keyof typeof PILL_DICT.en
+
+/** Provider row names, per locale. Brand words stay untranslated; only the
+ * qualifier ("Sub") stays short, so the pill and the menu agree with the
+ * settings card in both languages. */
+const PILL_PROVIDER_LABELS: Record<'en', Record<ImageProvider, string>> = {
+  en: {
+    google: 'Gemini',
+    openai: 'OpenAI',
+    'openai-compat': 'OpenAI Compatible',
+    xai: 'Grok',
+    comfyui: 'ComfyUI',
+    'grok-sub': 'Grok Sub',
+    'google-sub': 'Google Sub',
+  },
+}
+
+type KeyDot = 'checking' | 'configured' | 'missing' | 'unknown'
+
+/** Menu's design max-height, mirroring the CSS `max-height` rule. */
+const MENU_MAX_HEIGHT = 320
+
+/**
+ * Where `position: fixed` offsets start next to the pill, in viewport
+ * coordinates. The host composer wraps the tool row in a transformed box
+ * (`will-change: transform`), which makes fixed descendants resolve against
+ * that box instead of the viewport (#109): viewport coordinates then land the
+ * menu a sidebar-width off whenever the left sidebar is open. Two zero-size
+ * probes read the real origin, whichever CSS rule creates it.
+ */
+export function fixedOriginNear(host: Element): { left: number; top: number; bottom: number } {
+  const probe = (css: string): DOMRect => {
+    const element = document.createElement('div')
+    element.style.cssText = `position:fixed;width:0;height:0;visibility:hidden;pointer-events:none;${css}`
+    host.appendChild(element)
+    const rect = element.getBoundingClientRect()
+    element.remove()
+    return rect
+  }
+  const topLeft = probe('left:0;top:0')
+  return { left: topLeft.left, top: topLeft.top, bottom: probe('left:0;bottom:0').bottom }
+}
+
+/** Compute the fixed-position anchor from the pill button: open upward when
+ * the chat pane leaves room above the composer, drop down otherwise. The
+ * numbers are relative to the box fixed elements resolve against. */
+function anchorOf(button: HTMLButtonElement | null): { left: number; bottom?: number; top?: number } | undefined {
+  const rect = button?.getBoundingClientRect()
+  const host = button?.parentElement
+  if (rect === undefined || host === null || host === undefined) return undefined
+  const origin = fixedOriginNear(host)
+  const left = rect.left - origin.left
+  if (rect.top >= MENU_MAX_HEIGHT + 12) {
+    return { left, bottom: origin.bottom - rect.top + 6 }
+  }
+  return { left, top: rect.bottom + 6 - origin.top }
+}
+
+/** Whether the user opted into the composer pill; hidden (not merely inert) when off. */
+export function pillVisible(value: PillSettings | undefined): boolean {
+  return value?.showProviderPill === true
+}
+
+const PILL_MODEL_FIELDS: Partial<Record<ImageProvider, keyof PillSettings>> = {
+  google: 'googleModel',
+  openai: 'openaiModel',
+  'openai-compat': 'openaiCompatModel',
+  xai: 'xaiModel',
+}
+
+const PILL_MODEL_OPTIONS_FIELDS: Partial<Record<ImageProvider, keyof PillSettings>> = {
+  'openai-compat': 'openaiCompatModels',
+}
+
+/** Model (or ComfyUI workflow) a provider row will use with the persisted settings. */
+export function pillModelOf(provider: ImageProvider, value: PillSettings | undefined, channelId?: string): string {
+  if (provider === 'comfyui') {
+    const workflow = activeComfyUIWorkflow(value ?? {})
+    return workflow === undefined ? '' : workflow.name
+  }
+  if ((SUBSCRIPTION_PROVIDERS as readonly string[]).includes(provider)) {
+    return DEFAULT_MODELS[provider]
+  }
+  if (provider === 'openai-compat') {
+    const channel = resolveOpenAICompatChannel(value ?? {}, channelId)
+    return channel.model.trim().length > 0 ? channel.model.trim() : DEFAULT_MODELS[provider]
+  }
+  const field = PILL_MODEL_FIELDS[provider]
+  const stored = field === undefined ? undefined : value?.[field]
+  return typeof stored === 'string' && stored.length > 0 ? stored : DEFAULT_MODELS[provider]
+}
+
+/** Optional model choices exposed by a provider; single-model providers return an empty list. */
+export function pillModelOptionsOf(provider: ImageProvider, value: PillSettings | undefined, channelId?: string): string[] {
+  // ComfyUI lists its imported workflows the way a relay lists models (#115).
+  if (provider === 'comfyui') return resolveComfyUIWorkflows(value ?? {}).map(workflow => workflow.name)
+  if (provider === 'openai-compat') {
+    const channel = resolveOpenAICompatChannel(value ?? {}, channelId)
+    return resolveOpenAICompatModels({ openaiCompatModel: pillModelOf(provider, value, channel.id), openaiCompatModels: channel.models ?? [] })
+  }
+  const field = PILL_MODEL_OPTIONS_FIELDS[provider]
+  if (field === undefined) return []
+  const configured: unknown = value?.[field]
+  const models = Array.isArray(configured)
+    ? [...new Set(configured.filter((model): model is string => typeof model === 'string').map(model => model.trim()).filter(Boolean))]
+    : []
+  const defaultModel = pillModelOf(provider, value)
+  if (defaultModel.length > 0 && !models.includes(defaultModel)) models.unshift(defaultModel)
+  return models
+}
+
+function pillTargetKey(provider: CloudImageProvider, channelId?: string): string {
+  return provider === 'openai-compat' ? `openai-compat:${channelId ?? 'default'}` : provider
+}
+
+/**
+ * The settings writes that make a ComfyUI workflow the active one: the same
+ * three fields the settings card saves for its active workflow (the name plus
+ * the legacy single-workflow mirror), so the two views never disagree.
+ * Undefined for a name that is not imported.
+ */
+export function comfyUIWorkflowWrites(value: PillSettings | undefined, name: string): Array<[keyof PillSettings, string]> | undefined {
+  const workflow = resolveComfyUIWorkflows(value ?? {}).find(entry => entry.name === name)
+  if (workflow === undefined) return undefined
+  return [['comfyuiActiveWorkflow', workflow.name], ['comfyuiWorkflowJson', workflow.json], ['comfyuiWorkflowName', workflow.name]]
+}
+
+/** The pill button text: the channel label, or the provider with its active workflow for ComfyUI. */
+export function pillButtonLabel(provider: ImageProvider, providerLabel: string, value: PillSettings | undefined, channelLabel?: string): string {
+  if (channelLabel !== undefined) return channelLabel
+  if (provider === 'comfyui') {
+    const workflow = pillModelOf(provider, value)
+    if (workflow.length > 0) return `${providerLabel} · ${workflow}`
+  }
+  return providerLabel
+}
+
+/** One fixed-position provider menu anchored to the pill button. */
+export function ImageProviderPill(props: ProviderPillFace) {
+  const [snapshot, setSnapshot] = useState(() => props.scope.getSnapshot())
+  const lang = 'en' as const
+  const [open, setOpen] = useState(false)
+  const [pending, setPending] = useState<ImageProvider | undefined>(undefined)
+  const [error, setError] = useState('')
+  const [dots, setDots] = useState<Record<string, KeyDot>>({})
+  const [keyTick, setKeyTick] = useState(0)
+  // Subscription login state read from the host status route; the browser sees
+  // only state words and the account email, never a token.
+  const [subDots, setSubDots] = useState<Record<SubscriptionProvider, 'logged-in' | 'logged-out' | 'unknown'>>(
+    () => ({ 'chatgpt-sub': 'unknown', 'grok-sub': 'unknown', 'google-sub': 'unknown' }),
+  )
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const [menuStyle, setMenuStyle] = useState<{ left: number; bottom?: number; top?: number } | null>(null)
+
+  useEffect(() => props.scope.subscribe(() => { setSnapshot(props.scope.getSnapshot()) }), [props.scope])
+  useEffect(() => props.credentialEvents?.listen(() => { setKeyTick(tick => tick + 1) }), [props.credentialEvents])
+
+  useEffect(() => {
+    let active = true
+    const targets = [
+      ...CLOUD_IMAGE_PROVIDERS.filter(provider => provider !== 'openai-compat').map(provider => ({
+        key: provider as string,
+        ref: cloudCredentialRef(provider) as string,
+      })),
+      ...resolveOpenAICompatChannels(snapshot.value ?? {}).map(channel => ({
+        key: pillTargetKey('openai-compat', channel.id),
+        ref: channel.keyRef,
+      })),
+    ]
+    void props.credentials.describe(targets.map(target => target.ref)).then(response => {
+      if (!active) return
+      const next: Record<string, KeyDot> = {}
+      for (const target of targets) {
+        const info = response.ok ? response.value?.[target.ref] : undefined
+        next[target.key] = response.ok ? (info?.configured ? 'configured' : 'missing') : 'unknown'
+      }
+      setDots(next)
+    }).catch(() => {
+      if (!active) return
+      setDots({})
+    })
+    return () => { active = false }
+  }, [props.credentials, keyTick, snapshot.value])
+
+  // Subscription login badges: probed when the menu opens and re-probed on
+  // host credential events (a login/logout in the settings card flips the
+  // dots here too). Same status route as the settings card; state words only.
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    const probe = async (): Promise<void> => {
+      try {
+        const response = await fetch(SUBSCRIPTION_STATUS_ROUTE, { method: 'POST', cache: 'no-store' })
+        if (!active || !response.ok) return
+        const payload = await response.json() as { statuses?: Record<string, { state?: string }> }
+        if (!active || payload.statuses === undefined) return
+        const next = {} as Record<SubscriptionProvider, 'logged-in' | 'logged-out' | 'unknown'>
+        for (const provider of SUBSCRIPTION_PROVIDERS) {
+          const row = payload.statuses[provider]
+          next[provider] = row?.state === 'logged-in' ? 'logged-in' : row?.state === 'logged-out' ? 'logged-out' : 'unknown'
+        }
+        setSubDots(next)
+      } catch { /* dots stay unknown */ }
+    }
+    void probe()
+    return () => { active = false }
+  }, [open, keyTick])
+
+  const t = (keyName: PillDictKey): string => PILL_DICT.en[keyName]
+
+  const current = snapshot.value?.provider ?? 'google'
+  const currentChannel = current === 'openai-compat' ? resolveOpenAICompatChannel(snapshot.value ?? {}) : undefined
+  const writable = snapshot.writable
+
+  // Anchor the fixed-position menu next to the pill each time it opens, and
+  // re-anchor on viewport changes: the menu follows the button instead of
+  // snapping shut.
+  useEffect(() => {
+    if (!open) { setMenuStyle(null); return }
+    const anchor = (): void => {
+      const next = anchorOf(buttonRef.current)
+      if (next !== undefined) setMenuStyle(next)
+    }
+    anchor()
+    window.addEventListener('resize', anchor)
+    return () => { window.removeEventListener('resize', anchor) }
+  }, [open])
+
+  // Close on outside press, Escape, and when the pill scrolls fully out of
+  // view. Menu-internal scrolling never closes: the capture-phase scroll
+  // listener below ignores events originating inside the menu itself.
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: Event): void => {
+      const target = event.target
+      if (target instanceof Node && buttonRef.current !== null && !buttonRef.current.contains(target)
+        && !(target instanceof Element && target.closest('.dsh-st-pill-menu') !== null)) {
+        setOpen(false)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent): void => { if (event.key === 'Escape') setOpen(false) }
+    const onReflow = (event: Event): void => {
+      // Scrolling inside the menu itself only scrolls; it never re-anchors
+      // and never closes.
+      if (event.target instanceof Element && event.target.closest('.dsh-st-pill-menu') !== null) return
+      // Page/pane scroll re-anchors the menu so it keeps following the
+      // button; it closes only when the pill left the viewport entirely.
+      const rect = buttonRef.current?.getBoundingClientRect()
+      if (rect !== undefined && (rect.bottom < 0 || rect.top > window.innerHeight)) {
+        setOpen(false)
+        return
+      }
+      const next = anchorOf(buttonRef.current)
+      if (next !== undefined) setMenuStyle(next)
+    }
+    document.addEventListener('mousedown', onPointerDown, true)
+    document.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('resize', onReflow)
+    window.addEventListener('scroll', onReflow, true)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown, true)
+      document.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('resize', onReflow)
+      window.removeEventListener('scroll', onReflow, true)
+    }
+  }, [open])
+
+  // Opt-in guard, placed after the last hook: render nothing until the user
+  // enables the pill in settings. Toggling later is a plain re-render.
+  if (!pillVisible(snapshot.value)) return null
+
+  const select = (provider: ImageProvider, model?: string, channelId?: string): void => {
+    const currentModel = pillModelOf(provider, snapshot.value, channelId)
+    const sameChannel = provider !== 'openai-compat' || currentChannel?.id === (channelId ?? 'default')
+    if (pending !== undefined || (provider === current && sameChannel && (model === undefined || model === currentModel))) {
+      setOpen(false)
+      return
+    }
+    const modelField = model === undefined ? undefined : PILL_MODEL_FIELDS[provider]
+    setError('')
+    setPending(provider)
+    void (async () => {
+      if (model !== undefined && provider === 'comfyui') {
+        const writes = comfyUIWorkflowWrites(snapshot.value, model)
+        if (writes === undefined) throw new Error(t('writeRejected'))
+        for (const [field, value] of writes) await writeSetting(props.scope, field, value, t('writeRejected'))
+      } else if (model !== undefined && provider === 'openai-compat' && channelId !== undefined && channelId !== 'default') {
+        const channels = (snapshot.value?.openaiCompatChannels ?? []).map(channel => channel.id === channelId ? { ...channel, model } : channel)
+        await writeSetting(props.scope, 'openaiCompatChannels', channels, t('writeRejected'))
+      } else if (model !== undefined && modelField !== undefined) {
+        await writeSetting(props.scope, modelField, model, t('writeRejected'))
+      }
+      if (provider === 'openai-compat' && channelId !== undefined && currentChannel?.id !== channelId) {
+        await writeSetting(props.scope, 'openaiCompatActiveChannel', channelId, t('writeRejected'))
+      }
+      if (provider !== current) await writeSetting(props.scope, 'provider', provider, t('writeRejected'))
+    })()
+      .then(() => { setOpen(false) })
+      .catch(cause => { setError(cause instanceof Error ? cause.message : String(cause)) })
+      .finally(() => { setPending(undefined) })
+  }
+
+  /** Plan A dots: ComfyUI is always fixed blue (theme-independent); each
+   * subscription reflects its login state (green in, gray out); cloud rows
+   * reflect their API-key state as before. */
+  const dotClassOf = (provider: ImageProvider, channelId?: string): string => {
+    if (provider === 'comfyui') return 'dsh-st-pill-dot-neutral'
+    if (isSubscriptionProvider(provider)) {
+      const state = subDots[provider]
+      return state === 'logged-in' ? 'dsh-st-pill-dot-ok' : 'dsh-st-pill-dot-missing'
+    }
+    const dot = dots[pillTargetKey(provider, channelId)]
+    return dot === 'configured' ? 'dsh-st-pill-dot-ok' : dot === 'missing' ? 'dsh-st-pill-dot-missing' : 'dsh-st-pill-dot-neutral'
+  }
+
+  const subtitleOf = (provider: ImageProvider, includeModel = true, channelId?: string): string => {
+    if (provider === 'comfyui') {
+      // With workflows the submenu lists them; the subtitle names the empty state only.
+      const workflow = pillModelOf(provider, snapshot.value)
+      if (workflow.length === 0) return `${t('noKeyNeeded')} · ${t('noWorkflow')}`
+      return includeModel ? `${t('noKeyNeeded')} · ${workflow}` : t('noKeyNeeded')
+    }
+    if (isSubscriptionProvider(provider)) {
+      const state = subDots[provider]
+      const stateText = state === 'logged-in' ? t('subSignedIn') : state === 'logged-out' ? t('subSignedOut') : t('subStatusUnknown')
+      return `${t('subNoKey')} · ${stateText} · ${pillModelOf(provider, snapshot.value)}`
+    }
+    const dot = dots[pillTargetKey(provider, channelId)]
+    const model = pillModelOf(provider, snapshot.value, channelId)
+    const modelSuffix = includeModel ? ` · ${model}` : ''
+    if (dot === 'configured') return `${t('keyConfigured')}${modelSuffix}`
+    if (dot === 'missing') return `${t('keyMissing')}${modelSuffix}`
+    return includeModel ? model : ''
+  }
+
+  const menuEntries = IMAGE_PROVIDERS.flatMap<{ provider: ImageProvider; channel?: OpenAICompatChannel }>(provider =>
+    provider === 'openai-compat'
+      ? resolveOpenAICompatChannels(snapshot.value ?? {}).map(channel => ({ provider, channel }))
+      : [{ provider }],
+  )
+
+  return (
+    <div className="dsh-st-pill-root">
+      <button
+        type="button"
+        ref={buttonRef}
+        className={`dsh-st-pill-button${open ? ' dsh-st-pill-button-open' : ''}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={writable ? t('menuTitle') : t('readOnly')}
+        disabled={!writable}
+        onClick={() => { setOpen(value => !value) }}
+      >
+        <svg className="dsh-st-pill-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="1.5" y="2.5" width="13" height="11" rx="2" /><circle cx="5.5" cy="6.5" r="1.3" /><path d="M14.5 10.5l-3.2-3.2-6.3 6.2" />
+        </svg>
+        <span className="dsh-st-pill-provider">{pillButtonLabel(current, PILL_PROVIDER_LABELS[lang][current], snapshot.value, currentChannel?.label)}</span>
+        <span className={`dsh-st-pill-caret${open ? ' dsh-st-pill-caret-open' : ''}`} aria-hidden="true">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 10l4-4 4 4" /></svg>
+        </span>
+      </button>
+      {open && menuStyle !== null ? (
+        <div className="dsh-st-pill-menu" role="menu" aria-label={t('menuTitle')} style={menuStyle}>
+          <div className="dsh-st-pill-menu-title">{t('menuTitle')}</div>
+          {menuEntries.map(({ provider, channel }) => {
+            const channelId = channel?.id
+            const modelOptions = pillModelOptionsOf(provider, snapshot.value, channelId)
+            const active = provider === current && (provider !== 'openai-compat' || currentChannel?.id === channelId)
+            const currentModel = active ? pillModelOf(provider, snapshot.value, channelId) : ''
+            // ComfyUI without an imported workflow cannot generate: show the empty state, not a switch.
+            const unavailable = provider === 'comfyui' && modelOptions.length === 0 && !active
+            return (
+              <Fragment key={channelId === undefined ? provider : pillTargetKey('openai-compat', channelId)}>
+                <button
+                  type="button"
+                  role={modelOptions.length > 0 ? 'menuitem' : 'menuitemradio'}
+                  aria-checked={modelOptions.length > 0 ? undefined : active}
+                  className={`dsh-st-pill-option${active ? ' dsh-st-pill-option-active' : ''}`}
+                  disabled={pending !== undefined || unavailable}
+                  onClick={() => { select(provider, undefined, channelId) }}
+                >
+                  <span className={`dsh-st-pill-dot ${dotClassOf(provider, channelId)}`} aria-hidden="true" />
+                  <span className="dsh-st-pill-option-text">
+                    <span className="dsh-st-pill-option-name">{channel?.label ?? PILL_PROVIDER_LABELS[lang][provider]}</span>
+                    <span className="dsh-st-pill-option-sub">{subtitleOf(provider, modelOptions.length === 0, channelId)}</span>
+                  </span>
+                  {active && modelOptions.length === 0 ? <span className="dsh-st-pill-check" aria-hidden="true">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 8.5l3.5 3.5 7-8" /></svg>
+                  </span> : null}
+                </button>
+                {modelOptions.map(model => {
+                  const selected = active && model === currentModel
+                  return (
+                    <button
+                      type="button"
+                      key={model}
+                      role="menuitemradio"
+                      aria-checked={selected}
+                      className={`dsh-st-pill-option dsh-st-pill-model-option${selected ? ' dsh-st-pill-option-active' : ''}`}
+                      disabled={pending !== undefined}
+                      onClick={() => { select(provider, model, channelId) }}
+                    >
+                      <span className="dsh-st-pill-model-name">{model}</span>
+                      {selected ? <span className="dsh-st-pill-check" aria-hidden="true">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 8.5l3.5 3.5 7-8" /></svg>
+                      </span> : null}
+                    </button>
+                  )
+                })}
+              </Fragment>
+            )
+          })}
+          {error.length > 0 ? <div className="dsh-st-pill-error" role="alert">{t('switchFailed')}: {error}</div> : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/** Styles for the pill and its fixed-position menu; injected by the client entry. */
+export const PROVIDER_PILL_STYLE = `
+.dsh-st-pill-root{position:relative;display:inline-flex;align-items:center;height:28px}
+.dsh-st-pill-button{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 9px 0 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:20px;cursor:pointer;transition:border-color .15s,background .15s,color .15s;-webkit-user-select:none;user-select:none}
+.dsh-st-pill-button:hover:not(:disabled){border-color:var(--dsw-alias-label-dimmed);color:var(--dsw-alias-label-primary)}
+.dsh-st-pill-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.dsh-st-pill-button:disabled{opacity:.5;cursor:not-allowed}
+.dsh-st-pill-button-open{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary)}
+.dsh-st-pill-icon{flex:none;color:var(--dsw-alias-brand-primary)}
+.dsh-st-pill-provider{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-st-pill-caret{display:inline-flex;flex:none;transition:transform .15s}
+.dsh-st-pill-caret-open{transform:rotate(180deg)}
+@container (max-width:700px){
+  .dsh-st-pill-caret{display:none}
+  .dsh-st-pill-button{padding:0 7px 0 6px}
+}
+.dsh-st-pill-menu{position:fixed;z-index:1000;min-width:264px;max-width:min(320px,calc(100vw - 24px));padding:6px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-3);box-shadow:0 12px 32px color-mix(in srgb,black 16%,transparent),0 2px 8px color-mix(in srgb,black 8%,transparent);max-height:min(320px,calc(100vh - 48px));overflow-y:auto}
+.dsh-st-pill-menu-title{padding:6px 8px 4px;font-size:11px;font-weight:600;color:var(--dsw-alias-label-tertiary)}
+.dsh-st-pill-option{display:flex;width:100%;align-items:center;gap:9px;padding:7px 8px;border:0;border-radius:8px;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.dsh-st-pill-option:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2)}
+.dsh-st-pill-option:disabled{opacity:.6;cursor:default}
+.dsh-st-pill-option:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
+.dsh-st-pill-option-active{background:var(--dsw-alias-brand-primary)}
+.dsh-st-pill-dot{flex:none;width:7px;height:7px;border-radius:50%}
+.dsh-st-pill-dot-ok{background:var(--dsw-alias-state-success-primary)}
+.dsh-st-pill-dot-missing{background:var(--dsw-alias-label-tertiary)}
+.dsh-st-pill-dot-neutral{background:var(--dsw-alias-brand-primary)}
+.dsh-st-pill-option-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.dsh-st-pill-option-name{font-size:12.5px;font-weight:500;color:var(--dsw-alias-label-primary);line-height:1.2}
+.dsh-st-pill-option-sub{font-size:11px;color:var(--dsw-alias-label-tertiary);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-st-pill-model-option{padding-left:24px}
+.dsh-st-pill-model-name{flex:1;min-width:0;font-size:12px;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-st-pill-check{flex:none;color:var(--dsw-alias-brand-primary)}
+.dsh-st-pill-error{margin-top:4px;padding:6px 8px;border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 8%,transparent);color:var(--dsw-alias-state-error-primary);font-size:11.5px;line-height:1.4;word-break:break-all}
+`

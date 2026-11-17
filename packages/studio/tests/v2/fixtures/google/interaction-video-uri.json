@@ -1,0 +1,1 @@
+{"steps":[{"type":"model_output","content":[{"type":"video","mime_type":"video/mp4","uri":"https://generativelanguage.googleapis.com/v1beta/files/abc-123:download?alt=media"}]}],"id":"v1_big456","status":"completed","model":"gemini-omni-1.2-flash","object":"interaction"}

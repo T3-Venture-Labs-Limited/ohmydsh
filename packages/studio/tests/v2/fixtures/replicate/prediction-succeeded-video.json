@@ -1,0 +1,1 @@
+{"id":"gm3qorzdhgbfurvjtvhg6dckhu","model":"google/veo-3.1-fast","status":"succeeded","input":{"prompt":"waves","duration":4},"output":"https://replicate.delivery/xezq/vid/out.mp4","error":null,"metrics":{"predict_time":61.2},"urls":{"get":"https://api.replicate.com/v1/predictions/gm3qorzdhgbfurvjtvhg6dckhu"}}

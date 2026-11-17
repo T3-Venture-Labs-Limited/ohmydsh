@@ -1,0 +1,1 @@
+{"id":"def","model":"black-forest-labs/flux-3-image","status":"succeeded","input":{"prompt":"x"},"output":["https://replicate.delivery/xezq/def/0.png","https://replicate.delivery/xezq/def/1.png"],"error":null,"urls":{"get":"https://api.replicate.com/v1/predictions/def"}}

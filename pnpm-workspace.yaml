@@ -1,7 +1,7 @@
 # ohmydsh monorepo workspace. Per-package pnpm settings were merged here when the plugins were imported.
 packages:
   - packages/*
-  - apps/*
+  # apps/desktop is a standalone npm project (Electron); apps/android is Gradle (no package.json)
 
 nodeLinker: isolated
 

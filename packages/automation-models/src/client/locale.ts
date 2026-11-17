@@ -1,0 +1,46 @@
+// English dictionary: the typed source of truth for every UI string. `{name}` placeholders are filled from params.
+// Import the helper directly (not the kit barrel): the entry must not pull kit components onto the boot path.
+import { defineLocale } from '../kit/locale.ts'
+
+export const locale = defineLocale('dsh-automation-models', {
+  panel: 'Automation models',
+  pageTitle: 'Automation models',
+  pageDescription: 'Run scheduled tasks, sentinel wake-ups and other automations on a cheaper model. The session keeps its own model: it is switched for the automation turn only and restored afterwards.',
+  loading: 'Loading…',
+  loadFailed: 'Could not load the automation settings.',
+  retry: 'Retry',
+  refresh: 'Refresh',
+  enabledTitle: 'Switch models for automations',
+  enabledDescription: 'When off, every automation runs on the model of the session it is delivered to.',
+  sectionDefaults: 'Defaults per source',
+  sectionDefaultsDescription: 'Applies to every automation of that source unless a task below has its own model.',
+  sectionTasks: 'Scheduled tasks',
+  sectionTasksDescription: 'Override the model for one task. “Source default” follows the Scheduled tasks row above.',
+  noTasks: 'No scheduled tasks',
+  noTasksDescription: 'Create one from the Automation page or ask the agent to schedule something; it will show up here.',
+  providerLabel: 'Provider',
+  modelLabel: 'Model',
+  effortLabel: 'Reasoning effort',
+  optInherit: 'Source default',
+  optInheritDefault: 'Built-in default',
+  optSession: 'Session’s own model',
+  effortDefault: 'Model default',
+  keepLabel: 'Keep this model after the run',
+  keepHint: 'Normally the session returns to its previous model when the turn ends.',
+  effective: 'Runs on {route}',
+  effectiveSession: 'Runs on the session’s own model',
+  unavailable: 'This model is not available right now; the built-in default is used instead.',
+  statusPaused: 'Paused',
+  statusEnded: 'Ended',
+  statusActive: 'Active',
+  targetNew: 'new session',
+  targetNewOnce: 'one new session',
+  targetSession: 'existing session',
+  noCatalog: 'The model list is not available yet.',
+  notices: 'Recent notices',
+  noticesEmpty: 'Nothing to report.',
+  saving: 'Saving…',
+  saveFailed: 'Could not save: {message}',
+})
+
+export type T = ReturnType<typeof locale.bind>

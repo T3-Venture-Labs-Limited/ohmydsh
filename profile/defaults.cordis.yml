@@ -1,0 +1,20 @@
+# ohmydsh defaults: rows applied to every omd profile. Rewritten by `omd update`; put your own rows
+# outside the ohmydsh block (below it) and they always win.
+#
+# A patch row with an existing id replaces that plugin's whole `config`, so every field a row sets is listed.
+
+# Studio: keep the Grok subscription as the image provider and show the composer pill.
+- id: studio
+  name: dsh-studio
+  config:
+    provider: grok-sub
+    showProviderPill: true
+
+# Phone app: the normal DSH UI as an installable app; the share sheet pre-fills a draft and never sends by itself;
+# Web Push goes only to devices that subscribed in Settings > Phone app.
+- id: dsh-pwa
+  name: dsh-pwa
+  config:
+    serviceWorker: true
+    share:
+      enabled: true

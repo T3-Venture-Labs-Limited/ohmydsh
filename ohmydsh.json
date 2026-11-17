@@ -1,0 +1,144 @@
+{
+  "version": "0.1.0",
+  "dsh": "0.2.2-rc.3",
+  "node": ">=24",
+  "profile": {
+    "name": "omd",
+    "defaults": "profile/defaults.cordis.yml",
+    "official": [
+      "@deepseek-ai/dsh-personalized-recommendations",
+      "@deepseek-ai/dsh-experimental-voice-input-bundle",
+      "@deepseek-ai/dsh-experimental-session-titles-bundle",
+      "@deepseek-ai/dsh-experimental-plugin-market-bundle"
+    ]
+  },
+  "plugins": {
+    "core": {
+      "dsh-plugin-subscriptions": "0.9.13",
+      "@kenz1117/dsh-engram": "0.13.10",
+      "dsh-context": "0.84.1",
+      "dsh-model-logos": "0.7.0",
+      "dsh-better-sidebar": "0.32.1",
+      "@changfenhuang/dsh-genui": "0.16.0",
+      "dsh-marktext": "0.1.13",
+      "@orderg-x/dsh-video-preview": "0.5.7",
+      "@zseven-w/dsh-openpencil": "0.1.0-rc.15",
+      "dsh-output-styles": "0.8.3",
+      "dsh-composer-history": "0.8.16",
+      "@hellokidder/dsh-hotkey": "0.0.3",
+      "dsh-sentinel": "0.15.0",
+      "dsh-notify-me": "1.20.1",
+      "dsh-agent-browser": "0.2.7",
+      "dsh-studio": "0.1.0",
+      "dsh-pwa": "0.2.1",
+      "dsh-agent-browser-takeover": "0.1.0",
+      "dsh-review-comments": "0.2.0",
+      "dsh-skill-studio": "0.1.0",
+      "dsh-notebook": "0.1.0",
+      "dsh-triggers": "0.1.0",
+      "dsh-automation-models": "0.1.0"
+    },
+    "packs": {
+      "composio": {
+        "dsh-composio": "0.1.0"
+      },
+      "langfuse": {
+        "dsh-langfuse": "0.1.0"
+      },
+      "parallel": {
+        "@parallel-web/dsh-web-search-parallel": "0.1.0"
+      },
+      "omarchy": {
+        "dsh-theme": "0.1.0",
+        "dsh-hud": "0.1.0"
+      }
+    }
+  },
+  "packInfo": {
+    "composio": {
+      "summary": "Composio apps and triggers",
+      "requires": [
+        "the Composio CLI, logged in (`composio login`)"
+      ]
+    },
+    "langfuse": {
+      "summary": "Langfuse tracing for every agent turn",
+      "requires": [
+        "LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in the environment"
+      ]
+    },
+    "parallel": {
+      "summary": "Web search and fetch through Parallel",
+      "requires": [
+        "PARALLEL_API_KEY in the environment"
+      ],
+      "rows": "profile/packs/parallel.cordis.yml"
+    },
+    "omarchy": {
+      "summary": "Follow your Omarchy theme and a floating quick-prompt HUD",
+      "requires": [
+        "Omarchy (Hyprland); the HUD also needs the separate dsh-hud-qt app"
+      ],
+      "rows": "profile/packs/omarchy.cordis.yml"
+    }
+  },
+  "sources": {
+    "dsh-studio": {
+      "workspace": "packages/studio",
+      "tarball": "https://github.com/deestax/dsh-studio/releases/download/v0.1.0/dsh-studio-0.1.0.tgz"
+    },
+    "dsh-pwa": {
+      "workspace": "packages/pwa",
+      "tarball": "https://github.com/deestax/dsh-pwa/releases/download/v0.2.1/dsh-pwa-0.2.1.tgz"
+    },
+    "dsh-agent-browser-takeover": {
+      "workspace": "packages/browser-takeover",
+      "tarball": "https://github.com/deestax/dsh-agent-browser-takeover/releases/download/v0.1.0/dsh-agent-browser-takeover-0.1.0.tgz"
+    },
+    "dsh-review-comments": {
+      "workspace": "packages/review-comments",
+      "tarball": "https://github.com/deestax/dsh-review-comments/releases/download/v0.2.0/dsh-review-comments-0.2.0.tgz"
+    },
+    "dsh-skill-studio": {
+      "workspace": "packages/skill-studio",
+      "tarball": "https://github.com/deestax/dsh-skill-studio/releases/download/v0.1.0/dsh-skill-studio-0.1.0.tgz"
+    },
+    "dsh-notebook": {
+      "workspace": "packages/notebook",
+      "tarball": "https://github.com/deestax/dsh-notebook/releases/download/v0.1.0/dsh-notebook-0.1.0.tgz"
+    },
+    "dsh-triggers": {
+      "workspace": "packages/triggers",
+      "tarball": "https://github.com/deestax/dsh-triggers/releases/download/v0.1.0/dsh-triggers-0.1.0.tgz"
+    },
+    "dsh-automation-models": {
+      "workspace": "packages/automation-models",
+      "tarball": "https://github.com/deestax/dsh-automation-models/releases/download/v0.1.0/dsh-automation-models-0.1.0.tgz"
+    },
+    "dsh-composio": {
+      "workspace": "packages/composio",
+      "tarball": "https://github.com/deestax/dsh-composio/releases/download/v0.1.0/dsh-composio-0.1.0.tgz"
+    },
+    "dsh-langfuse": {
+      "workspace": "packages/langfuse",
+      "tarball": "https://github.com/deestax/dsh-langfuse/releases/download/v0.1.0/dsh-langfuse-0.1.0.tgz"
+    },
+    "@parallel-web/dsh-web-search-parallel": {
+      "workspace": "packages/web-search-parallel",
+      "tarball": "https://github.com/deestax/dsh-web-search-parallel/releases/download/v0.1.0/parallel-web-dsh-web-search-parallel-0.1.0.tgz"
+    },
+    "dsh-theme": {
+      "workspace": "packages/theme",
+      "tarball": "https://github.com/deestax/dsh-theme/releases/download/v0.1.0/dsh-theme-0.1.0.tgz"
+    },
+    "dsh-hud": {
+      "workspace": "packages/hud",
+      "tarball": "https://github.com/deestax/dsh-hud/releases/download/v0.1.0/dsh-hud-0.1.0.tgz"
+    }
+  },
+  "allowBuilds": [
+    "agent-browser@0.43.0",
+    "onnxruntime-node@1.30.0",
+    "protobufjs@7.6.6"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "name": "@ohmydsh/cli",
+  "version": "0.1.0",
+  "description": "omd: install, update and roll back the ohmydsh setup for DeepSeek Harness",
+  "license": "MIT",
+  "author": "T3 Venture Labs (https://github.com/T3-Venture-Labs-Limited)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh#readme",
+  "type": "module",
+  "bin": {
+    "omd": "./bin/omd.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test tests/",
+    "check": "node --check bin/omd.js && node --test tests/"
+  }
+}

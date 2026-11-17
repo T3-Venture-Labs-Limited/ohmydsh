@@ -1,0 +1,7 @@
+# Parallel pack: web search AND fetch through Parallel. Several fetch providers are registered, so DSH refuses to
+# guess; a same-id row replaces the whole config, so both fields are listed.
+- id: web
+  name: '@deepseek-ai/dsh-web'
+  config:
+    searchProvider: parallel
+    fetchProvider: parallel

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">ohmydsh</string>
+    <string name="intro_first">Link a computer</string>
+    <string name="intro_more">Link another computer</string>
+    <string name="steps">1. On your computer, open DSH and go to Settings → Phone app.\n2. Press “Pair a phone”.\n3. Scan the QR code here. The code works once and expires in 10 minutes.</string>
+    <string name="scan">Scan the QR code</string>
+    <string name="paste">Paste a link instead</string>
+    <string name="scan_prompt">Point the camera at the QR code in DSH</string>
+    <string name="paste_title">Paste the pairing link</string>
+    <string name="paste_hint">ohmydsh://pair?… or https://…/app/pair#…</string>
+    <string name="paste_ok">Continue</string>
+    <string name="computers">Your computers</string>
+    <string name="computers_back">Your computers</string>
+    <string name="computer_current">Current</string>
+    <string name="remove">Forget</string>
+    <string name="remove_title">Forget %1$s?</string>
+    <string name="remove_body">This phone will be signed out and the stored key deleted. To also revoke it on the computer, remove the phone under Settings → Phone app there.</string>
+    <string name="remove_ok">Forget</string>
+    <string name="confirm_title">Link this phone?</string>
+    <string name="confirm_body">This phone will get full access to the DSH at %1$s: everything you can do there, including running commands. Only continue if this is your own computer.</string>
+    <string name="confirm_body_http">This phone will get full access to the DSH at %1$s: everything you can do there, including running commands.\n\nThis address is not encrypted. Anyone on the same network could read the traffic. Use Tailscale HTTPS when you can. Only continue if this is your own computer.</string>
+    <string name="confirm_ok">Link</string>
+    <string name="pairing_with">Linking with %1$s…</string>
+    <string name="connecting_to">Connecting to %1$s…</string>
+    <string name="retry">Try again</string>
+    <string name="err_not_dsh_qr">That QR code is not a DSH pairing code. In DSH, open Settings → Phone app → Pair a phone.</string>
+    <string name="err_not_dsh_link">That is not a DSH pairing link. It looks like ohmydsh://pair?… or https://…/app/pair#…</string>
+    <string name="err_revoked">%1$s no longer knows this phone (it was removed there). Link it again to continue.</string>
+    <string name="err_page">Could not load DSH from %1$s. Check that it is running and reachable.</string>
+    <string name="err_no_browser">No app can open that link.</string>
+    <string name="err_no_files">No file picker available.</string>
+</resources>

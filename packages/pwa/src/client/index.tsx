@@ -4,6 +4,7 @@ import { Suspense, lazy } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import { locale } from './locale.ts'
 import { startBridge, type ShareRecord } from './bridge.ts'
+import { openPhoneSettings, wantsPhoneSettings } from './deeplink.ts'
 
 const SettingsPage = lazy(() => import('./views.tsx').then((m) => ({ default: m.SettingsPage })))
 
@@ -40,6 +41,11 @@ export function apply(ctx: Context): void {
   c.slots.inject('settings.section', () => c.slots.register({
     name: 'settings.section', id: 'dsh-pwa', order: 130, label: () => t('nav'),
   }, () => <Lazy><SettingsPage t={t} /></Lazy>))
+
+  // `/?settings=phone` (used by the desktop app's "Pair phone") opens Settings > Phone app once the shell has rendered.
+  if (wantsPhoneSettings(window.location.search)) {
+    void openPhoneSettings({ document, location: window.location, replaceUrl: (url) => { window.history.replaceState(window.history.state, '', url) }, sectionLabel: t('nav') })
+  }
 
   // Notification clicks and share drafts need the workspace navigation service; without it the section above still works.
   ;(ctx as unknown as { inject(names: string[], fn: (scope: { get(name: string): unknown }) => void | (() => void)): void }).inject(['sessions', 'workspaces', 'uiWorkspace'], (scope) => {

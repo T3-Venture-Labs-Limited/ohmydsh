@@ -1,0 +1,42 @@
+{
+  "name": "@ohmydsh/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ohmydsh desktop app: DeepSeek Harness with the ohmydsh plugin set, in its own window",
+  "author": "T3 Venture Labs <https://github.com/T3-Venture-Labs-Limited>",
+  "license": "MIT",
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "apps/desktop"
+  },
+  "type": "commonjs",
+  "main": "src/main.js",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node scripts/bundle.mjs && electron .",
+    "bundle": "node scripts/bundle.mjs",
+    "test": "node --test tests/",
+    "check": "node --check src/main.js && node --test tests/",
+    "icons": "node scripts/make-icons.mjs",
+    "pack": "node scripts/bundle.mjs && electron-builder --dir",
+    "dist:linux": "node scripts/bundle.mjs && electron-builder --linux AppImage deb --x64 --publish never",
+    "dist:win": "node scripts/bundle.mjs && electron-builder --win nsis --x64 --publish never",
+    "dist:mac": "node scripts/bundle.mjs && electron-builder --mac dmg --arm64 --x64 --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11",
+    "npm": "11.21.2"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.18.1"
+  },
+  "ohmydsh": {
+    "pnpm": "12.15.0",
+    "electronPinReason": "DSH's native add-on only accepts Electron 43.0.0, 44.0.0, 44.7.0 or 45.0.0-alpha.6 when DSH runs under ELECTRON_RUN_AS_NODE; see docs/APPS.md"
+  }
+}

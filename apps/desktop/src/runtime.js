@@ -1,0 +1,108 @@
+'use strict'
+// First-run provisioning, entirely inside the app's data folder:
+//   1. <runtime>/node_modules: the pinned DSH CLI (@deepseek-ai/dsh) and the matching pnpm executable, installed with the
+//      npm that ships inside the app, run by Electron's own Node. No system Node, npm or pnpm is needed.
+//   2. The omd profile in DSH_HOME: `omd setup --no-dsh-install` (the CLI that ships inside the app) installs the plugin
+//      set from the bundled ohmydsh.json.
+// Every step reports progress; every failure carries the last lines of the tool's output.
+const { spawn } = require('node:child_process')
+const fs = require('node:fs')
+const path = require('node:path')
+const { redact } = require('./token-url')
+const { writeShims, childEnv } = require('./shims')
+
+class ProvisionError extends Error {}
+
+const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'))
+
+/** The versions this app installs, taken from the bundled manifest. */
+function wantedVersions(paths, pnpmVersion) {
+  const manifest = read(paths.manifest)
+  if (typeof manifest.dsh !== 'string') throw new ProvisionError('the bundled ohmydsh.json has no dsh version')
+  return { dsh: manifest.dsh, pnpm: pnpmVersion, manifestVersion: manifest.version }
+}
+
+function readState(paths) {
+  try { return read(paths.stateFile) } catch { return {} }
+}
+
+/** What still has to be done: `runtime` (DSH + pnpm) and/or `profile` (omd setup). */
+function needs(paths, wanted, state = readState(paths), exists = fs.existsSync) {
+  const runtimeOk = state.dsh === wanted.dsh && state.pnpm === wanted.pnpm && exists(paths.dshBin) && exists(paths.pnpmExe)
+  const profileOk = state.manifestVersion === wanted.manifestVersion && state.dsh === wanted.dsh && exists(path.join(paths.dshHome, 'profiles', 'omd'))
+  return { runtime: !runtimeOk, profile: !profileOk }
+}
+
+function run(file, args, { env, cwd, onLine, log, timeoutMs = 30 * 60 * 1000 }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(file, args, { env, cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+    const tail = []
+    const feed = (chunk) => {
+      for (const line of chunk.toString('utf8').split(/\r?\n/)) {
+        if (line.trim() === '') continue
+        const safe = redact(line)
+        tail.push(safe); if (tail.length > 30) tail.shift()
+        log?.(safe)
+        onLine?.(safe)
+      }
+    }
+    child.stdout.on('data', feed)
+    child.stderr.on('data', feed)
+    const timer = setTimeout(() => { child.kill(); reject(new ProvisionError(`${path.basename(args[0] ?? file)} timed out`)) }, timeoutMs)
+    child.on('error', (e) => { clearTimeout(timer); reject(new ProvisionError(`could not start ${file}: ${e.message}`)) })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (code === 0) resolve()
+      else reject(new ProvisionError(`${path.basename(args[0] ?? file)} exited with code ${code}\n${tail.slice(-12).join('\n')}`))
+    })
+  })
+}
+
+/**
+ * @param {object} o
+ * @param {ReturnType<import('./paths').resolvePaths>} o.paths
+ * @param {string} o.electron           path of the Electron executable (acts as Node)
+ * @param {string} o.pnpmVersion        pnpm version to install (pinned in the app's package.json)
+ * @param {(p: { step: string, detail?: string, fraction?: number }) => void} o.progress
+ * @param {(line: string) => void} [o.log]
+ */
+async function provision({ paths, electron, pnpmVersion, progress, log, platform = process.platform }) {
+  const wanted = wantedVersions(paths, pnpmVersion)
+  const todo = needs(paths, wanted)
+  if (!todo.runtime && !todo.profile) return { changed: false, wanted }
+  fs.mkdirSync(paths.runtime, { recursive: true })
+  fs.mkdirSync(paths.dshHome, { recursive: true })
+  const env = childEnv({ bin: paths.bin, pnpmDir: path.dirname(paths.pnpmExe), dshHome: paths.dshHome, platform })
+  const state = readState(paths)
+
+  if (todo.runtime) {
+    progress({ step: 'Installing DeepSeek Harness', detail: `version ${wanted.dsh}`, fraction: 0.05 })
+    fs.writeFileSync(path.join(paths.runtime, 'package.json'), `${JSON.stringify({ name: 'ohmydsh-runtime', private: true, version: '0.0.0', dependencies: {} }, null, 2)}\n`)
+    const pkgs = [`@deepseek-ai/dsh@${wanted.dsh}`, `pnpm@${wanted.pnpm}`]
+    await run(electron, [paths.npmCli, 'install', ...pkgs, '--save-exact', '--no-audit', '--no-fund', '--loglevel=error', '--foreground-scripts'], {
+      env: { ...env, npm_config_cache: path.join(paths.runtime, 'npm-cache') }, cwd: paths.runtime, log,
+      onLine: (l) => progress({ step: 'Installing DeepSeek Harness', detail: l.slice(0, 120), fraction: 0.2 }),
+    })
+    if (!fs.existsSync(paths.dshBin)) throw new ProvisionError(`installed DSH but ${paths.dshBin} is missing`)
+    if (!fs.existsSync(paths.pnpmExe)) throw new ProvisionError(`installed pnpm but ${paths.pnpmExe} is missing (is this platform supported?)`)
+    state.dsh = wanted.dsh; state.pnpm = wanted.pnpm
+    fs.writeFileSync(paths.stateFile, `${JSON.stringify(state, null, 2)}\n`)
+  }
+
+  writeShims({ bin: paths.bin, electron, dshBin: paths.dshBin, omdBin: paths.omdBin, platform })
+
+  if (todo.profile) {
+    progress({ step: 'Installing the ohmydsh plugins', detail: 'this takes a few minutes the first time', fraction: 0.4 })
+    let seen = 0
+    await run(electron, [paths.omdBin, 'setup', '--no-dsh-install', '--manifest', paths.manifest], {
+      env, cwd: paths.runtime, log,
+      onLine: (l) => { seen += 1; progress({ step: 'Installing the ohmydsh plugins', detail: l.replace(/^\S+\s+/, '').slice(0, 120), fraction: Math.min(0.95, 0.4 + seen / 400) }) },
+    })
+    state.manifestVersion = wanted.manifestVersion
+    fs.writeFileSync(paths.stateFile, `${JSON.stringify(state, null, 2)}\n`)
+  }
+  progress({ step: 'Ready', fraction: 1 })
+  return { changed: true, wanted }
+}
+
+module.exports = { provision, needs, wantedVersions, ProvisionError, run }

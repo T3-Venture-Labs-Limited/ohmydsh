@@ -1,0 +1,58 @@
+appId: ai.t3.ohmydsh
+productName: ohmydsh
+copyright: Copyright © T3 Venture Labs
+directories:
+  output: dist
+  buildResources: build
+files:
+  - package.json
+  - src/**
+  - build/tray.png
+  - build/tray-template.png
+  - build/icon.png
+  - build/icon.ico
+  - "!**/*.map"
+# The npm CLI is executed by Electron's Node (a child process cannot read inside an asar), the bundle is read by omd.
+asarUnpack:
+  - node_modules/npm/**
+extraResources:
+  - from: bundle/ohmydsh
+    to: ohmydsh
+    filter: ["**/*"]
+publish:
+  provider: github
+  owner: T3-Venture-Labs-Limited
+  repo: ohmydsh
+# Unsigned for now: signing needs a Windows certificate and an Apple Developer ID (see docs/APPS.md).
+artifactName: ohmydsh-${version}-${os}-${arch}.${ext}
+linux:
+  target: [AppImage, deb]
+  category: Development
+  icon: build/icon.png
+  maintainer: T3 Venture Labs <hello@t3.ai>
+  synopsis: DeepSeek Harness with the ohmydsh plugin set
+  desktop:
+    entry:
+      Name: ohmydsh
+      Comment: DeepSeek Harness, batteries included
+      StartupWMClass: ohmydsh
+      Categories: Development;
+deb:
+  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0]
+win:
+  target: [{ target: nsis, arch: [x64] }]
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  artifactName: ohmydsh-${version}-win-${arch}-setup.${ext}
+mac:
+  target: [{ target: dmg, arch: [arm64, x64] }]
+  icon: build/icon.icns
+  category: public.app-category.developer-tools
+  identity: null
+  hardenedRuntime: false
+dmg:
+  artifactName: ohmydsh-${version}-mac-${arch}.${ext}

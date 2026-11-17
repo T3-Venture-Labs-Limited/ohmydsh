@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="220" viewBox="0 0 640 220" role="img" aria-label="Dark and light panels with a swatch row">
+  <!-- artwork -->
+  <rect width="640" height="220" rx="14" fill="#2a2a2a"/>
+  <rect x="20" y="20" width="290" height="180" rx="10" fill="#121212"/>
+  <rect x="20" y="20" width="70" height="180" rx="10" fill="#0d0d0d"/>
+  <rect x="106" y="40" width="180" height="14" rx="4" fill="#bebebe"/>
+  <rect x="106" y="66" width="130" height="10" rx="4" fill="#8a8a8d"/>
+  <rect x="106" y="150" width="90" height="28" rx="8" fill="#e68e0d"/>
+  <rect x="330" y="20" width="290" height="180" rx="10" fill="#eff1f5"/>
+  <rect x="330" y="20" width="70" height="180" rx="10" fill="#e3e4e8"/>
+  <rect x="416" y="40" width="180" height="14" rx="4" fill="#4c4f69"/>
+  <rect x="416" y="66" width="130" height="10" rx="4" fill="#5c5f77"/>
+  <rect x="416" y="150" width="90" height="28" rx="8" fill="#1e66f5"/>
+  <path d="M318 102l12-8v16z" fill="#bebebe"/>
+</svg>

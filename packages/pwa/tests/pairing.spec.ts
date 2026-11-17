@@ -8,6 +8,8 @@ import { CODE_TTL_MS, CodeBook, DEVICE_TOKEN_PREFIX, DeviceStore, FailureLimiter
 import { chooseOrigin, isLoopbackAuthority, pairLinks, tailscaleFacts } from '../src/host/origin.ts'
 import { registerPairing, type PairDeps } from '../src/host/pair-routes.ts'
 import { apply } from '../src/host/index.ts'
+import { EventEmitter } from 'node:events'
+import { installAdmitGate, trackDeviceSockets } from '../src/host/revocation.ts'
 
 const tmp = mkdtempSync(join(tmpdir(), 'pwa-pair-'))
 afterAll(() => { rmSync(tmp, { recursive: true, force: true }) })
@@ -275,20 +277,21 @@ describe('host wiring', () => {
     process.env['DSH_HOME'] = home
     const boot = (config: unknown) => {
       const routes = new Map<string, (req: any, res: any) => Promise<void> | void>() // eslint-disable-line
-      const listeners: ((...a: any[]) => unknown)[] = [] // eslint-disable-line
+      const upgrade = new EventEmitter()
       const ctx = {
         effect: (fn: () => unknown) => { fn() },
-        on: (e: string, fn: (...a: any[]) => unknown) => { if (e === 'connection/request') listeners.push(fn); return () => {} }, // eslint-disable-line
-        webServer: { register: (r: { kind: string; path: string; handler: never }) => { routes.set(r.path, r.handler); return () => {} }, host: '127.0.0.1', port: 3080, protocol: 'http:' },
+        on: () => () => {},
+        webServer: { register: (r: { kind: string; path: string; handler: never }) => { routes.set(r.path, r.handler); return () => {} }, host: '127.0.0.1', port: 3080, protocol: 'http:', server: upgrade },
         connection: {
           requestRejection: () => undefined,
+          admit: () => ({ peer: {} }),
           authenticatedUrl: (u: string) => `${u}?token=LAUNCHTOKEN`,
           authorizeIndex: (req: { url?: string }, res: { writeHead(s: number, h: Record<string, string>): void; end(): void }) => { expect(req.url).toContain('LAUNCHTOKEN'); res.writeHead(303, { location: './', 'set-cookie': 'dsh-auth-H=v1.cookie.sig; Path=/; HttpOnly; SameSite=Strict' }); res.end(); return false },
         },
         logger: () => ({ warn() {}, debug() {} }),
       }
       apply(ctx as never, config)
-      return { routes, listeners }
+      return { routes, connection: ctx.connection as unknown as { admit(request: { headers: unknown }): unknown; authorizeIndex(request: object, response: object): boolean }, upgrade }
     }
     const on = boot({})
     for (const p of ['/pair/code', '/pair/devices', '/pair/remove', '/pair/claim', '/pair/session', '/app/pair', '/app/pair.js']) expect(on.routes.has(p), p).toBe(true)
@@ -306,13 +309,48 @@ describe('host wiring', () => {
     const { token, device } = JSON.parse(claim.body)
     const session = await run('/pair/session', { method: 'GET', url: '/pair/session', headers: { authorization: `Bearer ${token}` } })
     expect(session.status).toBe(303); expect(session.body).not.toContain('LAUNCHTOKEN'); expect(JSON.stringify(session.headers)).not.toContain('LAUNCHTOKEN')
-    // the API wrapper lets a live cookie through and refuses it after revoke
-    const next = vi.fn(async () => {})
+    // core's admission lets a live device cookie through and refuses it after revoke; its open socket is closed
     const apiReq = { headers: { cookie: 'dsh-auth-H=v1.cookie.sig' } }
-    await on.listeners[0]!(apiReq, { writeHead() {}, end() {} }, next); expect(next).toHaveBeenCalledTimes(1)
+    expect(on.connection.admit(apiReq)).toEqual({ peer: {} })
+    const socket = Object.assign(new EventEmitter(), { destroy: vi.fn() })
+    on.upgrade.emit('upgrade', { headers: apiReq.headers }, socket); expect(socket.destroy).not.toHaveBeenCalled()
     await run('/pair/remove', Object.assign(Readable.from([Buffer.from(JSON.stringify({ id: device.id }))]), { method: 'POST', url: '/pair/remove', headers: { origin: 'http://127.0.0.1:3080', 'content-type': 'application/json' } }))
-    let status = 0
-    await on.listeners[0]!(apiReq, { writeHead: (s: number) => { status = s }, end() {} }, next); expect(status).toBe(401); expect(next).toHaveBeenCalledTimes(1)
+    expect(on.connection.admit(apiReq)).toEqual({ rejection: 401 })
+    expect(on.connection.admit({ headers: new Headers({ cookie: 'dsh-auth-H=v1.cookie.sig' }) })).toEqual({ rejection: 401 })
+    expect(socket.destroy).toHaveBeenCalledTimes(1)
+    const shell = { status: 0 }
+    expect(on.connection.authorizeIndex({ headers: apiReq.headers, url: '/' }, { writeHead: (s: number) => { shell.status = s }, end() {} })).toBe(false)
+    expect(shell.status).toBe(401) // the page shell is refused too
+    const late = Object.assign(new EventEmitter(), { destroy: vi.fn() })
+    on.upgrade.emit('upgrade', { headers: apiReq.headers }, late); expect(late.destroy).toHaveBeenCalledTimes(1) // a revoked cookie cannot open a new socket
     expect(statSync(join(home, 'plugin-data', 'dsh-pwa', 'devices.json')).mode & 0o777).toBe(0o600)
+  })
+})
+
+describe('revocation gate', () => {
+  it("keeps core's own rejection (403 wins), restores the original, and ignores hosts without admit", async () => {
+    const store = new DeviceStore(join(tmp, 'g', 'devices.json'))
+    const target = { admit: vi.fn(() => ({ rejection: 403 })) as unknown as (r: { headers: Record<string, string> }) => unknown }
+    const original = target.admit
+    const off = installAdmitGate(target as never, store)
+    expect(target.admit({ headers: {} })).toEqual({ rejection: 403 })
+    off(); expect(target.admit).toBe(original)
+    expect(() => installAdmitGate({}, store)()).not.toThrow()
+  })
+  it('closes only the removed device sockets', async () => {
+    const store = new DeviceStore(join(tmp, 'g2', 'devices.json'))
+    const a = await store.add('a'); const b = await store.add('b')
+    const line = (v: string): string => `dsh-auth-X=${v}; Path=/; HttpOnly`
+    await store.recordSession(a.device.id, [line('v1.a.sig')]); await store.recordSession(b.device.id, [line('v1.b.sig')])
+    const server = new EventEmitter()
+    const tracker = trackDeviceSockets(server as never, store)
+    const mk = () => Object.assign(new EventEmitter(), { destroy: vi.fn() })
+    const sa = mk(); const sb = mk(); const anon = mk()
+    server.emit('upgrade', { headers: { cookie: 'dsh-auth-X=v1.a.sig' } }, sa)
+    server.emit('upgrade', { headers: { cookie: 'dsh-auth-X=v1.b.sig' } }, sb)
+    server.emit('upgrade', { headers: {} }, anon)
+    expect(tracker.closeDevice(a.device.id)).toBe(1)
+    expect(sa.destroy).toHaveBeenCalled(); expect(sb.destroy).not.toHaveBeenCalled(); expect(anon.destroy).not.toHaveBeenCalled()
+    tracker.dispose()
   })
 })

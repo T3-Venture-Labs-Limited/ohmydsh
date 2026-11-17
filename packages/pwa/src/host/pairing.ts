@@ -105,6 +105,8 @@ export class DeviceStore {
   private revoked: RevokedRecord[] = []
   private revokedSet = new Set<string>()
   private queue: Promise<unknown> = Promise.resolve()
+  /** Called after a device is removed (its open sockets are closed here). */
+  onRemoved: ((id: string) => void) | undefined
   constructor(private readonly file: string, private readonly now: () => number = Date.now) {}
 
   private async load(): Promise<Map<string, StoredDevice>> {
@@ -172,6 +174,19 @@ export class DeviceStore {
     return false
   }
 
+  /** The device a Cookie header's sign-in cookie was minted for, if it is one of ours and the device still exists. */
+  deviceForCookie(cookieHeader: unknown): string | undefined {
+    if (typeof cookieHeader !== 'string') return undefined
+    for (const part of cookieHeader.split(';')) {
+      const at = part.indexOf('=')
+      if (at <= 0 || !part.slice(0, at).trim().startsWith('dsh-auth-')) continue
+      const hash = cookieHash(part.slice(at + 1).trim())
+      const record = this.sessions.find((r) => r.hash === hash)
+      if (record !== undefined && this.devices?.has(record.device) === true) return record.device
+    }
+    return undefined
+  }
+
   /** Remember that `device` was given this sign-in cookie, so removing the device can invalidate exactly these cookies. */
   recordSession(deviceId: string, setCookieLines: readonly string[]): Promise<void> {
     return this.serial(async () => {
@@ -226,6 +241,7 @@ export class DeviceStore {
       this.sessions = this.sessions.filter((r) => r.device !== id)
       this.pruneRecords()
       await this.save()
+      try { this.onRemoved?.(id) } catch { /* closing sockets is best effort */ }
       return true
     })
   }

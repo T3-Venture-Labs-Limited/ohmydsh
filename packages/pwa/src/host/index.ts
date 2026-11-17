@@ -35,6 +35,7 @@ import { CodeBook, DeviceStore, FailureLimiter } from './pairing.ts'
 import { registerPairing } from './pair-routes.ts'
 import { PAIR_CSP, pairPageHtml, pairScriptSource } from './pair-page.ts'
 import { chooseOrigin } from './origin.ts'
+import { installAdmitGate, trackDeviceSockets, type UpgradeServer } from './revocation.ts'
 
 export const name = 'dsh-pwa'
 export const inject = ['webServer', 'connection']
@@ -47,9 +48,10 @@ interface Route { kind: 'exact' | 'prefix'; path: string; handler: (req: Incomin
 interface Ctx {
   effect(fn: () => unknown, label?: string): void
   on(event: string, fn: (...args: any[]) => unknown, opts?: unknown): () => void // eslint-disable-line
-  webServer: { register(route: Route): () => void; host?: string; port?: number; protocol?: 'http:' | 'https:' }
+  webServer: { register(route: Route): () => void; host?: string; port?: number; protocol?: 'http:' | 'https:'; server?: UpgradeServer }
   connection: {
     requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined
+    admit?: (request: { headers: IncomingMessage['headers'] | Headers }) => unknown
     authorizeIndex?(request: { method?: string; url?: string; headers: IncomingMessage['headers'] }, response: { writeHead(status: number, headers?: Record<string, string>): unknown; end(body?: string): unknown }): boolean
     authenticatedUrl?(baseUrl: string): string
   }
@@ -122,9 +124,7 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
 
   // Gate for every signed-in route: Host/Origin fence plus authentication, failing closed.
   const rejected = (req: IncomingMessage, res: ServerResponse): boolean => {
-    let status: 401 | 403 | undefined = ctx.connection.requestRejection({ headers: req.headers })
-    // Core's sign-in cookie is stateless. A cookie minted for a device that has since been removed is refused here.
-    if (status === undefined && devices.isRevokedCookie(req.headers['cookie'])) status = 401
+    const status = ctx.connection.requestRejection({ headers: req.headers })
     if (status === undefined) return false
     send(res, status, status === 401 ? 'Sign in to DSH first: open the DSH link with its token once on this device.' : 'Forbidden', { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
     return true
@@ -250,12 +250,14 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
       pageScript: pairScriptSource(),
       pageCsp: PAIR_CSP,
     })
-    // Removing a device also ends its browser session on the shared /api route (core's own cookie cannot be revoked).
-    ctx.on('connection/request' as never, ((req: IncomingMessage, res: ServerResponse, next: () => Promise<void>) => {
-      if (!devices.isRevokedCookie(req.headers['cookie'])) return next()
-      send(res, 401, 'unauthorized', { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
-      return Promise.resolve()
-    }) as never)
+    // Core's sign-in cookie is stateless, so "Remove" is enforced here: every request whose cookie was minted for a removed
+    // device is refused by core's own admission (all plugin routes, /api, the WebSocket upgrade) and its open sockets close.
+    ctx.effect(() => installAdmitGate(ctx.connection as never, devices), 'dsh-pwa: refuse removed devices')
+    ctx.effect(() => {
+      const tracker = trackDeviceSockets(ctx.webServer.server, devices)
+      devices.onRemoved = (id) => { tracker.closeDevice(id) }
+      return () => { devices.onRemoved = undefined; tracker.dispose() }
+    }, 'dsh-pwa: close sockets of removed devices')
   }
 
   // ── Web Push ──

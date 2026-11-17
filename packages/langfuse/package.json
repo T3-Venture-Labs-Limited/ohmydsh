@@ -1,0 +1,105 @@
+{
+  "name": "dsh-langfuse",
+  "version": "0.1.0",
+  "description": "Rich Langfuse tracing for DeepSeek Harness: one trace per turn, generations, tools, subagents, usage and an Open trace action.",
+  "license": "MIT",
+  "author": "Superdao (https://github.com/deestax)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deestax/dsh-langfuse.git"
+  },
+  "bugs": {
+    "url": "https://github.com/deestax/dsh-langfuse/issues"
+  },
+  "homepage": "https://github.com/deestax/dsh-langfuse#readme",
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.2-rc.1 <0.3.0-0"
+  },
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "locale",
+    "docs",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "NOTICE",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
+    "build": "pnpm run clean && tsdown && node scripts/check-artifacts.mjs && node tools/token-lint.mjs src lib",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src tests scripts tsdown.config.ts && node tools/token-lint.mjs src",
+    "test": "vitest run",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build",
+    "prepare": "pnpm run build"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-locale": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-sidebar": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-llm": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-session": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/schemastery": ">=3.18.4 <4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.3",
+    "@deepseek-ai/schemastery": "3.19.0",
+    "@opentelemetry/sdk-trace-base": "^2.12.1",
+    "@types/node": "26.2.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "^18.3.7",
+    "jsdom": "^29.1.1",
+    "oxlint": "1.76.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsdown": "0.22.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8"
+  },
+  "dependencies": {
+    "@langfuse/otel": "^5.14.0",
+    "@langfuse/tracing": "^5.14.0",
+    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/core": "^2.12.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.301.2",
+    "@opentelemetry/otlp-exporter-base": "^0.301.2",
+    "@opentelemetry/sdk-trace-base": "^2.12.1",
+    "@opentelemetry/sdk-trace-node": "^2.12.1"
+  }
+}

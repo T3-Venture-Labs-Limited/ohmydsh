@@ -1,0 +1,94 @@
+{
+  "name": "dsh-review-comments",
+  "version": "0.2.0",
+  "description": "Highlight text in any DeepSeek Harness preview or reply, write a comment, and send every comment to the composer as its own removable quote chip.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Superdao (https://github.com/deestax)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deestax/dsh-review-comments.git"
+  },
+  "bugs": {
+    "url": "https://github.com/deestax/dsh-review-comments/issues"
+  },
+  "homepage": "https://github.com/deestax/dsh-review-comments#readme",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.2-rc.1 <0.3.0-0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-chat",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsdown && node scripts/check-artifacts.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint:tokens": "node ../dsh-kit/lint/token-lint.mjs src",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm lint:tokens"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-connection": ">=0.2.2-rc.1 <0.3.0-0"
+  },
+  "peerDependenciesMeta": {},
+  "devDependencies": {
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.1",
+    "@types/node": "^24.0.0",
+    "jsdom": "^26.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.8",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.3",
+    "@deepseek-ai/schemastery": "3.19.0",
+    "@deepseek-ai/dsh-timeout": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-connection": "0.2.2-rc.3"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "review",
+    "comments",
+    "annotation"
+  ]
+}

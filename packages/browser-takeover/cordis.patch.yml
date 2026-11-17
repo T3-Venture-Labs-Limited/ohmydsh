@@ -1,0 +1,39 @@
+# dsh-agent-browser-takeover bundle patch.
+#
+# 1. Inserts this plugin's row.
+#    - perConversation: every conversation gets its own browser (and profile),
+#      so parallel conversations never share or fight over one browser.
+#    - saveLoginsOnHandback: handing a browser back saves its logins into the
+#      shared store every later browser starts from.
+#    - pruneAfterDays: delete a conversation's browser profile after this many
+#      idle days (0 keeps them forever).
+#    - binaryPath: the same wrapper, used to save logins.
+# 2. Overrides dsh-agent-browser's `browser` row config (a matching override
+#    replaces the whole config, so every value it needs is restated here):
+#    - allowTakeover: lets the sidebar forward your mouse/keyboard.
+#    - idleTimeoutMinutes 30: an idle conversation's browser shuts down after
+#      30 minutes (its profile and logins stay on disk); with one browser per
+#      conversation, a long timeout would keep many Chromes running.
+#    - autoOpenPanel false: the sidebar tab replaces the floating chip panel.
+#    - binaryPath: the wrapper that gives each session its own seeded profile.
+- insert:
+    - id: agent-browser-takeover
+      name: dsh-agent-browser-takeover
+      config:
+        humanIdleMinutes: 10
+        requestTimeoutMinutes: 15
+        perConversation: true
+        saveLoginsOnHandback: true
+        pruneAfterDays: 14
+        binaryPath: !!js "ctx.get('profileContext').dir + '/node_modules/dsh-agent-browser-takeover/bin/agent-browser.mjs'"
+- id: browser
+  name: dsh-agent-browser
+  config:
+    autoOpenPanel: false
+    idleTimeoutMinutes: 30
+    defaultTimeoutMs: 60000
+    cookiesRedacted: true
+    allowTakeover: true
+    # profileContext.dir is the running profile's directory; the wrapper is
+    # linked into its node_modules by the install.
+    binaryPath: !!js "ctx.get('profileContext').dir + '/node_modules/dsh-agent-browser-takeover/bin/agent-browser.mjs'"

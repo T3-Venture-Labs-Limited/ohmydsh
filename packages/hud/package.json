@@ -1,0 +1,76 @@
+{
+  "name": "dsh-hud",
+  "version": "0.1.0",
+  "description": "Unix-socket bridge for the dsh-hud Qt Quick HUD: list sessions, chat, stream replies, open in web.",
+  "license": "MIT",
+  "author": "Superdao (https://github.com/deestax)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deestax/dsh-hud.git"
+  },
+  "bugs": {
+    "url": "https://github.com/deestax/dsh-hud/issues"
+  },
+  "homepage": "https://github.com/deestax/dsh-hud#readme",
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.2-rc.1 <0.3.0-0"
+  },
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "locale",
+    "docs",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
+    "build": "pnpm run clean && tsdown && node scripts/check-artifacts.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src tests scripts tsdown.config.ts",
+    "test": "vitest run",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build",
+    "prepare": "pnpm run build"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-locale": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/schemastery": ">=3.18.4 <4"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.3",
+    "@types/node": "26.2.0",
+    "oxlint": "1.76.0",
+    "tsdown": "0.22.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8",
+    "@deepseek-ai/schemastery": "3.19.0"
+  }
+}

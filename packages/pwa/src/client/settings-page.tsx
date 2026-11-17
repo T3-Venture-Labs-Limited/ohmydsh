@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Card, Page, Section, SettingsRow } from '../kit/index.ts'
 import type { T } from './locale.ts'
+import PairSection from './pair-section.tsx'
 import { currentSubscription, disablePush, enablePush, pushSupport, resync, sendTest } from './push-client.ts'
 
 interface InstallPromptEvent extends Event {
@@ -81,6 +82,7 @@ export default function SettingsPage({ t }: { t: T }) {
 
   return (
     <Page title={t('pageTitle')} description={t('pageDescription')}>
+      <PairSection t={t} />
       <Section title={t('sectionInstall')}>
         <Card>
           <SettingsRow title={t('installTitle')} description={secure ? t('installDescription') : t('insecure')}>

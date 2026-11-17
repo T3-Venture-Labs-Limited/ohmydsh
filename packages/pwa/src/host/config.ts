@@ -12,6 +12,12 @@ export interface PwaConfig {
   readonly serviceWorker: boolean
   readonly share: ShareConfig
   readonly push: PushConfig
+  readonly pairing: PairingConfig
+}
+
+export interface PairingConfig {
+  /** Phone pairing: one-time codes, device tokens, /pair/* routes. Turning it off removes the routes. */
+  readonly enabled: boolean
 }
 
 export interface ShareConfig {
@@ -46,6 +52,7 @@ export function readConfig(raw: unknown): PwaConfig {
   const section = (key: string): Record<string, unknown> => (cfg[key] !== null && typeof cfg[key] === 'object' ? cfg[key] : {}) as Record<string, unknown>
   const share = section('share')
   const push = section('push')
+  const pairing = section('pairing')
   // The phone page at /m no longer exists: a config left over from it falls back to the normal UI.
   const requested = typeof cfg['startUrl'] === 'string' && PATH.test(cfg['startUrl']) ? cfg['startUrl'] : '/app'
   const start = requested === '/m' || requested.startsWith('/m/') ? '/app' : requested
@@ -62,6 +69,7 @@ export function readConfig(raw: unknown): PwaConfig {
       cwd: typeof share['cwd'] === 'string' ? share['cwd'].trim() : '',
       maxMiB,
     },
+    pairing: { enabled: pairing['enabled'] !== false },
     push: {
       enabled: push['enabled'] !== false,
       subject: typeof push['subject'] === 'string' && SUBJECT.test(push['subject'].trim()) ? push['subject'].trim() : 'mailto:dsh-pwa@localhost.invalid',

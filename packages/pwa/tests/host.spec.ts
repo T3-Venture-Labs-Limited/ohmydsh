@@ -48,7 +48,7 @@ describe('route table and gates', () => {
     const injected: unknown[] = []
     const ctx = {
       effect: (fn: () => unknown) => { fn() },
-      on: (_e: string, fn: (t: { push(r: unknown): void }) => void) => { fn({ push: (r) => injected.push(r) }); return () => {} },
+      on: (e: string, fn: (t: { push(r: unknown): void }) => void) => { if (e === 'webserver/index-inject') fn({ push: (r) => injected.push(r) }); return () => {} },
       webServer: { register: (r: { kind: string; path: string; handler: never }) => { const key = `${r.kind} ${r.path}`; if (routes.has(key)) throw new Error('duplicate'); routes.set(key, r); return () => routes.delete(key) } },
       connection: { requestRejection: () => reject, browserPeer: {} },
       logger: () => ({ warn() {}, debug() {} }),
@@ -65,7 +65,7 @@ describe('route table and gates', () => {
 
   it('registers exactly the documented routes and nothing under /m', () => {
     const { routes } = boot()
-    expect([...routes.keys()].sort()).toEqual(['exact /app', 'exact /app.js', 'exact /manifest.webmanifest', 'exact /push/key', 'exact /push/subscribe', 'exact /push/test', 'exact /push/unsubscribe', 'exact /share', 'exact /sw.js'])
+    expect([...routes.keys()].sort()).toEqual(['exact /app', 'exact /app.js', 'exact /app/pair', 'exact /app/pair.js', 'exact /manifest.webmanifest', 'exact /pair/claim', 'exact /pair/code', 'exact /pair/devices', 'exact /pair/remove', 'exact /pair/session', 'exact /push/key', 'exact /push/subscribe', 'exact /push/test', 'exact /push/unsubscribe', 'exact /share', 'exact /sw.js'])
     expect([...routes.keys()].some((k) => /\/m(\/|$)/.test(k))).toBe(false)
     expect([...boot({ push: { enabled: false } }).routes.keys()].some((k) => k.includes('/push'))).toBe(false)
   })

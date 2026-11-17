@@ -11,6 +11,8 @@
  *   POST /push/subscribe         signed-in + same-origin; store this device's PushSubscription
  *   POST /push/unsubscribe       signed-in + same-origin; forget it
  *   POST /push/test              signed-in + same-origin; push one test notification to the calling device
+ *   POST /pair/code, GET /pair/devices, POST /pair/remove   signed-in; phone pairing (see pair-routes.ts)
+ *   POST /pair/claim, GET /pair/session, GET /app/pair      public + rate-limited; device token claim / session exchange
  *
  * Routing (verified in dsh-host-webserver): the match order is exact route, then longest prefix, then the single
  * fallback seat that serves the SPA, and a duplicate (kind, path) registration throws, so these exact routes cannot
@@ -29,11 +31,15 @@ import { SubscriptionError, SubscriptionStore, parseSubscription, redactEndpoint
 import { createPusher, type Pusher } from './push.ts'
 import { createNotifier } from './notifier.ts'
 import { APP_CSP, appPageHtml, appScriptSource } from './app-page.ts'
+import { CodeBook, DeviceStore, FailureLimiter } from './pairing.ts'
+import { registerPairing } from './pair-routes.ts'
+import { PAIR_CSP, pairPageHtml, pairScriptSource } from './pair-page.ts'
+import { chooseOrigin } from './origin.ts'
 
 export const name = 'dsh-pwa'
 export const inject = ['webServer', 'connection']
 
-const VERSION = '0.2.1'
+const VERSION = '0.3.0'
 const SHARE_TTL_MS = 7 * 24 * 3600 * 1000
 const MAX_JSON_BYTES = 8 * 1024
 
@@ -41,8 +47,12 @@ interface Route { kind: 'exact' | 'prefix'; path: string; handler: (req: Incomin
 interface Ctx {
   effect(fn: () => unknown, label?: string): void
   on(event: string, fn: (...args: any[]) => unknown, opts?: unknown): () => void // eslint-disable-line
-  webServer: { register(route: Route): () => void }
-  connection: { requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined }
+  webServer: { register(route: Route): () => void; host?: string; port?: number; protocol?: 'http:' | 'https:' }
+  connection: {
+    requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined
+    authorizeIndex?(request: { method?: string; url?: string; headers: IncomingMessage['headers'] }, response: { writeHead(status: number, headers?: Record<string, string>): unknown; end(body?: string): unknown }): boolean
+    authenticatedUrl?(baseUrl: string): string
+  }
   logger(name: string): { warn(...a: unknown[]): void; debug(...a: unknown[]): void }
 }
 
@@ -64,6 +74,10 @@ export function sameOrigin(req: IncomingMessage): boolean {
   }
   const site = req.headers['sec-fetch-site']
   return site === undefined || site === 'same-origin' || site === 'none'
+}
+
+function portOf(host: unknown): number {
+  try { return Number(new URL(`http://${String(host)}`).port) || 3080 } catch { return 3080 }
 }
 
 export function dataDir(): string {
@@ -97,6 +111,8 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
   const dir = dataDir()
   const sharesDir = join(dir, 'shares')
   const store = new SubscriptionStore(join(dir, 'subscriptions.json'))
+  const devices = new DeviceStore(join(dir, 'devices.json'))
+  void devices.warm().catch((error: unknown) => { log.warn('could not read the paired devices file', (error as Error).message) })
 
   // The VAPID pair is created on first use and kept for good (a new pair would orphan every subscription).
   let vapidPromise: Promise<VapidKeys> | undefined
@@ -106,7 +122,9 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
 
   // Gate for every signed-in route: Host/Origin fence plus authentication, failing closed.
   const rejected = (req: IncomingMessage, res: ServerResponse): boolean => {
-    const status = ctx.connection.requestRejection({ headers: req.headers })
+    let status: 401 | 403 | undefined = ctx.connection.requestRejection({ headers: req.headers })
+    // Core's sign-in cookie is stateless. A cookie minted for a device that has since been removed is refused here.
+    if (status === undefined && devices.isRevokedCookie(req.headers['cookie'])) status = 401
     if (status === undefined) return false
     send(res, status, status === 401 ? 'Sign in to DSH first: open the DSH link with its token once on this device.' : 'Forbidden', { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
     return true
@@ -198,6 +216,47 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
       }
     },
   })
+
+  // ── Phone pairing ──
+  if (config.pairing.enabled) {
+    const conn = ctx.connection
+    registerPairing({
+      store: devices,
+      codes: new CodeBook(),
+      claimLimiter: new FailureLimiter(5, 30, 10 * 60 * 1000),
+      sessionLimiter: new FailureLimiter(20, 100, 10 * 60 * 1000),
+      route,
+      rejected,
+      untrusted: (req) => ctx.connection.requestRejection({ headers: req.headers }) === 403,
+      sameOrigin,
+      mint: async (req) => {
+        if (conn.authorizeIndex === undefined || conn.authenticatedUrl === undefined) throw new Error('this DSH version cannot sign a device in')
+        // The launch token is read and spent inside this process: it is never written to a response, a log or the page.
+        const token = new URL(conn.authenticatedUrl('http://dsh.invalid/')).searchParams.get('token') ?? ''
+        const out: { status: number; cookies: string[] } = { status: 0, cookies: [] }
+        conn.authorizeIndex(
+          { method: 'GET', url: `/?token=${encodeURIComponent(token)}`, headers: { host: req.headers['host'] } },
+          { writeHead: (status, headers) => { out.status = status; const c = headers?.['set-cookie']; if (typeof c === 'string') out.cookies.push(c) }, end: () => {} },
+        )
+        if (out.status !== 303 || out.cookies.length === 0) throw new Error('DSH did not sign this address in. Open the pairing link at an address DSH trusts (see --trusted-host).')
+        return out.cookies
+      },
+      chooseOrigin: (req) => chooseOrigin({
+        bind: { host: ctx.webServer.host ?? '127.0.0.1', port: ctx.webServer.port ?? portOf(req.headers['host']), protocol: ctx.webServer.protocol ?? 'http:' },
+        requestHost: typeof req.headers['host'] === 'string' ? req.headers['host'] : undefined,
+      }),
+      log,
+      pageHtml: pairPageHtml(),
+      pageScript: pairScriptSource(),
+      pageCsp: PAIR_CSP,
+    })
+    // Removing a device also ends its browser session on the shared /api route (core's own cookie cannot be revoked).
+    ctx.on('connection/request' as never, ((req: IncomingMessage, res: ServerResponse, next: () => Promise<void>) => {
+      if (!devices.isRevokedCookie(req.headers['cookie'])) return next()
+      send(res, 401, 'unauthorized', { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+      return Promise.resolve()
+    }) as never)
+  }
 
   // ── Web Push ──
   if (config.push.enabled) {

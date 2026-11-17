@@ -1,6 +1,6 @@
 # ohmydsh design
 
-Status: plan, agreed 2026-11-17. Nothing below is built yet except the artwork and the README.
+Status: plan, agreed 2026-11-17. Milestone 1 is built: monorepo skeleton, imported packages, `ohmydsh.json`, the `omd` CLI, installer script and CI. Not yet done: the npm scope and renaming, publishing, the release workflow.
 
 ## Goals
 
@@ -109,3 +109,46 @@ POSIX sh, readable in one screen. Checks OS, finds or installs Node 24 (via mise
 - An npm organisation `ohmydsh` must be created and owned by T3 Venture Labs (needs a human with an npm account).
 - Decide whether the phone-app plugin should default on (it needs HTTPS to be useful).
 - Licences: Studio and Notebook are Apache-2.0 forks; their NOTICE files move with them.
+
+## Milestone 1 status and planned names
+
+Built: `packages/*` (history imported from the public deestax repos, which were already squashed), `ohmydsh.json`,
+`profile/` defaults and pack rows, `packages/cli` (`omd setup | doctor | list | add | remove | update | rollback`),
+`install.sh`, CI (`ci.yml`, `canary.yml` skeleton) and the private-strings audit.
+
+Plugin names stay as they are until milestone 2, because renaming changes plugin row ids and paths. Planned npm names:
+
+| Folder | Today | Planned npm name |
+|---|---|---|
+| `packages/kit` | `dsh-kit` (private) | `@ohmydsh/kit` |
+| `packages/studio` | `dsh-studio` | `@ohmydsh/studio` |
+| `packages/pwa` | `dsh-pwa` | `@ohmydsh/pwa` |
+| `packages/browser-takeover` | `dsh-agent-browser-takeover` | `@ohmydsh/browser-takeover` |
+| `packages/review-comments` | `dsh-review-comments` | `@ohmydsh/review-comments` |
+| `packages/skill-studio` | `dsh-skill-studio` | `@ohmydsh/skill-studio` |
+| `packages/notebook` | `dsh-notebook` | `@ohmydsh/notebook` |
+| `packages/triggers` | `dsh-triggers` | `@ohmydsh/triggers` |
+| `packages/automation-models` | `dsh-automation-models` | `@ohmydsh/automation-models` |
+| `packages/composio` | `dsh-composio` | `@ohmydsh/composio` |
+| `packages/langfuse` | `dsh-langfuse` | `@ohmydsh/langfuse` |
+| `packages/theme` | `dsh-theme` | `@ohmydsh/theme` |
+| `packages/hud` | `dsh-hud` | `@ohmydsh/hud` |
+| `packages/web-search-parallel` | `@parallel-web/dsh-web-search-parallel` | `@ohmydsh/web-search-parallel` (it is a fork of Parallel's plugin) |
+| `packages/cli` | `@ohmydsh/cli` | `@ohmydsh/cli` |
+
+Until publishing exists, `ohmydsh.json` installs our plugins from the GitHub release tarballs listed under `sources`,
+or links `packages/<name>` when `omd setup --dev` is used.
+
+### Decisions made while building
+
+- The manifest has `sources` (per plugin: workspace folder and release tarball), `packInfo` (summary, requirements,
+  optional rows file) and `profile` (profile name, defaults file, official optional bundles to switch on).
+- Both managed blocks (`cordis.patch.yml` and `pnpm-workspace.yaml`) are rewritten between the markers; rows outside them
+  are never touched, and the managed block sits first so the user's rows win.
+- `omd update` stages `omd-next`, runs `dsh plugin install`, then `dsh --dump-config`. A patch row that names a plugin
+  that is not active (dsh only warns) is an error, as is any pinned plugin that did not contribute to the config.
+  Only then are the folders swapped; `omd-prev` is kept and `omd rollback` swaps them back (and again to undo).
+- A running DSH on the profile blocks the swap unless `--force`; omd never restarts DSH.
+- An optional `--boot-check` boots the staged web app briefly and looks for load failures.
+- Gotcha for any test home: some plugins read `~/.dsh` directly (dsh-engram "adopts" an existing store into a second
+  `DSH_HOME`). Boot test homes with a fake `HOME` (see `scripts/dev-env.sh`, `OMD_FAKE_HOME=1`).

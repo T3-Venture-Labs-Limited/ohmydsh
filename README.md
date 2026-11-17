@@ -33,7 +33,7 @@ DeepSeek Harness is a plugin framework: the core is small and everything else is
 ## Install
 
 > [!IMPORTANT]
-> **Work in progress.** The installer and the `omd` command are being built now; the commands below don't work yet. Until then, the plugins are available one by one from their [release pages](https://github.com/deestax?tab=repositories&q=dsh-). See [docs/DESIGN.md](docs/DESIGN.md) for the plan.
+> **Work in progress.** The installer and the `omd` command are being built now; the commands below don't work yet. Until then, the plugins are available one by one from their [release pages](https://github.com/deestax?tab=repositories&q=dsh-). See [docs/DESIGN.md](docs/DESIGN.md) for the plan. From a checkout, `pnpm install && node packages/cli/bin/omd.js setup --dev` already works.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/T3-Venture-Labs-Limited/ohmydsh/main/install.sh | sh

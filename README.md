@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hero.svg" alt="ohmydsh — DeepSeek Harness, batteries included." width="100%">
+  <img src="assets/hero.png" alt="ohmydsh — DeepSeek Harness, batteries included." width="100%">
 </p>
 
 <p align="center">

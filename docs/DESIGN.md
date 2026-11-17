@@ -102,7 +102,7 @@ POSIX sh, readable in one screen. Checks OS, finds or installs Node 24 (via mise
 2. Replace each plugin's copied `src/kit` with a dependency on `@ohmydsh/kit` (bundled at build time, so nothing changes at runtime).
 3. Rename packages to `@ohmydsh/<name>`, keep the plugin row ids unchanged so existing user settings keep working.
 4. Archive the `deestax/dsh-*` repos with a README pointer.
-5. Switch Daryll's own `web` profile to the `omd` profile (or keep `web` linked to the monorepo for development).
+5. Move the maintainers' own setups onto the `omd` profile (or keep `web` linked to the monorepo for development).
 
 ## Open items
 

@@ -1,6 +1,7 @@
 # ohmydsh monorepo workspace. Per-package pnpm settings were merged here when the plugins were imported.
 packages:
   - packages/*
+  - apps/*
 
 nodeLinker: isolated
 

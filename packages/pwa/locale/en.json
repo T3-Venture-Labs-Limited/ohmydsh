@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Phone app",
+    "description": "Installs the normal DSH UI as an app on your phone or desktop and sends Web Push notifications to phones that turn them on: when a session needs you (approval, question, plan review) and when a reply has finished, even with the app closed. Also accepts shares from the Android share sheet as a draft in the normal composer. Open Settings > Phone app to install it and enable notifications. Needs HTTPS (for example Tailscale HTTPS) or localhost. The service worker only caches public, versioned files; it never caches /api or anything signed in. Turn the plugin off to remove the manifest, worker and push routes.",
+    "detail": "docs/DETAIL.md"
+  }
+}

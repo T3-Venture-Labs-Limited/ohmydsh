@@ -1,0 +1,14 @@
+dsh-kit
+Copyright (c) 2026 Superdao (deestax)
+
+Licensed under the MIT License (see LICENSE).
+
+The UI controls in ui/ (Button, Switch, SegmentedControl, TextField/Select, Modal, Tooltip, the modal-layer and
+tooltip-placement helpers and the matching rules in ui/kit.css) were adapted from the DSH client UI primitives:
+
+  @deepseek-ai/dsh-client-ui-primitives 0.2.2-rc.3
+  https://github.com/deepseek-ai/deepseek-harness (packages/client/ui-primitives)
+  MIT License, Copyright (c) 2026 DeepSeek
+
+The upstream licence text is reproduced in THIRD_PARTY_NOTICES.md and must stay with copies of that code. Plugins created
+from the template (scripts/new-plugin.sh) receive a copy of ui/ as src/kit/ and a NOTICE file that carries the same attribution.

@@ -10,7 +10,7 @@ source, webhook URL, last runs and links to the chats it created. Design notes: 
 |---|---|---|
 | Webhook | `POST /hooks/<automation-id>` on the DSH web server | Auth per automation: bearer token (`Authorization: Bearer` / `X-Trigger-Token`), HMAC-SHA256 (`X-Hub-Signature-256`, GitHub), Standard Webhooks (`webhook-id/-timestamp/-signature`), or none (loopback only). Body ≤ 1 MiB. Optional event-type filter. Reachable from your tailnet at `https://<tailnet-host>/hooks/<id>` when DSH is served with `tailscale serve`. |
 | File | A new file whose **name** matches a glob (`transcript.md`, `*.pdf`) in a watched folder, once quiet for *settle* seconds | Recursive watch plus a periodic catch-up scan. Files present when the automation is created never fire. Optional "sibling JSON field equals" condition. |
-| Composio | A Composio trigger event (Gmail, Slack, GitHub, …) received by [dsh-composio](../dsh-composio)'s realtime listener | Pick a connected account and a trigger type on the page; the trigger instance is created in Composio on save and removed on delete (unless a Composio-page route still uses it). No public URL needed. |
+| Composio | A Composio trigger event (Gmail, Slack, GitHub, …) received by [dsh-composio](../composio)'s realtime listener | Pick a connected account and a trigger type on the page; the trigger instance is created in Composio on save and removed on delete (unless a Composio-page route still uses it). No public URL needed. |
 
 Each automation targets either a **new chat per event** or **one chat** that every event is added to, in a chosen
 workspace, with a model (or the profile default), file sandbox, tool set and title template.

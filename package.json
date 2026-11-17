@@ -1,0 +1,28 @@
+{
+  "name": "ohmydsh",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An opinionated, batteries-included setup for DeepSeek Harness",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git"
+  },
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "pnpm -r --workspace-concurrency=2 run check",
+    "build": "pnpm -r --workspace-concurrency=2 run build",
+    "test": "pnpm -r run test",
+    "check:private": "node scripts/check-private-strings.mjs",
+    "check:manifest": "node scripts/check-manifest.mjs",
+    "changeset": "changeset",
+    "version-packages": "changeset version"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.0"
+  }
+}

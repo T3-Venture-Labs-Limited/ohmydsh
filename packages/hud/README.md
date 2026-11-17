@@ -1,6 +1,6 @@
 # dsh-hud
 
-Host half of the DSH HUD: a Unix-socket JSON-RPC bridge that lets the [dsh-hud-qt](../dsh-hud-qt) desktop popup list sessions, chat, switch the model and open a session in the web UI.
+Host half of the DSH HUD: a Unix-socket JSON-RPC bridge that lets the [dsh-hud-qt](https://github.com/deestax/dsh-hud-qt) desktop popup list sessions, chat, switch the model and open a session in the web UI.
 
 **Disabled by default.** Enable it only if you run the Qt HUD:
 

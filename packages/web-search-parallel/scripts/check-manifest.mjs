@@ -15,13 +15,13 @@ assert.equal(manifest.packageManager, 'pnpm@11.7.0')
 assert.equal(manifest.engines.node, '^22.19.0 || >=24.0.0')
 assert.equal(manifest.dsh?.bundle?.patch, './cordis.patch.yml')
 assert.deepEqual(manifest.dependencies, {
-  '@deepseek-ai/schemastery': '3.18.1',
   'parallel-web': '1.3.0',
 })
 assert.deepEqual(manifest.peerDependencies, {
   '@deepseek-ai/cordis': '^4.0.1',
   '@deepseek-ai/dsh-launch-environment': '>=0.2.0-0 <0.3.0',
   '@deepseek-ai/dsh-web': '>=0.2.0-0 <0.3.0',
+  '@deepseek-ai/schemastery': '>=3.18.4 <4',
 })
 assert.equal(manifest.engines.dsh, '>=0.2.0-0 <0.3.0')
 for (const name of Object.keys(manifest.peerDependencies)) {

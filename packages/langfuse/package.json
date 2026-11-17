@@ -101,5 +101,8 @@
     "@opentelemetry/otlp-exporter-base": "^0.301.2",
     "@opentelemetry/sdk-trace-base": "^2.12.1",
     "@opentelemetry/sdk-trace-node": "^2.12.1"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

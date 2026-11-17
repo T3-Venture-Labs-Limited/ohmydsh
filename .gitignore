@@ -1,0 +1,11 @@
+node_modules/
+lib/
+dist/
+.tmp/
+*.log
+*.tgz
+.DS_Store
+.tsbuildinfo
+.env
+.env.*
+!.env.example

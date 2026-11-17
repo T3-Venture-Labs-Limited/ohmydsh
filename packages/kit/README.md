@@ -26,8 +26,8 @@ Bundling: the template's tsdown config handles `*.css?inline`; React/ReactDOM ar
 ## Token linter (`lint/token-lint.mjs`)
 
 ```sh
-node ../dsh-kit/lint/token-lint.mjs            # scans src (strict) and lib (tokens only) in cwd
-node ../dsh-kit/lint/token-lint.mjs src --tokens my-tokens.txt
+node ../kit/lint/token-lint.mjs            # scans src (strict) and lib (tokens only) in cwd
+node ../kit/lint/token-lint.mjs src --tokens my-tokens.txt
 ```
 
 Fails on: `--dsw-*` names not in `dsw-defined.txt`, dynamic `--dsw-…${}` names, and `#hex` / `rgb()` / `hsl()` literals outside artwork.

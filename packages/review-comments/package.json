@@ -54,7 +54,7 @@
     "build": "tsdown && node scripts/check-artifacts.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint:tokens": "node ../dsh-kit/lint/token-lint.mjs src",
+    "lint:tokens": "node ../kit/lint/token-lint.mjs src",
     "check": "pnpm typecheck && pnpm test && pnpm build && pnpm lint:tokens"
   },
   "peerDependencies": {
@@ -90,5 +90,8 @@
     "review",
     "comments",
     "annotation"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

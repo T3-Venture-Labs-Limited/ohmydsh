@@ -89,5 +89,8 @@
   },
   "dependencies": {
     "pusher-js": "^8.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

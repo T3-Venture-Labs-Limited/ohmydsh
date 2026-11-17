@@ -4,7 +4,9 @@ import { spawnSync } from 'node:child_process'
 const pnpmCli = process.env.npm_execpath
 assert.ok(pnpmCli, 'npm_execpath is required to run the pinned pnpm CLI')
 
-const result = spawnSync(process.execPath, [pnpmCli, 'pack', '--dry-run', '--json'], {
+// pnpm 12 ships as a native binary; older releases are a JS file that needs node.
+const isScript = /\.[cm]?js$/.test(pnpmCli)
+const result = spawnSync(isScript ? process.execPath : pnpmCli, [...(isScript ? [pnpmCli] : []), 'pack', '--dry-run', '--json'], {
   cwd: new URL('..', import.meta.url),
   encoding: 'utf8',
 })

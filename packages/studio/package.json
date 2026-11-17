@@ -136,5 +136,8 @@
   },
   "optionalDependencies": {
     "sharp": "0.35.5"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -111,7 +111,8 @@ describe('webhook route', () => {
     const res = await post(r.automation.id, '{"n":2}', auth)
     expect(res.status).toBe(429)
     expect(res.headers.get('retry-after')).toBe('60')
-    expect(store.recentRuns()[0]).toMatchObject({ status: 'skipped', reason: 'rate-limited' })
+    // Both runs can land in the same millisecond, so don't rely on their order.
+    expect(store.recentRuns()).toContainEqual(expect.objectContaining({ status: 'skipped', reason: 'rate-limited' }))
   })
 
   it('event-type filter answers 202 accepted:false', async () => {

@@ -1,0 +1,259 @@
+name: Apps (desktop + Android)
+
+# Builds the ohmydsh desktop app (Windows, macOS, Linux) and the Android APK and attaches them to the GitHub Release.
+# Runs on a version tag (v*) and by hand. Desktop builds are UNSIGNED for now (see docs/APPS.md).
+#
+# Repository secrets used (all optional; without them the Android release is signed with a generated key and says so):
+#   ANDROID_KEYSTORE_BASE64    base64 of the release .jks
+#   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS
+#   ANDROID_KEY_PASSWORD
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing tag to attach the build to (leave empty to only build and keep the artifacts for 14 days)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apps-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Version shown in the apps: the tag without the leading v, else 0.0.0-dev.
+  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+
+jobs:
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      code: ${{ steps.v.outputs.code }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - id: v
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.release_tag }}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; fi
+          VERSION="${TAG#v}"
+          if [[ -z "$VERSION" ]]; then VERSION="0.0.0-dev"; fi
+          # versionCode = major*1000000 + minor*1000 + patch (the "-rc.1" style suffix is ignored), at least 1.
+          IFS=. read -r MA MI PA <<< "${VERSION%%-*}"
+          CODE=$(( ${MA:-0} * 1000000 + ${MI:-0} * 1000 + ${PA:-0} ))
+          if [[ "$CODE" -lt 1 ]]; then CODE=1; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  desktop:
+    name: desktop (${{ matrix.name }})
+    needs: version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-latest
+            script: dist:linux
+          - name: windows
+            os: windows-latest
+            script: dist:win
+          - name: macos
+            os: macos-latest
+            script: dist:mac
+    defaults:
+      run:
+        working-directory: apps/desktop
+    env:
+      # No certificates anywhere: unsigned builds, and no attempt to discover a signing identity.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+      electron_config_cache: ${{ github.workspace }}/.cache/electron
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install (npm, standalone project)
+        run: npm ci --no-audit --no-fund
+      - name: Electron binary (install script)
+        run: node node_modules/electron/install.js
+      - name: Unit tests
+        run: npm run check
+      - name: Set the app version from the tag
+        shell: bash
+        run: npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version
+      - name: Build (unsigned)
+        run: npm run ${{ matrix.script }}
+      - name: List artifacts
+        shell: bash
+        run: ls -la dist/*.AppImage dist/*.deb dist/*.exe dist/*.dmg dist/latest*.yml 2>/dev/null || true
+      - name: Build the phone-app plugin the smoke profile links (pairing lives in packages/pwa)
+        if: matrix.name == 'linux'
+        working-directory: .
+        shell: bash
+        run: |
+          npm install -g pnpm@12.15.0
+          pnpm install --frozen-lockfile --filter dsh-pwa...
+          pnpm --filter dsh-pwa run build
+      - name: Unpack the AppImage
+        if: matrix.name == 'linux'
+        shell: bash
+        run: |
+          APPIMAGE=$(ls dist/*.AppImage | head -1)
+          chmod +x "$APPIMAGE"
+          "$APPIMAGE" --appimage-extract >/dev/null
+      - name: "Smoke test the Linux build (real first run - installs DSH, boots it, checks pairing end to end)"
+        if: matrix.name == 'linux'
+        shell: bash
+        env:
+          ELECTRON_RUN_AS_NODE: '1'
+          OHMYDSH_USER_DATA: ${{ runner.temp }}/ohmydsh-userdata
+          OHMYDSH_MANIFEST: ${{ github.workspace }}/apps/desktop/tests/smoke/ohmydsh.json
+          OHMYDSH_OMD_ARGS: --dev
+        run: timeout 1500 ./squashfs-root/ohmydsh --no-sandbox squashfs-root/resources/app.asar/src/smoke.js
+      - name: "Smoke test the window under xvfb (the same checks, inside a real BrowserWindow)"
+        if: matrix.name == 'linux'
+        shell: bash
+        env:
+          OHMYDSH_USER_DATA: ${{ runner.temp }}/ohmydsh-userdata
+          OHMYDSH_MANIFEST: ${{ github.workspace }}/apps/desktop/tests/smoke/ohmydsh.json
+          OHMYDSH_OMD_ARGS: --dev
+          OHMYDSH_TEST_PORT: '43183'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgbm1 libasound2t64 >/dev/null
+          timeout 600 xvfb-run -a ./squashfs-root/ohmydsh --no-sandbox --headless-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ohmydsh-desktop-${{ matrix.name }}
+          path: |
+            apps/desktop/dist/*.AppImage
+            apps/desktop/dist/*.deb
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/*.dmg
+            apps/desktop/dist/latest*.yml
+            apps/desktop/dist/*.blockmap
+          if-no-files-found: error
+          retention-days: 14
+
+  android:
+    name: android (apk)
+    needs: version
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests (pairing link parser, computers store, API client)
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+      - name: Release signing key
+        id: key
+        shell: bash
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_KEYPASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          KS="$RUNNER_TEMP/ohmydsh-release.jks"
+          if [[ -n "$KS_B64" && -n "$KS_PASS" && -n "$KS_ALIAS" ]]; then
+            echo "$KS_B64" | base64 -d > "$KS"
+            echo "OHMYDSH_KEYSTORE_FILE=$KS" >> "$GITHUB_ENV"
+            echo "OHMYDSH_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "OHMYDSH_KEY_ALIAS=$KS_ALIAS" >> "$GITHUB_ENV"
+            echo "OHMYDSH_KEY_PASSWORD=${KS_KEYPASS:-$KS_PASS}" >> "$GITHUB_ENV"
+            echo "signed=repo-key" >> "$GITHUB_OUTPUT"
+          else
+            # No secrets (a fork, or the key was not set up yet): a throwaway key, so the APK still installs, with a loud warning.
+            # An APK signed with a different key cannot update one signed with the real key: do not publish this one.
+            GEN_PASS=$(openssl rand -hex 16)
+            keytool -genkeypair -keystore "$KS" -storepass "$GEN_PASS" -keypass "$GEN_PASS" -alias ohmydsh -keyalg RSA -keysize 3072 -validity 10000 -dname "CN=ohmydsh generated key, O=not the release key" >/dev/null 2>&1
+            echo "::add-mask::$GEN_PASS"
+            echo "OHMYDSH_KEYSTORE_FILE=$KS" >> "$GITHUB_ENV"
+            echo "OHMYDSH_KEYSTORE_PASSWORD=$GEN_PASS" >> "$GITHUB_ENV"
+            echo "OHMYDSH_KEY_ALIAS=ohmydsh" >> "$GITHUB_ENV"
+            echo "OHMYDSH_KEY_PASSWORD=$GEN_PASS" >> "$GITHUB_ENV"
+            echo "signed=generated" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Android APK signed with a generated key::ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD are not set. This APK will not update an APK signed with the real key. See docs/APPS.md."
+          fi
+      - name: Build the release APK
+        run: ./gradlew --no-daemon :app:assembleRelease -PappVersion=${{ needs.version.outputs.version }} -PappVersionCode=${{ needs.version.outputs.code }}
+      - name: Name, verify the signature and fingerprint
+        shell: bash
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          OUT="ohmydsh-${{ needs.version.outputs.version }}-android.apk"
+          cp "$APK" "$OUT"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$OUT" | tee apk-signature.txt
+          echo "signed: ${{ steps.key.outputs.signed }}" | tee -a apk-signature.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ohmydsh-android
+          path: |
+            apps/android/ohmydsh-*-android.apk
+            apps/android/apk-signature.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: attach to the release
+    needs: [version, desktop, android]
+    # Only for a tag (pushed, or named in a manual run) so a manual test run never publishes anything.
+    if: needs.version.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Checksums
+        shell: bash
+        working-directory: artifacts
+        run: |
+          ls -la
+          sha256sum ohmydsh-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Release notes block
+        shell: bash
+        run: |
+          cat > apps-notes.md <<'EOF'
+          ### Apps
+
+          | | File |
+          |---|---|
+          | Windows (x64) | `ohmydsh-<version>-win-x64-setup.exe` |
+          | macOS (Apple Silicon / Intel) | `ohmydsh-<version>-mac-arm64.dmg` / `-mac-x64.dmg` |
+          | Linux | `ohmydsh-<version>-linux-x86_64.AppImage` or `.deb` |
+          | Android | `ohmydsh-<version>-android.apk` |
+
+          **The desktop apps are not code-signed yet.** Windows shows SmartScreen ("More info" → "Run anyway"); on macOS right-click the app → Open, or run `xattr -dr com.apple.quarantine /Applications/ohmydsh.app`. Verify downloads against `SHA256SUMS.txt`. Details: [docs/APPS.md](https://github.com/${{ github.repository }}/blob/main/docs/APPS.md).
+          EOF
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          files: |
+            artifacts/*
+          append_body: true
+          body_path: apps-notes.md
+          fail_on_unmatched_files: true

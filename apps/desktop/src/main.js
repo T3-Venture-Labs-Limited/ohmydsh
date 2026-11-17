@@ -156,44 +156,9 @@ function finishTest(code) {
   stop.finally(() => { logger?.close(); app.exit(code) })
 }
 async function runHeadlessTest(url) {
-  const origin = new URL(url).origin
-  const results = []
-  const check = async (name, fn) => {
-    try { const detail = await fn(); results.push({ name, ok: true, detail }) } catch (e) { results.push({ name, ok: false, detail: e.message }) }
-  }
-  const jar = {}
-  await check('token URL signs the app in (303 + HttpOnly cookie)', async () => {
-    const r = await fetch(url, { redirect: 'manual' })
-    const cookie = r.headers.get('set-cookie') ?? ''
-    if (r.status !== 303 || !/HttpOnly/i.test(cookie)) throw new Error(`status ${r.status}`)
-    jar.cookie = cookie.split(';')[0]
-    return `${r.status}, ${cookie.split('=')[0].slice(0, 12)}…`
-  })
-  await check('the DSH web UI loads with that cookie', async () => {
-    const r = await fetch(`${origin}/`, { headers: { cookie: jar.cookie } })
-    const body = await r.text()
-    if (r.status !== 200 || !/<html/i.test(body)) throw new Error(`status ${r.status}`)
-    return `200, ${body.length} bytes of HTML`
-  })
-  await check('without the cookie DSH answers 401', async () => {
-    const r = await fetch(`${origin}/`)
-    if (r.status !== 401) throw new Error(`status ${r.status}`)
-    return '401'
-  })
-  await check('the phone-app plugin is active (/manifest.webmanifest)', async () => {
-    const r = await fetch(`${origin}/manifest.webmanifest`)
-    const m = await r.json()
-    if (m.start_url !== '/app') throw new Error(`start_url ${m.start_url}`)
-    return `start_url ${m.start_url}`
-  })
-  await check('pairing routes are protected (/pair/code needs a sign-in)', async () => {
-    const r = await fetch(`${origin}/pair/code`, { method: 'POST', headers: { 'content-type': 'application/json', origin }, body: '{}' })
-    if (r.status !== 401) throw new Error(`status ${r.status}`)
-    return '401'
-  })
-  const ok = results.every((r) => r.ok)
-  console.log(`ohmydsh ${pkg.version} headless test (electron ${process.versions.electron}, node ${process.versions.node}, DSH home ${paths.usesOwnHome ? 'app data' : 'custom'})`)
-  for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.detail ? ` – ${r.detail}` : ''}`)
+  const { runChecks, report } = require('./checks')
+  const { ok, results } = await runChecks(url)
+  console.log(report(results, `ohmydsh ${pkg.version} headless test (electron ${process.versions.electron}, node ${process.versions.node}, DSH home ${paths.usesOwnHome ? 'app data' : 'custom'})`))
   console.log(ok ? 'HEADLESS-TEST OK' : 'HEADLESS-TEST FAILED')
   finishTest(ok ? 0 : 1)
 }

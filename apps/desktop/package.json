@@ -20,16 +20,16 @@
     "start": "node scripts/bundle.mjs && electron .",
     "bundle": "node scripts/bundle.mjs",
     "test": "node --test tests/",
-    "check": "node --check src/main.js && node --test tests/",
+    "check": "node --check src/main.js && node --check src/smoke.js && node --test tests/",
     "icons": "node scripts/make-icons.mjs",
     "pack": "node scripts/bundle.mjs && electron-builder --dir",
     "dist:linux": "node scripts/bundle.mjs && electron-builder --linux AppImage deb --x64 --publish never",
     "dist:win": "node scripts/bundle.mjs && electron-builder --win nsis --x64 --publish never",
-    "dist:mac": "node scripts/bundle.mjs && electron-builder --mac dmg --arm64 --x64 --publish never"
+    "dist:mac": "node scripts/bundle.mjs && electron-builder --mac dmg --arm64 --x64 --publish never",
+    "smoke": "node scripts/bundle.mjs && ELECTRON_RUN_AS_NODE=1 electron src/smoke.js"
   },
   "dependencies": {
-    "electron-updater": "6.8.11",
-    "npm": "11.21.2"
+    "electron-updater": "6.8.11"
   },
   "devDependencies": {
     "electron": "44.7.0",
@@ -37,6 +37,7 @@
   },
   "ohmydsh": {
     "pnpm": "12.15.0",
-    "electronPinReason": "DSH's native add-on only accepts Electron 43.0.0, 44.0.0, 44.7.0 or 45.0.0-alpha.6 when DSH runs under ELECTRON_RUN_AS_NODE; see docs/APPS.md"
+    "electronPinReason": "DSH's native add-on only accepts Electron 43.0.0, 44.0.0, 44.7.0 or 45.0.0-alpha.6 when DSH runs under ELECTRON_RUN_AS_NODE; see docs/APPS.md",
+    "npm": "11.21.2"
   }
 }

@@ -1,0 +1,7 @@
+bundle/
+dist/
+node_modules/
+*.AppImage
+*.deb
+*.exe
+*.dmg

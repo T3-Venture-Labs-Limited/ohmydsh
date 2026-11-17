@@ -25,7 +25,10 @@ function resolvePaths({ userData, resources, appPath, env = process.env, platfor
     omdBin: path.join(resources, 'ohmydsh', 'packages', 'cli', 'bin', 'omd.js'),
     // OHMYDSH_MANIFEST points the installer at another ohmydsh.json (tests, a release candidate); relative profile/ files resolve next to it.
     manifest: env.OHMYDSH_MANIFEST && env.OHMYDSH_MANIFEST !== '' ? path.resolve(env.OHMYDSH_MANIFEST) : path.join(resources, 'ohmydsh', 'ohmydsh.json'),
-    npmCli: path.join(appPath.endsWith('.asar') ? `${appPath}.unpacked` : appPath, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    npmTarball: path.join(resources, 'npm.tgz'),
+    // npm unpacked by the first run (see runtime.js); it is what installs DSH, run by Electron's Node.
+    npmDir: path.join(runtime, 'npm'),
+    npmCli: path.join(runtime, 'npm', 'bin', 'npm-cli.js'),
   }
 }
 

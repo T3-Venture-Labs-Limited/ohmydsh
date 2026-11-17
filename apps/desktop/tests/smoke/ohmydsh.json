@@ -1,0 +1,9 @@
+{
+  "version": "0.0.0-smoke",
+  "dsh": "0.2.2-rc.3",
+  "node": ">=24",
+  "profile": { "name": "omd", "defaults": "profile/defaults.cordis.yml", "official": [] },
+  "plugins": { "core": { "dsh-pwa": "0.3.0" }, "packs": {} },
+  "sources": { "dsh-pwa": { "workspace": "../../../../packages/pwa" } },
+  "allowBuilds": []
+}

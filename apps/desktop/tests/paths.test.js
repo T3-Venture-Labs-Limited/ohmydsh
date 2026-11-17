@@ -9,7 +9,7 @@ test('uses its own DSH home in the app data folder by default', () => {
   assert.equal(p.dshHome, path.join('/u', 'dsh-home')); assert.equal(p.usesOwnHome, true)
   assert.equal(p.dshBin, path.join('/u', 'runtime', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))
   assert.equal(p.manifest, path.join('/r', 'ohmydsh', 'ohmydsh.json'))
-  assert.equal(p.npmCli, path.join('/a/app.asar.unpacked', 'node_modules', 'npm', 'bin', 'npm-cli.js'))
+  assert.equal(p.npmCli, path.join('/u', 'runtime', 'npm', 'bin', 'npm-cli.js')); assert.equal(p.npmTarball, path.join('/r', 'npm.tgz'))
 })
 test('OHMYDSH_DSH_HOME points the app at an existing DSH home; OHMYDSH_MANIFEST at another manifest', () => {
   const p = resolvePaths({ userData: '/u', resources: '/r', appPath: '/a', env: { OHMYDSH_DSH_HOME: '/home/me/.dsh', OHMYDSH_MANIFEST: '/tmp/m.json' }, platform: 'linux' })

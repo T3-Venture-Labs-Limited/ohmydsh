@@ -1,0 +1,7 @@
+# Smoke-test profile: only the phone-app plugin (linked from this checkout), so CI does not install the whole set.
+- id: dsh-pwa
+  name: dsh-pwa
+  config:
+    serviceWorker: true
+    share:
+      enabled: true

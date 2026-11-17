@@ -58,6 +58,18 @@ function run(file, args, { env, cwd, onLine, log, timeoutMs = 30 * 60 * 1000 }) 
   })
 }
 
+/** Unpack the bundled npm (a registry tarball: everything sits under package/) into <runtime>/npm, once per npm version. */
+async function unpackNpm(paths, env, log) {
+  const stamp = path.join(paths.npmDir, '.tarball-size')
+  const size = String(fs.statSync(paths.npmTarball).size)
+  try { if (fs.readFileSync(stamp, 'utf8') === size && fs.existsSync(paths.npmCli)) return } catch { /* not unpacked yet */ }
+  fs.rmSync(paths.npmDir, { recursive: true, force: true })
+  fs.mkdirSync(paths.npmDir, { recursive: true })
+  // bsdtar (macOS, Windows 10+) and GNU tar (Linux) both read .tgz; --strip-components drops the leading package/.
+  await run('tar', ['-xzf', paths.npmTarball, '-C', paths.npmDir, '--strip-components=1'], { env, log })
+  fs.writeFileSync(stamp, size)
+}
+
 /**
  * @param {object} o
  * @param {ReturnType<import('./paths').resolvePaths>} o.paths
@@ -76,6 +88,7 @@ async function provision({ paths, electron, pnpmVersion, progress, log, platform
   const state = readState(paths)
 
   if (todo.runtime) {
+    await unpackNpm(paths, env, log)
     progress({ step: 'Installing DeepSeek Harness', detail: `version ${wanted.dsh}`, fraction: 0.05 })
     fs.writeFileSync(path.join(paths.runtime, 'package.json'), `${JSON.stringify({ name: 'ohmydsh-runtime', private: true, version: '0.0.0', dependencies: {} }, null, 2)}\n`)
     const pkgs = [`@deepseek-ai/dsh@${wanted.dsh}`, `pnpm@${wanted.pnpm}`]
@@ -94,7 +107,9 @@ async function provision({ paths, electron, pnpmVersion, progress, log, platform
   if (todo.profile) {
     progress({ step: 'Installing the ohmydsh plugins', detail: 'this takes a few minutes the first time', fraction: 0.4 })
     let seen = 0
-    await run(electron, [paths.omdBin, 'setup', '--no-dsh-install', '--manifest', paths.manifest], {
+    // OHMYDSH_OMD_ARGS: extra `omd setup` flags for tests and release candidates (for example `--dev` to link a checkout).
+    const extra = (process.env.OHMYDSH_OMD_ARGS ?? '').split(/\s+/).filter(Boolean)
+    await run(electron, [paths.omdBin, 'setup', '--no-dsh-install', '--manifest', paths.manifest, ...extra], {
       env, cwd: paths.runtime, log,
       onLine: (l) => { seen += 1; progress({ step: 'Installing the ohmydsh plugins', detail: l.replace(/^\S+\s+/, '').slice(0, 120), fraction: Math.min(0.95, 0.4 + seen / 400) }) },
     })
@@ -105,4 +120,4 @@ async function provision({ paths, electron, pnpmVersion, progress, log, platform
   return { changed: true, wanted }
 }
 
-module.exports = { provision, needs, wantedVersions, ProvisionError, run }
+module.exports = { provision, needs, wantedVersions, unpackNpm, ProvisionError, run }

@@ -59,6 +59,24 @@ npm install -g @ohmydsh/cli
 omd setup
 ```
 
+### Apps
+
+Prefer an app to a terminal? ohmydsh ships a **desktop app** and an **Android app** that links to it by QR code.
+
+> [!NOTE]
+> **Coming with the first release.** The download buttons below start working when the first version tag is built. See [docs/APPS.md](docs/APPS.md) for everything, including how to build them today.
+
+<p align="center">
+  <a href="https://github.com/T3-Venture-Labs-Limited/ohmydsh/releases/latest"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-download-2447D6?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="https://github.com/T3-Venture-Labs-Limited/ohmydsh/releases/latest"><img alt="Download for macOS" src="https://img.shields.io/badge/macOS-download-2447D6?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/T3-Venture-Labs-Limited/ohmydsh/releases/latest"><img alt="Download for Linux" src="https://img.shields.io/badge/Linux-download-2447D6?style=for-the-badge&logo=linux&logoColor=white"></a>
+  <a href="https://github.com/T3-Venture-Labs-Limited/ohmydsh/releases/latest"><img alt="Download the Android APK" src="https://img.shields.io/badge/Android-APK-5EEAD4?style=for-the-badge&logo=android&logoColor=0A0A0A"></a>
+</p>
+
+- **Desktop** (Windows, macOS, Linux): DSH and the plugin set in their own window, with a tray icon. No Node, no terminal. The first start installs everything (a few minutes).
+- **Android**: open **Settings → Phone app → Pair a phone** in DSH, scan the QR code with the ohmydsh app, and your computer's DSH opens full-screen on the phone, over Tailscale or your Wi-Fi.
+- The desktop builds are **not code-signed yet**, so Windows and macOS ask you to confirm the first start: [how](docs/APPS.md#installing-the-desktop-app).
+
 ## What's inside
 
 Everything below is installed and enabled by default unless marked *optional*.

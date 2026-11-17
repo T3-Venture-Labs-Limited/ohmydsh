@@ -12,13 +12,13 @@ files:
   - build/icon.png
   - build/icon.ico
   - "!**/*.map"
-# The npm CLI is executed by Electron's Node (a child process cannot read inside an asar), the bundle is read by omd.
-asarUnpack:
-  - node_modules/npm/**
+# Read by child processes (a child cannot read inside an asar): the omd CLI + manifest, and npm, which installs DSH on first run.
 extraResources:
   - from: bundle/ohmydsh
     to: ohmydsh
     filter: ["**/*"]
+  - from: bundle/npm.tgz
+    to: npm.tgz
 publish:
   provider: github
   owner: T3-Venture-Labs-Limited
@@ -27,6 +27,7 @@ publish:
 artifactName: ohmydsh-${version}-${os}-${arch}.${ext}
 linux:
   target: [AppImage, deb]
+  executableName: ohmydsh
   category: Development
   icon: build/icon.png
   maintainer: T3 Venture Labs <hello@t3.ai>

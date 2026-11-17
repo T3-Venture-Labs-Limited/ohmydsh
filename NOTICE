@@ -24,6 +24,14 @@ Packages and their licences
   packages/web-search-parallel MIT   @parallel-web/dsh-web-search-parallel (a fork of Parallel's plugin, (c) 2026 Parallel;
                                      its upstream history is kept in this repository)
 
+Apps
+----
+  apps/desktop                 MIT   @ohmydsh/desktop (Electron, MIT; electron-builder and electron-updater, MIT; npm, Artistic-2.0, shipped unmodified as a tarball)
+  apps/android                 MIT   ai.t3.ohmydsh (zxing-android-embedded, Apache-2.0, (c) JourneyApps; ZXing, Apache-2.0;
+                                     AndroidX, Material Components and security-crypto, Apache-2.0, (c) Google)
+  The apps were written for this repository. Ideas were read, not copied, from zexadev/dsh-tether (MIT), saya-ch/dsh-mobile
+  (Apache-2.0) and dsh-tauri/deepseek-harness-desktop (MIT); no code from them is included.
+
 Third-party code common to our plugins
 --------------------------------------
 Most plugins adapt UI controls from @deepseek-ai/dsh-client-ui-primitives (https://github.com/deepseek-ai/deepseek-harness),

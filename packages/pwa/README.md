@@ -18,6 +18,21 @@ Installs the **normal DeepSeek Harness UI** as an app and sends **Web Push notif
 
 Routing was verified in `dsh-host-webserver`: the match order is exact route, then longest prefix, then the single SPA fallback seat, and a duplicate `(kind, path)` registration throws, so these exact routes cannot silently shadow another plugin.
 
+## Pair a phone (0.3.0)
+
+**Settings > Phone app > Pair a phone** shows a QR code and a copyable link for the ohmydsh Android app ([docs/APPS.md](../../docs/APPS.md)). The code is valid 10 minutes and works once.
+
+| Route | Auth | What it does |
+|---|---|---|
+| `POST /pair/code` | signed in, same-origin | Issues a one-time code and the best address for a phone (Tailscale HTTPS name, else the LAN address, with warnings) |
+| `GET /pair/devices` | signed in | Paired devices (name, created, last seen; never tokens) |
+| `POST /pair/remove` | signed in, same-origin | Revokes a device at once |
+| `POST /pair/claim` | **public**, rate-limited | `{code, deviceName}` returns a device token (`{mode:'cookie'}` signs a browser in instead) |
+| `GET /pair/session` | **public**, `Authorization: Bearer <device token>` | `303 /` with DSH's normal HttpOnly sign-in cookie |
+| `GET /app/pair` | public | Landing page of the plain link `https://<address>/app/pair#<code>` (the code stays in the fragment) |
+
+The device token (32 random bytes) is stored only as a SHA-256 hash in `plugin-data/dsh-pwa/devices.json` (0600) and only travels in an `Authorization` header. DSH's launch token is used inside the process and never leaves it. Core's cookie is stateless, so *Remove* is enforced by refusing the cookies minted for that device at core's admission check (all routes, `/api`, the page shell) and closing its WebSockets. Set `pairing: { enabled: false }` to remove all of it. Tests: expiry, single use, rate limit, revocation, constant-time comparison, address choice, and the QR encoder against an independent decoder.
+
 ## What the phone has to do
 
 1. Open DSH at its **HTTPS** address (for example Tailscale: `tailscale serve --bg --https=443 http://127.0.0.1:<port>`) or on `localhost`. Plain `http://` to a non-local host is not a secure context: Chrome will not install the app, run the worker or allow push.

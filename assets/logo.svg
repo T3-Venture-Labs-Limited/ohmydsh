@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ohmydsh logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1B3F"/>
+      <stop offset="1" stop-color="#2447D6"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4D6BFE"/>
+      <stop offset="1" stop-color="#2A3FC4"/>
+    </linearGradient>
+    <clipPath id="tile"><rect width="512" height="512" rx="116"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="512" height="512" fill="url(#bg)"/>
+    <!-- spout: three plugins -->
+    <circle cx="318" cy="118" r="22" fill="#FFB547"/>
+    <circle cx="372" cy="96" r="18" fill="#5EEAD4"/>
+    <circle cx="410" cy="140" r="15" fill="#F472B6"/>
+    <path d="M330 196 C332 170 344 150 362 136" fill="none" stroke="#C9D6FF" stroke-width="10" stroke-linecap="round" opacity=".7"/>
+    <!-- whale -->
+    <path fill="#F5F8FF" d="M112 318
+      C 96 300, 84 268, 86 236
+      C 104 246, 118 258, 128 272
+      C 130 250, 140 230, 158 218
+      C 164 250, 160 282, 154 306
+      C 174 246, 236 204, 314 206
+      C 384 208, 430 252, 430 304
+      C 430 352, 388 372, 330 372
+      L 176 372
+      C 146 372, 124 350, 112 318 Z"/>
+    <path d="M250 318 C 290 340, 350 340, 392 318" fill="none" stroke="#2447D6" stroke-width="10" stroke-linecap="round" opacity=".35"/>
+    <circle cx="376" cy="274" r="11" fill="#0B1B3F"/>
+    <!-- sea -->
+    <path fill="url(#sea)" d="M0 384 C 60 360, 110 360, 170 384 S 280 408, 340 384 S 450 360, 512 384 L 512 512 L 0 512 Z"/>
+    <path fill="none" stroke="#8FA4FF" stroke-width="8" stroke-linecap="round" opacity=".55" d="M40 432 C 90 416, 130 416, 180 432 M300 446 C 350 430, 400 430, 450 446"/>
+  </g>
+</svg>

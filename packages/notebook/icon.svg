@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128"><!-- artwork:start -->
+<rect x="14" y="10" width="100" height="108" rx="14" fill="#F4F1EA"/>
+<rect x="14" y="10" width="100" height="108" rx="14" fill="none" stroke="#C9C2B2" stroke-width="3"/>
+<g fill="#D9D3C4"><rect x="26" y="26" width="10" height="10" rx="3"/><rect x="26" y="52" width="10" height="10" rx="3"/><rect x="26" y="78" width="10" height="10" rx="3"/><rect x="26" y="100" width="10" height="8" rx="3"/></g>
+<rect x="44" y="24" width="58" height="16" rx="5" fill="#3B5BDB"/><path d="M52 29l7 3-7 3z" fill="#fff"/><rect x="64" y="30" width="30" height="4" rx="2" fill="#BAC8FF"/>
+<rect x="44" y="50" width="58" height="26" rx="5" fill="#fff" stroke="#C9C2B2" stroke-width="2"/>
+<path d="M50 70l9-9 7 5 9-12 8 7" fill="none" stroke="#E8590C" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="44" y="86" width="58" height="18" rx="5" fill="#3B5BDB"/><rect x="52" y="93" width="40" height="4" rx="2" fill="#BAC8FF"/>
+<!-- artwork:end --></svg>

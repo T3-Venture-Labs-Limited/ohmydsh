@@ -1,0 +1,5 @@
+# dsh-notebook: one plugin row. Host half = notebook documents, kernels, agent tools, routes;
+# client half = the .ipynb sidebar tab (declared by package.json dsh.client).
+- insert:
+    - id: dsh-notebook
+      name: 'dsh-notebook'

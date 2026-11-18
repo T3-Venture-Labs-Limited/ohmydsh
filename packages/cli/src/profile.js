@@ -105,7 +105,9 @@ export async function syncProfile(ctx, opts) {
     for (const w of ws.warnings) log.warn(w)
 
     log.step('installing plugins (pnpm, may take a minute)')
-    const inst = ctx.run('dsh', ['plugin', '--profile', stagingName(name), 'install'], { env: ctx.env })
+    // The staging profile's package.json is rewritten above, so its lockfile is expected to change; pnpm defaults to
+    // --frozen-lockfile under CI=true, which would refuse exactly this.
+    const inst = ctx.run('dsh', ['plugin', '--profile', stagingName(name), 'install', '--no-frozen-lockfile'], { env: ctx.env })
     if (inst.error || inst.status !== 0) throw new OmdError(`plugin install failed:\n${(inst.error?.message ?? `${inst.stdout}\n${inst.stderr}`).trim().split('\n').slice(-25).join('\n')}`)
 
     log.step('checking that DSH starts with the new set')

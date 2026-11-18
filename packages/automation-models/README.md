@@ -1,4 +1,4 @@
-# dsh-automation-models
+# @t3labs/ohmydsh-automation-models
 
 Run scheduled tasks, sentinel wake-ups and other automations on a **cheaper model**, without touching the session's own model or the profile's global default.
 
@@ -87,7 +87,7 @@ Built-in sources: `schedule` ("Scheduled tasks") and `sentinel` ("Sentinel wake-
 ```sh
 pnpm install
 pnpm run check    # typecheck, oxlint, token lint, vitest, tsdown build, artifact check
-dsh plugin --profile <profile> add "dsh-automation-models@link:$PWD"
+dsh plugin --profile <profile> add "@t3labs/ohmydsh-automation-models@link:$PWD"
 # then restart DSH
 ```
 

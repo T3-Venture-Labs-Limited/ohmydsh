@@ -10,7 +10,7 @@ import { scopeOfSession } from './scope.ts'
 import type { NotebookService } from './service.ts'
 
 export const REMOTE_NAMESPACE = 'dshNotebook'
-export const REMOTE_PACKAGE = 'dsh-notebook'
+export const REMOTE_PACKAGE = '@t3labs/ohmydsh-notebook'
 export const STREAM_METHOD = 'events'
 
 /** Same scope and path rules as the RPC route: the session decides the workspace, the path must stay inside it. */

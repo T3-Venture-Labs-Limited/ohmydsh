@@ -1,4 +1,4 @@
-# dsh-triggers
+# @t3labs/ohmydsh-triggers
 
 Event automations for [DeepSeek Harness](https://github.com/deepseek-ai) (DSH 0.2.x): **something happens → a chat
 opens (or wakes) with a prompt built from the event.** One sidebar page, *Triggers*, lists every automation, its
@@ -64,11 +64,11 @@ senders that need a public URL, relay through Composio or a tunnel you control.
 ```sh
 pnpm install
 pnpm run check                                   # typecheck + lint + token lint + tests + build
-dsh plugin --profile <profile> add "dsh-triggers@link:$PWD"
+dsh plugin --profile <profile> add "@t3labs/ohmydsh-triggers@link:$PWD"
 # then restart DSH
 ```
 
-Remove with `dsh plugin --profile <profile> remove dsh-triggers`. Never link before `pnpm run build` passes: a missing
+Remove with `dsh plugin --profile <profile> remove @t3labs/ohmydsh-triggers`. Never link before `pnpm run build` passes: a missing
 client bundle can stop DSH from starting.
 
 ## Layout

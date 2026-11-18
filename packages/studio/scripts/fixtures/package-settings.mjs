@@ -13,7 +13,7 @@ import Settings from '@deepseek-ai/dsh-settings'
 const home = dirname(fileURLToPath(import.meta.url))
 const version = process.argv[2]
 const legacy = version === '3.18.2'
-const pluginURL = import.meta.resolve('dsh-studio')
+const pluginURL = import.meta.resolve('@t3labs/ohmydsh-studio')
 if (legacy) {
   // Simulate a profile resolving an older schemastery copy. The actual
   // published 3.18.2 is loaded only by the installed plugin; the host stays 0.2.
@@ -24,7 +24,7 @@ if (legacy) {
     return nextResolve(specifier, context)
   } })
 }
-const plugin = await import('dsh-studio')
+const plugin = await import('@t3labs/ohmydsh-studio')
 const profileDir = join(home, `profile-${version}`)
 initProfile(profileDir, ['test-settings-bundle'])
 const bundle = join(profileDir, 'node_modules', 'test-settings-bundle')

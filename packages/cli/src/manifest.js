@@ -30,7 +30,7 @@ export function validateManifest(m) {
   const sources = m.sources ?? {}
   for (const [name, s] of Object.entries(sources)) {
     if (!isObj(s)) { errs.push(`sources.${name} must be an object`); continue }
-    if (s.tarball !== undefined && !/^https:\/\//.test(s.tarball)) errs.push(`sources.${name}.tarball must be an https URL`)
+    if (s.tarball !== undefined && (typeof s.tarball !== 'string' || /^http:\/\//i.test(s.tarball))) errs.push(`sources.${name}.tarball must be an https URL, a file: URL or a path next to the manifest`)
     if (s.workspace !== undefined && typeof s.workspace !== 'string') errs.push(`sources.${name}.workspace must be a path`)
     if (!all.some(([, n]) => n === name)) errs.push(`sources.${name} is not a plugin of this manifest`)
   }
@@ -93,7 +93,9 @@ export function packNames(manifest) {
 
 /**
  * What should be installed for this manifest and set of enabled packs.
- * Ours install from the GitHub release tarball (or `link:` the workspace folder with dev); the community's from npm.
+ * Every plugin installs from the npm registry at its exact pinned version. With --dev ours `link:` the workspace folder
+ * instead; a source may also carry an explicit `tarball` (https URL, file: URL or a path next to a local manifest): the
+ * escape hatch for a manifest that points at packed files, used by CI to test the registry shape before publishing.
  * @returns {{ plugins: Map<string, {version: string, spec: string, origin: string[]}> }}
  */
 export function resolveDesired(manifest, { packs = [], dev = false, source }) {
@@ -112,18 +114,21 @@ export function resolveDesired(manifest, { packs = [], dev = false, source }) {
 export function specFor(manifest, name, version, { dev, source }) {
   const s = manifest.sources[name]
   if (!s) return version
-  if (dev) {
-    if (!s.workspace) throw new OmdError(`${name} has no workspace folder in the manifest, cannot --dev`)
+  if (dev && s.workspace !== undefined) {
     if (!source || isUrl(source)) throw new OmdError('--dev needs a local manifest (a checkout of the repo)')
     const dir = resolvePath(dirname(source), s.workspace)
     if (!existsSync(resolvePath(dir, 'package.json'))) throw new OmdError(`--dev: ${dir} has no package.json`)
     return `link:${dir}`
   }
-  if (!s.tarball) throw new OmdError(`${name} has no tarball URL in the manifest`)
-  return s.tarball
+  if (dev) throw new OmdError(`${name} has no workspace folder in the manifest, cannot --dev`)
+  if (s.tarball === undefined) return version
+  if (/^https:\/\//.test(s.tarball) || s.tarball.startsWith('file:')) return s.tarball
+  // A path is resolved next to the manifest (a local --manifest used to test a set of packed tarballs).
+  if (!source || isUrl(source)) throw new OmdError(`${name}: a relative tarball path needs a local manifest`)
+  return `file:${resolvePath(dirname(source), s.tarball)}`
 }
 
 /** Plugins resolved from the registry at exact versions (those can be excluded from pnpm's minimum release age). */
 export function registryPins(manifest, plugins) {
-  return [...plugins].filter(([name]) => !manifest.sources[name]).map(([name, p]) => `${name}@${p.version}`)
+  return [...plugins].filter(([, p]) => p.spec === p.version).map(([name, p]) => `${name}@${p.version}`)
 }

@@ -5,7 +5,7 @@ import { pushIterable, registerPushRemote } from '../kit/push/host.ts'
 import type { PushHostCtx } from '../kit/push/host.ts'
 
 export const REMOTE_NAMESPACE = 'dshSkillStudio'
-export const REMOTE_PACKAGE = 'dsh-skill-studio'
+export const REMOTE_PACKAGE = '@t3labs/ohmydsh-skill-studio'
 export const STREAM_METHOD = 'summary'
 
 export interface SummaryFace<S> { summary(): S; subscribe(listener: () => void): () => void }

@@ -1,17 +1,18 @@
 {
-  "name": "dsh-langfuse",
+  "name": "@t3labs/ohmydsh-langfuse",
   "version": "0.1.0",
   "description": "Rich Langfuse tracing for DeepSeek Harness: one trace per turn, generations, tools, subagents, usage and an Open trace action.",
   "license": "MIT",
   "author": "Superdao (https://github.com/deestax)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deestax/dsh-langfuse.git"
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/langfuse"
   },
   "bugs": {
-    "url": "https://github.com/deestax/dsh-langfuse/issues"
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
   },
-  "homepage": "https://github.com/deestax/dsh-langfuse#readme",
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/langfuse#readme",
   "type": "module",
   "packageManager": "pnpm@12.15.0",
   "engines": {

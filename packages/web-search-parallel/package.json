@@ -1,5 +1,5 @@
 {
-  "name": "@parallel-web/dsh-web-search-parallel",
+  "name": "@t3labs/ohmydsh-web-search-parallel",
   "description": "Parallel Search and Extract provider bundle for the DeepSeek Harness web capability seam",
   "version": "0.1.0",
   "author": "Parallel <support@parallel.ai>",
@@ -27,12 +27,17 @@
     "README.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "publishConfig": {
     "access": "public"
   },
-  "repository": "github:parallel-web/dsh-web-search-parallel",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/web-search-parallel"
+  },
   "keywords": [
     "deepseek-harness",
     "dsh-plugin",
@@ -78,5 +83,9 @@
     "typescript": "6.0.3",
     "vitest": "4.1.8",
     "@deepseek-ai/schemastery": "3.19.0"
+  },
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/web-search-parallel#readme",
+  "bugs": {
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
   }
 }

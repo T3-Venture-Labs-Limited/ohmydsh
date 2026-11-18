@@ -14,7 +14,7 @@ import {
 } from './host/core.ts'
 import { AutomationStore, automationDomain, parseRoute, type DomainFace } from './host/store.ts'
 
-export const name = 'dsh-automation-models'
+export const name = '@t3labs/ohmydsh-automation-models'
 export const inject = ['agents', 'storageDomain']
 
 export const API = '/api/automation-models'

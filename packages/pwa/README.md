@@ -1,4 +1,4 @@
-# dsh-pwa
+# @t3labs/ohmydsh-pwa
 
 Installs the **normal DeepSeek Harness UI** as an app and sends **Web Push notifications** to phones that opt in. English-only UI, no phone-specific page: the installed app is the same interface you use in the browser, opened full-screen and signed in with the same HttpOnly cookie.
 
@@ -79,7 +79,7 @@ It answers only `GET` requests for public, content-addressed files: hashed `/ass
 
 ```yaml
 - id: dsh-pwa
-  name: dsh-pwa
+  name: '@t3labs/ohmydsh-pwa'
   config:
     name: DeepSeek Harness
     shortName: DSH

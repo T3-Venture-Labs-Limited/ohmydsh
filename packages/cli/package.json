@@ -1,5 +1,5 @@
 {
-  "name": "@ohmydsh/cli",
+  "name": "@t3labs/ohmydsh",
   "version": "0.1.0",
   "description": "omd: install, update and roll back the ohmydsh setup for DeepSeek Harness",
   "license": "MIT",

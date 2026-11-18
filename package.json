@@ -19,10 +19,6 @@
     "test": "pnpm -r run test",
     "check:private": "node scripts/check-private-strings.mjs",
     "check:manifest": "node scripts/check-manifest.mjs",
-    "changeset": "changeset",
-    "version-packages": "changeset version"
-  },
-  "devDependencies": {
-    "@changesets/cli": "^2.29.0"
+    "pack:all": "node scripts/pack-all.mjs"
   }
 }

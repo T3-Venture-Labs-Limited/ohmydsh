@@ -1,17 +1,18 @@
 {
-  "name": "dsh-hud",
+  "name": "@t3labs/ohmydsh-hud",
   "version": "0.1.0",
   "description": "Unix-socket bridge for the dsh-hud Qt Quick HUD: list sessions, chat, stream replies, open in web.",
   "license": "MIT",
   "author": "Superdao (https://github.com/deestax)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deestax/dsh-hud.git"
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/hud"
   },
   "bugs": {
-    "url": "https://github.com/deestax/dsh-hud/issues"
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
   },
-  "homepage": "https://github.com/deestax/dsh-hud#readme",
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/hud#readme",
   "type": "module",
   "packageManager": "pnpm@12.15.0",
   "engines": {

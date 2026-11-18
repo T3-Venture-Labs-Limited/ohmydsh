@@ -1,0 +1,7 @@
+@t3labs/ohmydsh-web-search-parallel
+Copyright (c) 2026 T3 Venture Labs
+
+This package is a fork of dsh-web-search-parallel by Parallel (https://github.com/parallel-web/dsh-web-search-parallel),
+published as "@parallel-web/dsh-web-search-parallel". The original work is licensed under the MIT License,
+Copyright (c) 2026 Parallel; the licence text is in the LICENSE file of this package and applies to the whole package.
+The upstream history is kept in the ohmydsh repository. Changes in this fork: renamed package, repository metadata.

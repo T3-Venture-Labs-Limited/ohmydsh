@@ -1,4 +1,4 @@
-# dsh-kit
+# @t3labs/ohmydsh-kit
 
 Shared foundations for DeepSeek Harness (DSH) plugins: a **source-copied** React UI kit, a **token linter**, and a **plugin template**.
 Nothing here is a runtime dependency: copy what you need into your plugin.

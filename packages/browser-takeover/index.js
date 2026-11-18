@@ -1,5 +1,5 @@
 /**
- * dsh-agent-browser-takeover — host half.
+ * @t3labs/ohmydsh-browser-takeover — host half.
  *
  * Companion to dsh-agent-browser; it does not modify that package. It adds
  * what a Manus-style "watch and take over" flow needs:
@@ -25,7 +25,7 @@
  *
  * No third-party imports: a linked local bundle resolves nothing beyond Node.
  *
- * @module dsh-agent-browser-takeover
+ * @module @t3labs/ohmydsh-browser-takeover
  */
 
 import { spawn } from 'node:child_process'
@@ -33,7 +33,7 @@ import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/p
 import os from 'node:os'
 import path from 'node:path'
 
-export const name = 'dsh-agent-browser-takeover'
+export const name = '@t3labs/ohmydsh-browser-takeover'
 export const inject = ['tools', 'systemPrompt']
 
 const DEFAULT_KEY = '__default__'

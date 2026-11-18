@@ -22,7 +22,7 @@ import { TriggersStore } from './host/store.ts'
 import { triggerTools } from './host/tools.ts'
 import { dshHome, errorText } from './host/util.ts'
 
-export const name = 'dsh-triggers'
+export const name = '@t3labs/ohmydsh-triggers'
 export const inject = ['agents', 'tools', 'sessions']
 
 declare module '@deepseek-ai/dsh-llm' {

@@ -1,5 +1,5 @@
 {
-  "name": "dsh-agent-browser-takeover",
+  "name": "@t3labs/ohmydsh-browser-takeover",
   "version": "0.1.0",
   "description": "Watch the dsh-agent-browser browser live in a right-sidebar tab, take control to sign in, and hand it back; pauses the agent's browser tools while you drive and keeps logins across restarts.",
   "type": "module",
@@ -45,10 +45,14 @@
   "author": "Superdao (https://github.com/deestax)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deestax/dsh-agent-browser-takeover.git"
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/browser-takeover"
   },
-  "homepage": "https://github.com/deestax/dsh-agent-browser-takeover#readme",
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/browser-takeover#readme",
   "publishConfig": {
     "access": "public"
+  },
+  "bugs": {
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
   }
 }

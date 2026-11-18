@@ -1,5 +1,5 @@
 /**
- * dsh-agent-browser-takeover — client half.
+ * @t3labs/ohmydsh-browser-takeover — client half.
  *
  * Registers a native right-sidebar tab "Agent browser" (through
  * dsh-better-sidebar's ctx.betterSidebar when present) showing the live
@@ -9,7 +9,7 @@
  * composer appears whenever the agent is waiting on the user.
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-agent-browser-takeover',
+  id: '@t3labs/ohmydsh-browser-takeover',
   factory(require) {
     const React = require('react')
     const { useCallback, useEffect, useRef, useState } = React

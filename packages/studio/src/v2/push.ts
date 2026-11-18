@@ -7,7 +7,7 @@ import type { StudioCore } from './core.js'
 import { jobView } from './routes/jobs.js'
 
 export const REMOTE_NAMESPACE = 'dshStudio'
-export const REMOTE_PACKAGE = 'dsh-studio'
+export const REMOTE_PACKAGE = '@t3labs/ohmydsh-studio'
 export const STREAM_METHOD = 'jobs'
 const ACTIVE = ['queued', 'submitting', 'running', 'finalizing', 'needs_attention'] as const
 

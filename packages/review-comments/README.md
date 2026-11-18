@@ -1,4 +1,4 @@
-# dsh-review-comments
+# @t3labs/ohmydsh-review-comments
 
 Select text anywhere you read in DeepSeek Harness, write a comment, and send every comment to the message box as its own removable quote chip.
 
@@ -57,7 +57,7 @@ It changes only comment status. It never edits files and never deletes a comment
 ```sh
 pnpm install
 pnpm check        # typecheck, tests, build, token lint
-dsh plugin --profile <profile> add "dsh-review-comments@link:$PWD"
+dsh plugin --profile <profile> add "@t3labs/ohmydsh-review-comments@link:$PWD"
 ```
 
 Client only (no Host half). UI controls come from `src/kit` (a copy of `dsh-kit/ui`); colours use `--dsw-*` tokens only.

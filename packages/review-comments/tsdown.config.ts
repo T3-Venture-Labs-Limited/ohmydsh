@@ -1,5 +1,6 @@
 // Builds both halves: lib/index.js (Host, ESM) and lib/client.js (browser closure factory for the module loader).
 import { readFile } from 'node:fs/promises'
+import { relative, resolve } from 'node:path'
 import type { UserConfig } from 'tsdown'
 
 const CLIENT_EXTERNALS = ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client']
@@ -12,11 +13,13 @@ const inlineCss = {
     if (!source.endsWith('.css?inline')) return null
     const base = source.slice(0, -'?inline'.length)
     const abs = new URL(base, importer === undefined ? import.meta.url : `file://${importer}`).pathname
-    return `${PREFIX}${abs}.mjs`
+    // Relative to the package: the virtual id is echoed into the bundle as a `//#region` comment, and an absolute path
+    // there would publish the build machine's directory layout.
+    return `${PREFIX}${relative(process.cwd(), abs)}.mjs`
   },
   async load(this: { addWatchFile(file: string): void }, id: string) {
     if (!id.startsWith(PREFIX)) return null
-    const file = id.slice(PREFIX.length, -'.mjs'.length)
+    const file = resolve(process.cwd(), id.slice(PREFIX.length, -'.mjs'.length))
     this.addWatchFile(file)
     return `export default ${JSON.stringify(await readFile(file, 'utf8'))};`
   },
@@ -32,7 +35,7 @@ const purityGate = {
 }
 
 const host: UserConfig = {
-  name: 'dsh-review-comments',
+  name: '@t3labs/ohmydsh-review-comments',
   entry: { index: 'src/index.ts' },
   outDir: 'lib',
   format: ['esm'],
@@ -46,7 +49,7 @@ const host: UserConfig = {
 }
 
 const client: UserConfig = {
-  name: 'dsh-review-comments/client',
+  name: '@t3labs/ohmydsh-review-comments/client',
   entry: { client: 'src/client/index.tsx' },
   outDir: 'lib',
   format: 'cjs',
@@ -61,7 +64,7 @@ const client: UserConfig = {
   plugins: [purityGate, inlineCss],
   outputOptions: {
     entryFileNames: 'client.js',
-    banner: 'window.__ModuleLoader__.load({ id: "dsh-review-comments", factory: (require) => {',
+    banner: 'window.__ModuleLoader__.load({ id: "@t3labs/ohmydsh-review-comments", factory: (require) => {',
     footer: 'return module.exports; } });',
     intro: 'var module = { exports: {} }; var exports = module.exports;',
   },

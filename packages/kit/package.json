@@ -1,5 +1,5 @@
 {
-  "name": "dsh-kit",
+  "name": "@t3labs/ohmydsh-kit",
   "version": "0.1.0",
   "private": true,
   "description": "Source-copied UI kit, token linter and plugin template for DSH plugins",
@@ -7,12 +7,13 @@
   "author": "Superdao (https://github.com/deestax)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deestax/dsh-kit.git"
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/kit"
   },
   "bugs": {
-    "url": "https://github.com/deestax/dsh-kit/issues"
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
   },
-  "homepage": "https://github.com/deestax/dsh-kit#readme",
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/kit#readme",
   "type": "module",
   "packageManager": "pnpm@12.15.0",
   "scripts": {

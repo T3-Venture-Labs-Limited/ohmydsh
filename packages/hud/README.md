@@ -1,11 +1,11 @@
-# dsh-hud
+# @t3labs/ohmydsh-hud
 
 Host half of the DSH HUD: a Unix-socket JSON-RPC bridge that lets the [dsh-hud-qt](https://github.com/deestax/dsh-hud-qt) desktop popup list sessions, chat, switch the model and open a session in the web UI.
 
 **Disabled by default.** Enable it only if you run the Qt HUD:
 
 ```yaml
-- name: dsh-hud
+- name: '@t3labs/ohmydsh-hud'
   config:
     enabled: true
     # allowDangerousSessions: false   # default; see below
@@ -42,11 +42,11 @@ pnpm run check          # typecheck + oxlint + token lint + tests + build + arti
 ## Install from source
 
 ```sh
-dsh plugin --profile <profile> add "dsh-hud@link:$PWD"
+dsh plugin --profile <profile> add "@t3labs/ohmydsh-hud@link:$PWD"
 # then restart DSH
 ```
 
-Remove with `dsh plugin --profile <profile> remove dsh-hud`.
+Remove with `dsh plugin --profile <profile> remove @t3labs/ohmydsh-hud`.
 
 ## Conventions
 

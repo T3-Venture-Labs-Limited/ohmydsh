@@ -1,5 +1,5 @@
 {
-  "name": "dsh-triggers",
+  "name": "@t3labs/ohmydsh-triggers",
   "version": "0.1.0",
   "description": "Triggers: DSH plugin",
   "license": "MIT",
@@ -80,5 +80,14 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/triggers"
+  },
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/triggers#readme",
+  "bugs": {
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
   }
 }

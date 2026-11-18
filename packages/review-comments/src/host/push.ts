@@ -6,7 +6,7 @@ import type { PushHostCtx } from '../kit/push/host.ts'
 import type { HostStore } from './store.ts'
 
 export const REMOTE_NAMESPACE = 'dshReviewComments'
-export const REMOTE_PACKAGE = 'dsh-review-comments'
+export const REMOTE_PACKAGE = '@t3labs/ohmydsh-review-comments'
 export const STREAM_METHOD = 'changes'
 
 export function changesStream(store: HostStore, signal: AbortSignal | undefined): AsyncGenerator<{ sessionId: string }, void, void> {

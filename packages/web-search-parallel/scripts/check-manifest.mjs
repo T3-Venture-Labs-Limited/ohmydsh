@@ -5,12 +5,16 @@ import yaml from 'js-yaml'
 
 const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
-assert.equal(manifest.name, '@parallel-web/dsh-web-search-parallel')
+assert.equal(manifest.name, '@t3labs/ohmydsh-web-search-parallel')
 assert.equal(manifest.version, '0.1.0')
 assert.equal(manifest.author, 'Parallel <support@parallel.ai>')
 assert.equal(manifest.type, 'module')
 assert.equal(manifest.license, 'MIT')
-assert.equal(manifest.repository, 'github:parallel-web/dsh-web-search-parallel')
+assert.deepEqual(manifest.repository, {
+  type: 'git',
+  url: 'git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git',
+  directory: 'packages/web-search-parallel',
+})
 assert.equal(manifest.packageManager, 'pnpm@11.7.0')
 assert.equal(manifest.engines.node, '^22.19.0 || >=24.0.0')
 assert.equal(manifest.dsh?.bundle?.patch, './cordis.patch.yml')
@@ -39,6 +43,7 @@ assert.deepEqual(manifest.files, [
   'CONTRIBUTING.md',
   'SECURITY.md',
   'LICENSE',
+  'NOTICE',
 ])
 
 const patchText = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
@@ -53,7 +58,7 @@ assert.deepEqual(patch, [
     insert: [
       {
         id: 'web-search-parallel',
-        name: '@parallel-web/dsh-web-search-parallel',
+        name: '@t3labs/ohmydsh-web-search-parallel',
       },
     ],
   },

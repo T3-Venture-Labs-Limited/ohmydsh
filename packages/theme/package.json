@@ -1,17 +1,18 @@
 {
-  "name": "dsh-theme",
+  "name": "@t3labs/ohmydsh-theme",
   "version": "0.1.0",
   "description": "Follow Omarchy: live Omarchy colours, light/dark and palettes for DSH, applied as a reversible token layer.",
   "license": "MIT",
   "author": "Superdao (https://github.com/deestax)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deestax/dsh-theme.git"
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/theme"
   },
   "bugs": {
-    "url": "https://github.com/deestax/dsh-theme/issues"
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
   },
-  "homepage": "https://github.com/deestax/dsh-theme#readme",
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/theme#readme",
   "type": "module",
   "packageManager": "pnpm@12.15.0",
   "engines": {

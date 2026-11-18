@@ -1,4 +1,4 @@
-# dsh-theme
+# @t3labs/ohmydsh-theme
 
 Follow Omarchy for DeepSeek Harness: DSH takes its colours from your Omarchy theme and updates live when you switch it, plus a handful of bundled palettes. Everything is one reversible token layer; disabling the plugin restores the stock look.
 
@@ -14,7 +14,7 @@ Follow Omarchy for DeepSeek Harness: DSH takes its colours from your Omarchy the
 ```sh
 pnpm install
 pnpm run check      # typecheck, oxlint + token lint, vitest, tsdown build, artifact check
-dsh plugin --profile <profile> add "dsh-theme@link:$PWD"
+dsh plugin --profile <profile> add "@t3labs/ohmydsh-theme@link:$PWD"
 # then restart DSH
 ```
 

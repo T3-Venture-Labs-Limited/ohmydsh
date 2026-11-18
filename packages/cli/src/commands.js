@@ -203,7 +203,7 @@ export async function doctor(ctx, { quietHeader = false } = {}) {
     if (p === 'composio' && !which('composio', ctx.env)) todos.push('pack composio: install the Composio CLI and run `composio login`')
     if (p === 'omarchy' && !which('omarchy-theme-current', ctx.env) && !existsSync(join(ctx.env.HOME ?? '', '.config', 'omarchy'))) todos.push('pack omarchy: this does not look like an Omarchy desktop; the theme plugin will have nothing to follow')
   }
-  if ('dsh-pwa' in (lock?.plugins ?? {})) log.info('phone app: needs DSH served over HTTPS (e.g. Tailscale) to install on a phone')
+  if ('@t3labs/ohmydsh-pwa' in (lock?.plugins ?? {})) log.info('phone app: needs DSH served over HTTPS (e.g. Tailscale) to install on a phone')
 
   for (const p of problems) log.error(p)
   for (const t of todos) log.warn(`todo: ${t}`)

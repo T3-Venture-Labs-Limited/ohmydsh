@@ -25,7 +25,7 @@ import { ComposioStore, DEFAULT_LIMITS, instanceStillUsed, newId, rateDecision, 
 import { CredsError, readCreds } from './host/creds.ts'
 import type { NormalizedEvent } from './host/events.ts'
 
-export const name = 'dsh-composio'
+export const name = '@t3labs/ohmydsh-composio'
 export const inject = ['agents', 'tools', 'sessions']
 export const API = '/api/composio'
 

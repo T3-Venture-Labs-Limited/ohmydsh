@@ -20,7 +20,7 @@ import { UsageIndex, type SessionReader } from './host/usage.ts'
 import { readFile, readdir } from 'node:fs/promises'
 import { createEvolution } from './evolution.ts'
 
-export const name = 'dsh-skill-studio'
+export const name = '@t3labs/ohmydsh-skill-studio'
 export const inject = ['skills']
 
 export const API = '/api/skill-studio'

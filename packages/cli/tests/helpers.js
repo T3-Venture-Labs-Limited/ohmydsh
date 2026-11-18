@@ -13,7 +13,7 @@ export const baseManifest = () => ({
     core: { 'dsh-a': '1.0.0', '@ohmydsh/b': '0.1.0' },
     packs: { extra: { 'dsh-c': '2.0.0' } },
   },
-  sources: { '@ohmydsh/b': { workspace: 'packages/b', tarball: 'https://example.invalid/b-0.1.0.tgz' } },
+  sources: { '@ohmydsh/b': { workspace: 'packages/b' } },
 })
 
 export function silentLog() {

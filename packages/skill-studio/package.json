@@ -1,8 +1,7 @@
 {
-  "name": "dsh-skill-studio",
+  "name": "@t3labs/ohmydsh-skill-studio",
   "version": "0.1.0",
   "description": "Skills manager for DeepSeek Harness: see, edit, create and disable skills in DSH only.",
-  "private": true,
   "type": "module",
   "exports": {
     ".": "./lib/index.js",
@@ -45,12 +44,13 @@
   "author": "Superdao (https://github.com/deestax)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deestax/dsh-skill-studio.git"
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/skill-studio"
   },
   "bugs": {
-    "url": "https://github.com/deestax/dsh-skill-studio/issues"
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
   },
-  "homepage": "https://github.com/deestax/dsh-skill-studio#readme",
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/skill-studio#readme",
   "main": "./lib/index.js",
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.1.0",

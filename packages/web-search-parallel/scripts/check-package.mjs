@@ -22,6 +22,7 @@ const files = pack.files.map(file => file.path).sort()
 assert.deepEqual(files, [
   'CONTRIBUTING.md',
   'LICENSE',
+  'NOTICE',
   'README.md',
   'SECURITY.md',
   'cordis.patch.yml',

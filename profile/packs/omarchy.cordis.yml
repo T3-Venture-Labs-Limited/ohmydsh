@@ -1,7 +1,7 @@
 # Omarchy pack: the quick-prompt HUD bridge stays off until you turn it on (it also needs the dsh-hud-qt app).
 # allowDangerousSessions stays false: the HUD cannot drive sessions in full-access mode.
 - id: dsh-hud
-  name: dsh-hud
+  name: '@t3labs/ohmydsh-hud'
   config:
     enabled: false
     model: claude-haiku-5-5

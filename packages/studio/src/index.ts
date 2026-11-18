@@ -22,7 +22,7 @@ export { Config } from './config.js'
 export { IMAGE_ROUTE, imageAttachmentFromMeta } from './image-route.js'
 export { TEST_CONNECTION_ROUTE } from './shared.js'
 
-export const name = 'dsh-studio'
+export const name = '@t3labs/ohmydsh-studio'
 export const inject = ['tools', 'attachments', 'credentials']
 
 export function apply(ctx: Context, config: Config = {}): void {

@@ -4,10 +4,10 @@ import { composeCheck, describeCompose, dumpedBundles, parseProblems, parseUnapp
 
 const DUMP = `# == @deepseek-ai/dsh-base
 - id: llm
-# == dsh-studio, patched by /x/profiles/omd/cordis.patch.yml
+# == @t3labs/ohmydsh-studio, patched by /x/profiles/omd/cordis.patch.yml
 - id: studio
-  name: dsh-studio
-# == dsh-pwa
+  name: '@t3labs/ohmydsh-studio'
+# == @t3labs/ohmydsh-pwa
 - id: dsh-pwa
 `
 
@@ -20,15 +20,15 @@ test('unapplied rows are detected from dsh warnings', () => {
 })
 
 test('bundle headers are read with their "patched by" suffix stripped', () => {
-  assert.deepEqual([...dumpedBundles(DUMP)].sort(), ['@deepseek-ai/dsh-base', 'dsh-pwa', 'dsh-studio'])
+  assert.deepEqual([...dumpedBundles(DUMP)].sort(), ['@deepseek-ai/dsh-base', '@t3labs/ohmydsh-pwa', '@t3labs/ohmydsh-studio'])
 })
 
 const ctxWith = (r) => ({ env: {}, run: () => r })
 
 test('composeCheck: clean, then unapplied row, missing plugin, missing managed row', () => {
-  const ok = composeCheck(ctxWith({ status: 0, stdout: DUMP, stderr: '' }), { profile: 'p', plugins: ['dsh-studio', 'dsh-pwa'], managedYaml: '- id: studio\n  name: dsh-studio\n- id: dsh-pwa\n  name: dsh-pwa\n' })
+  const ok = composeCheck(ctxWith({ status: 0, stdout: DUMP, stderr: '' }), { profile: 'p', plugins: ['@t3labs/ohmydsh-studio', '@t3labs/ohmydsh-pwa'], managedYaml: '- id: studio\n  name: \'@t3labs/ohmydsh-studio\'\n- id: dsh-pwa\n  name: \'@t3labs/ohmydsh-pwa\'\n' })
   assert.equal(ok.ok, true)
-  const bad = composeCheck(ctxWith({ status: 0, stdout: DUMP, stderr: 'patch: entry "ghost" not found\n' }), { profile: 'p', plugins: ['dsh-studio', 'dsh-missing'], managedYaml: '- id: nope\n  name: x\n' })
+  const bad = composeCheck(ctxWith({ status: 0, stdout: DUMP, stderr: 'patch: entry "ghost" not found\n' }), { profile: 'p', plugins: ['@t3labs/ohmydsh-studio', 'dsh-missing'], managedYaml: '- id: nope\n  name: x\n' })
   assert.equal(bad.ok, false)
   assert.deepEqual(bad.unapplied, ['ghost'])
   assert.deepEqual(bad.missingBundles, ['dsh-missing'])

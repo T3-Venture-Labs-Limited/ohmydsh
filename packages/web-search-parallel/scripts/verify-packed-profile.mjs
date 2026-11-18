@@ -14,7 +14,7 @@ const dshHome = resolve(argument('--dsh-home'))
 const expectedVersion = argument('--expected-version')
 const profileManifest = join(dshHome, 'profiles', 'web', 'package.json')
 const profileRequire = createRequire(profileManifest)
-const pluginManifest = profileRequire.resolve('@parallel-web/dsh-web-search-parallel/package.json')
+const pluginManifest = profileRequire.resolve('@t3labs/ohmydsh-web-search-parallel/package.json')
 const pluginRequire = createRequire(pluginManifest)
 
 const pluginPackage = pluginRequire(pluginManifest)
@@ -32,7 +32,7 @@ for (const packageName of [
   resolutions[packageName] = fromProfile
 }
 
-const pluginEntry = profileRequire.resolve('@parallel-web/dsh-web-search-parallel')
+const pluginEntry = profileRequire.resolve('@t3labs/ohmydsh-web-search-parallel')
 const plugin = await import(pathToFileURL(pluginEntry).href)
 const cordis = await import(pathToFileURL(resolutions['@deepseek-ai/cordis']).href)
 const web = await import(pathToFileURL(resolutions['@deepseek-ai/dsh-web']).href)

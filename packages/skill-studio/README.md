@@ -1,4 +1,4 @@
-# dsh-skill-studio
+# @t3labs/ohmydsh-skill-studio
 
 Skills manager for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 0.2.2: see, edit, create and disable every agent skill, in DSH only.
 
@@ -32,7 +32,7 @@ Settings, backups and (later) proposals live under `$DSH_HOME/skill-studio/`, ne
 ```sh
 pnpm install
 pnpm run check      # typecheck + token lint + tests + build + artifact check
-dsh plugin --profile <profile> add "dsh-skill-studio@link:$PWD"   # only after a green build
+dsh plugin --profile <profile> add "@t3labs/ohmydsh-skill-studio@link:$PWD"   # only after a green build
 # then restart DSH
 ```
 

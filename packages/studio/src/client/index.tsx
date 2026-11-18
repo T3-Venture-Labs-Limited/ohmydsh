@@ -204,7 +204,7 @@ export function apply(ctx: Context): void {
 
   // Live job/asset channel: a Typert stream on DSH's single multiplexed WebSocket (no HTTP stream; the browser allows only 6
   // per host). The lazy workbench chunk reads the opener from the shared page state.
-  const transport = createPushTransport(ctx as never, { pkg: 'dsh-studio', serviceKey: 'dshStudio', namespace: 'dshStudio', streams: [{ method: 'jobs' }] })
+  const transport = createPushTransport(ctx as never, { pkg: '@t3labs/ohmydsh-studio', serviceKey: 'dshStudio', namespace: 'dshStudio', streams: [{ method: 'jobs' }] })
   ctx.effect(() => {
     const live = sharedState<{ open?: unknown }>('livePush', () => ({}))
     live.open = (signal: AbortSignal) => transport.stream('jobs', [], signal)
@@ -264,8 +264,8 @@ export function apply(ctx: Context): void {
     ;(owner.slots.inject as (key: string, factory: () => () => void) => void)('plugins.bundle.config', () => ownerRegister({
       name: 'plugins.bundle.config',
       // Keyed slots select by bundle package name, and this plugin ships as the
-      // 'dsh-studio' bundle.
-      key: 'dsh-studio',
+      // '@t3labs/ohmydsh-studio' bundle.
+      key: '@t3labs/ohmydsh-studio',
       locale,
       inject: injectSettingsFace,
     }, ImageGenerationSettingsCard))

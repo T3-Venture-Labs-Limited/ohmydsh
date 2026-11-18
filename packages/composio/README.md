@@ -1,4 +1,4 @@
-# dsh-composio
+# @t3labs/ohmydsh-composio
 
 Composio for DSH: four agent tools over the Composio CLI, a **Composio** page (connections, tool browser, trigger routes, recipes, run log), and a realtime trigger listener that turns events into a new agent session or a wake of an existing one.
 
@@ -48,7 +48,7 @@ Outbound Pusher socket on `private-cli-<project_id>` (no public URL, no tunnel).
 ```sh
 pnpm install
 pnpm run check
-dsh plugin --profile <profile> add "dsh-composio@link:$PWD"
+dsh plugin --profile <profile> add "@t3labs/ohmydsh-composio@link:$PWD"
 # then restart DSH
 ```
 

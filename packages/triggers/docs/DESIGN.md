@@ -1,4 +1,4 @@
-# dsh-triggers — design (v0.1)
+# @t3labs/ohmydsh-triggers — design (v0.1)
 
 Hermes-style event automations for DSH: **an event happens → a chat opens (or wakes) with a prompt built from the event.**
 One sidebar page ("Triggers") lists every automation, its source, its webhook URL, its last runs, and links to the chats it created.

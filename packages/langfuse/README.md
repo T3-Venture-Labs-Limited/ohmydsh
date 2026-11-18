@@ -1,4 +1,4 @@
-# dsh-langfuse
+# @t3labs/ohmydsh-langfuse
 
 Rich [Langfuse](https://langfuse.com) tracing for DeepSeek Harness (DSH). One trace per agent turn, Langfuse sessions mapped to DSH sessions, generations with usage and timing, tool spans, subagent nesting, and an **Open trace** button under every assistant message.
 
@@ -19,7 +19,7 @@ The plugin owns a private `NodeTracerProvider` + `@langfuse/otel` span processor
 
 ```sh
 pnpm install && pnpm run check
-dsh plugin --profile <profile> add "dsh-langfuse@link:$PWD"
+dsh plugin --profile <profile> add "@t3labs/ohmydsh-langfuse@link:$PWD"
 # then restart DSH
 ```
 

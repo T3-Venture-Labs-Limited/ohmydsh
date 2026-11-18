@@ -1,3 +1,3 @@
 - insert:
     - id: dsh-triggers
-      name: 'dsh-triggers'
+      name: '@t3labs/ohmydsh-triggers'

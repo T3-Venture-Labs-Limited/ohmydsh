@@ -46,7 +46,7 @@ Create one fresh tarball and verify its exact contents:
 ```sh
 PACK_DIR="$(mktemp -d)"
 pnpm pack --pack-destination "$PACK_DIR"
-PACK_TGZ="$PACK_DIR/parallel-web-dsh-web-search-parallel-0.1.0.tgz"
+PACK_TGZ="$PACK_DIR/t3labs-ohmydsh-web-search-parallel-0.1.0.tgz"
 node scripts/verify-packed-artifact.mjs --tarball "$PACK_TGZ"
 ```
 
@@ -58,7 +58,7 @@ DSH_HOME="$REVIEW_DSH_HOME" pnpm exec dsh --profile web --dump-config > "$REVIEW
 DSH_HOME="$REVIEW_DSH_HOME" pnpm exec dsh plugin --profile web add "$PACK_TGZ"
 DSH_HOME="$REVIEW_DSH_HOME" pnpm exec dsh --profile web --dump-config > "$REVIEW_DSH_HOME/after.yml"
 node scripts/verify-packed-profile.mjs --dsh-home "$REVIEW_DSH_HOME" --expected-version 0.1.0
-DSH_HOME="$REVIEW_DSH_HOME" pnpm exec dsh plugin --profile web remove @parallel-web/dsh-web-search-parallel
+DSH_HOME="$REVIEW_DSH_HOME" pnpm exec dsh plugin --profile web remove @t3labs/ohmydsh-web-search-parallel
 DSH_HOME="$REVIEW_DSH_HOME" pnpm exec dsh --profile web --dump-config > "$REVIEW_DSH_HOME/removed.yml"
 node scripts/verify-profile-overlay.mjs \
   --before "$REVIEW_DSH_HOME/before.yml" \

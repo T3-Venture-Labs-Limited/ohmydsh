@@ -1,17 +1,18 @@
 {
-  "name": "dsh-pwa",
+  "name": "@t3labs/ohmydsh-pwa",
   "version": "0.3.0",
   "description": "Install the normal DSH UI as an app (manifest, service worker, share target) and get Web Push notifications on your phone",
   "license": "MIT",
   "author": "Superdao (https://github.com/deestax)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deestax/dsh-pwa.git"
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/pwa"
   },
   "bugs": {
-    "url": "https://github.com/deestax/dsh-pwa/issues"
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
   },
-  "homepage": "https://github.com/deestax/dsh-pwa#readme",
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/pwa#readme",
   "type": "module",
   "packageManager": "pnpm@12.15.0",
   "engines": {

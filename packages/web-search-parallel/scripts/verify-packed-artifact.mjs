@@ -33,7 +33,7 @@ assert.deepEqual(entries, [
 ])
 
 const manifest = JSON.parse(tar(['-xOzf', tarball, 'package/package.json']))
-assert.equal(manifest.name, '@parallel-web/dsh-web-search-parallel')
+assert.equal(manifest.name, '@t3labs/ohmydsh-web-search-parallel')
 assert.equal(manifest.version, '0.1.0')
 assert.equal(manifest.author, 'Parallel <support@parallel.ai>')
 assert.deepEqual(manifest.repository, {

@@ -5,7 +5,7 @@
 
 # Studio: keep the Grok subscription as the image provider and show the composer pill.
 - id: studio
-  name: dsh-studio
+  name: '@t3labs/ohmydsh-studio'
   config:
     provider: grok-sub
     showProviderPill: true
@@ -13,7 +13,7 @@
 # Phone app: the normal DSH UI as an installable app; the share sheet pre-fills a draft and never sends by itself;
 # Web Push goes only to devices that subscribed in Settings > Phone app.
 - id: dsh-pwa
-  name: dsh-pwa
+  name: '@t3labs/ohmydsh-pwa'
   config:
     serviceWorker: true
     share:

@@ -9,7 +9,7 @@ import { Bridge } from './host/bridge.ts'
 import { Harness } from './host/harness.ts'
 import { defaultSocketPath, dshHome } from './host/socket-path.ts'
 
-export const name = 'dsh-hud'
+export const name = '@t3labs/ohmydsh-hud'
 export { Config }
 export const inject = ['sessionController']
 

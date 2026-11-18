@@ -54,7 +54,7 @@ export function apply(ctx: Context): void {
   const t: T = locale.bind(c.locale)
 
   // Live summary: a Typert stream on DSH's single multiplexed WebSocket (no HTTP stream; the browser allows only 6 per host).
-  const transport = createPushTransport(ctx as never, { pkg: 'dsh-skill-studio', serviceKey: 'dshSkillStudio', namespace: 'dshSkillStudio', streams: [{ method: 'summary' }] })
+  const transport = createPushTransport(ctx as never, { pkg: '@t3labs/ohmydsh-skill-studio', serviceKey: 'dshSkillStudio', namespace: 'dshSkillStudio', streams: [{ method: 'summary' }] })
   ctx.effect(() => { configureSummary((signal) => transport.stream('summary', [], signal)); return () => { configureSummary(undefined) } }, 'skill-studio: summary stream')
 
   const services: PageServices = {

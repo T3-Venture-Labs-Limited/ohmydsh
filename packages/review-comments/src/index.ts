@@ -7,7 +7,7 @@ import { HostStore, SESSION_ID, TooLargeError } from './host/store.ts'
 import { createReviewTool, TOOL } from './host/tool.ts'
 import { registerReviewRemote } from './host/push.ts'
 
-export const name = 'dsh-review-comments'
+export const name = '@t3labs/ohmydsh-review-comments'
 export const API = '/api/review-comments'
 
 interface Peerish { headers: Headers }

@@ -22,7 +22,7 @@ import { Config, resolveSettings } from './host/settings.ts'
 import { configureTrustStore } from './host/python.ts'
 import { registerTools } from './host/tools.ts'
 
-export const name = 'dsh-notebook'
+export const name = '@t3labs/ohmydsh-notebook'
 export const inject = ['webServer', 'connection', 'tools', 'fs', 'subprocess', 'sessions', 'sandboxPolicy']
 export { Config }
 

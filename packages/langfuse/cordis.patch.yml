@@ -1,3 +1,3 @@
 - insert:
     - id: dsh-langfuse
-      name: 'dsh-langfuse'
+      name: '@t3labs/ohmydsh-langfuse'

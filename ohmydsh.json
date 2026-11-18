@@ -29,28 +29,28 @@
       "dsh-sentinel": "0.15.0",
       "dsh-notify-me": "1.20.1",
       "dsh-agent-browser": "0.2.7",
-      "dsh-studio": "0.1.0",
-      "dsh-pwa": "0.2.1",
-      "dsh-agent-browser-takeover": "0.1.0",
-      "dsh-review-comments": "0.2.0",
-      "dsh-skill-studio": "0.1.0",
-      "dsh-notebook": "0.1.0",
-      "dsh-triggers": "0.1.0",
-      "dsh-automation-models": "0.1.0"
+      "@t3labs/ohmydsh-studio": "0.1.0",
+      "@t3labs/ohmydsh-pwa": "0.3.0",
+      "@t3labs/ohmydsh-browser-takeover": "0.1.0",
+      "@t3labs/ohmydsh-review-comments": "0.2.0",
+      "@t3labs/ohmydsh-skill-studio": "0.1.0",
+      "@t3labs/ohmydsh-notebook": "0.1.0",
+      "@t3labs/ohmydsh-triggers": "0.1.0",
+      "@t3labs/ohmydsh-automation-models": "0.1.0"
     },
     "packs": {
       "composio": {
-        "dsh-composio": "0.1.0"
+        "@t3labs/ohmydsh-composio": "0.1.0"
       },
       "langfuse": {
-        "dsh-langfuse": "0.1.0"
+        "@t3labs/ohmydsh-langfuse": "0.1.0"
       },
       "parallel": {
-        "@parallel-web/dsh-web-search-parallel": "0.1.0"
+        "@t3labs/ohmydsh-web-search-parallel": "0.1.0"
       },
       "omarchy": {
-        "dsh-theme": "0.1.0",
-        "dsh-hud": "0.1.0"
+        "@t3labs/ohmydsh-theme": "0.1.0",
+        "@t3labs/ohmydsh-hud": "0.1.0"
       }
     }
   },
@@ -83,57 +83,44 @@
     }
   },
   "sources": {
-    "dsh-studio": {
-      "workspace": "packages/studio",
-      "tarball": "https://github.com/deestax/dsh-studio/releases/download/v0.1.0/dsh-studio-0.1.0.tgz"
+    "@t3labs/ohmydsh-studio": {
+      "workspace": "packages/studio"
     },
-    "dsh-pwa": {
-      "workspace": "packages/pwa",
-      "tarball": "https://github.com/deestax/dsh-pwa/releases/download/v0.2.1/dsh-pwa-0.2.1.tgz"
+    "@t3labs/ohmydsh-pwa": {
+      "workspace": "packages/pwa"
     },
-    "dsh-agent-browser-takeover": {
-      "workspace": "packages/browser-takeover",
-      "tarball": "https://github.com/deestax/dsh-agent-browser-takeover/releases/download/v0.1.0/dsh-agent-browser-takeover-0.1.0.tgz"
+    "@t3labs/ohmydsh-browser-takeover": {
+      "workspace": "packages/browser-takeover"
     },
-    "dsh-review-comments": {
-      "workspace": "packages/review-comments",
-      "tarball": "https://github.com/deestax/dsh-review-comments/releases/download/v0.2.0/dsh-review-comments-0.2.0.tgz"
+    "@t3labs/ohmydsh-review-comments": {
+      "workspace": "packages/review-comments"
     },
-    "dsh-skill-studio": {
-      "workspace": "packages/skill-studio",
-      "tarball": "https://github.com/deestax/dsh-skill-studio/releases/download/v0.1.0/dsh-skill-studio-0.1.0.tgz"
+    "@t3labs/ohmydsh-skill-studio": {
+      "workspace": "packages/skill-studio"
     },
-    "dsh-notebook": {
-      "workspace": "packages/notebook",
-      "tarball": "https://github.com/deestax/dsh-notebook/releases/download/v0.1.0/dsh-notebook-0.1.0.tgz"
+    "@t3labs/ohmydsh-notebook": {
+      "workspace": "packages/notebook"
     },
-    "dsh-triggers": {
-      "workspace": "packages/triggers",
-      "tarball": "https://github.com/deestax/dsh-triggers/releases/download/v0.1.0/dsh-triggers-0.1.0.tgz"
+    "@t3labs/ohmydsh-triggers": {
+      "workspace": "packages/triggers"
     },
-    "dsh-automation-models": {
-      "workspace": "packages/automation-models",
-      "tarball": "https://github.com/deestax/dsh-automation-models/releases/download/v0.1.0/dsh-automation-models-0.1.0.tgz"
+    "@t3labs/ohmydsh-automation-models": {
+      "workspace": "packages/automation-models"
     },
-    "dsh-composio": {
-      "workspace": "packages/composio",
-      "tarball": "https://github.com/deestax/dsh-composio/releases/download/v0.1.0/dsh-composio-0.1.0.tgz"
+    "@t3labs/ohmydsh-composio": {
+      "workspace": "packages/composio"
     },
-    "dsh-langfuse": {
-      "workspace": "packages/langfuse",
-      "tarball": "https://github.com/deestax/dsh-langfuse/releases/download/v0.1.0/dsh-langfuse-0.1.0.tgz"
+    "@t3labs/ohmydsh-langfuse": {
+      "workspace": "packages/langfuse"
     },
-    "@parallel-web/dsh-web-search-parallel": {
-      "workspace": "packages/web-search-parallel",
-      "tarball": "https://github.com/deestax/dsh-web-search-parallel/releases/download/v0.1.0/parallel-web-dsh-web-search-parallel-0.1.0.tgz"
+    "@t3labs/ohmydsh-web-search-parallel": {
+      "workspace": "packages/web-search-parallel"
     },
-    "dsh-theme": {
-      "workspace": "packages/theme",
-      "tarball": "https://github.com/deestax/dsh-theme/releases/download/v0.1.0/dsh-theme-0.1.0.tgz"
+    "@t3labs/ohmydsh-theme": {
+      "workspace": "packages/theme"
     },
-    "dsh-hud": {
-      "workspace": "packages/hud",
-      "tarball": "https://github.com/deestax/dsh-hud/releases/download/v0.1.0/dsh-hud-0.1.0.tgz"
+    "@t3labs/ohmydsh-hud": {
+      "workspace": "packages/hud"
     }
   },
   "allowBuilds": [

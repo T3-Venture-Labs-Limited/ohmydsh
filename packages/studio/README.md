@@ -1,4 +1,4 @@
-# dsh-studio
+# @t3labs/ohmydsh-studio
 
 A personal image and video studio for [DeepSeek Harness](https://github.com/deepseek-ai) (DSH 0.2.2-rc.x): generate, edit,
 inpaint, outpaint, upscale and animate, with a searchable library that remembers where every result came from.
@@ -72,7 +72,7 @@ pnpm run check      # typecheck + token lint + tests + build + artifact check
 ### Install from source
 
 ```sh
-dsh plugin --profile <profile> add "dsh-studio@link:$PWD"
+dsh plugin --profile <profile> add "@t3labs/ohmydsh-studio@link:$PWD"
 # then restart DSH
 ```
 

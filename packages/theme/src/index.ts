@@ -9,7 +9,7 @@ import { OMARCHY_ROUTE, serveSnapshot, withAdmission } from './host/routes.ts'
 import { registerThemeRemote } from './host/push.ts'
 import type { Admission } from './host/routes.ts'
 
-export const name = 'dsh-theme'
+export const name = '@t3labs/ohmydsh-theme'
 
 export function apply(ctx: Context): void {
   const state = new OmarchyState()

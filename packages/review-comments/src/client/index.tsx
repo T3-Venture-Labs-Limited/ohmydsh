@@ -15,7 +15,7 @@ import { runtime } from './runtime.ts'
 import { startHostSync } from './hostSync.ts'
 import { createPushTransport } from '../kit/push/transport.ts'
 
-export const name = 'dsh-review-comments'
+export const name = '@t3labs/ohmydsh-review-comments'
 export const inject = ['slots', 'locale', 'sessions', 'conversation']
 
 interface TabRegistry {
@@ -27,7 +27,7 @@ export function apply(ctx: Ctx): void {
   ctx.effect(() => { const off = locale.register(ctx.locale); bindLocale(ctx.locale); return () => { off(); unbindLocale() } }, 'dsh-review-comments: dictionary')
   ctx.effect(() => { runtime.set(ctx); return () => { runtime.set(undefined) } }, 'dsh-review-comments: runtime')
   // Live channel: a Typert stream on DSH's single multiplexed WebSocket (no HTTP stream; the browser allows only 6 per host).
-  const transport = createPushTransport(ctx as never, { pkg: 'dsh-review-comments', serviceKey: 'dshReviewComments', namespace: 'dshReviewComments', streams: [{ method: 'changes' }] })
+  const transport = createPushTransport(ctx as never, { pkg: '@t3labs/ohmydsh-review-comments', serviceKey: 'dshReviewComments', namespace: 'dshReviewComments', streams: [{ method: 'changes' }] })
   ctx.effect(() => { const sync = startHostSync(store, { fetch: globalThis.fetch.bind(globalThis), open: (signal) => transport.stream('changes', [], signal) }); return () => { sync.dispose() } }, 'dsh-review-comments: host sync')
   ctx.effect(() => () => { store.dispose(); uiState.reset() }, 'dsh-review-comments: store')
 

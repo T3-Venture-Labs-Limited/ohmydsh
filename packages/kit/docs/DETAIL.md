@@ -1,4 +1,4 @@
-# dsh-kit
+# @t3labs/ohmydsh-kit
 
 A starting point for DeepSeek Harness (DSH) plugins. It is a toolbox, not a plugin: nothing here is installed into DSH.
 

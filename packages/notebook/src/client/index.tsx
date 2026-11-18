@@ -68,7 +68,7 @@ export function apply(ctx: Context): void {
   const t = locale.bind(c.locale)
   // Live notebook events: a Typert stream per open notebook, all on DSH's single multiplexed WebSocket (no HTTP stream;
   // the browser allows only 6 per host). The lazy view reads the opener from shared page state.
-  const transport = createPushTransport(ctx as never, { pkg: 'dsh-notebook', serviceKey: 'dshNotebook', namespace: 'dshNotebook', streams: [{ method: 'events', params: ['sessionId', 'path'] }] })
+  const transport = createPushTransport(ctx as never, { pkg: '@t3labs/ohmydsh-notebook', serviceKey: 'dshNotebook', namespace: 'dshNotebook', streams: [{ method: 'events', params: ['sessionId', 'path'] }] })
   ctx.effect(() => {
     const SHARED = '__dshNotebookStream_v1'
     const bag = ((globalThis as Record<string, unknown>)[SHARED] ??= {}) as { open?: unknown }

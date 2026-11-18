@@ -7,8 +7,8 @@
 //   node scripts/check-private-strings.mjs --tree     # tree only
 //   OMD_ALLOWED_IDENTITIES='Name <mail>|Name2 <mail2>' extra author identities to accept (upstream history is allowed by default)
 import { spawnSync } from 'node:child_process'
+import { parts } from './private-patterns.mjs'
 
-const parts = ['dar' + 'yll', 'net' + 'scher', 't3' + 'labs', 'tren\\.fin' + 'ance', 'tail2d' + '28b9', 'hera' + 'plus', '/home/super' + 'dao', 'agent' + 'mail', 'claude' + 't3', 'ci@exa' + 'mple\\.invalid', 'TEAMMATE' + '-BRIEF', 'DSH' + '-PLAN']
 const RE = new RegExp(parts.join('|'), 'i')
 const SECRET_FILE = /(^|\/)(\.env|.*\.pem|.*\.key|id_rsa|\.credentials.*|auth\.json)$/
 const treeOnly = process.argv.includes('--tree')

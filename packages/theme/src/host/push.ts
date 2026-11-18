@@ -6,7 +6,7 @@ import type { OmarchyState } from './omarchy-state.ts'
 import { wireOf } from './routes.ts'
 
 export const REMOTE_NAMESPACE = 'dshTheme'
-export const REMOTE_PACKAGE = 'dsh-theme'
+export const REMOTE_PACKAGE = '@t3labs/ohmydsh-theme'
 export const STREAM_METHOD = 'omarchy'
 
 export function omarchyStream(state: OmarchyState, signal: AbortSignal | undefined): AsyncGenerator<ReturnType<typeof wireOf>, void, void> {

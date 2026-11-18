@@ -1,5 +1,7 @@
 # Parallel Search and Extract for DeepSeek Harness
 
+> `@t3labs/ohmydsh-web-search-parallel` is the ohmydsh fork of [parallel-web/dsh-web-search-parallel](https://github.com/parallel-web/dsh-web-search-parallel) (MIT, © 2026 Parallel). The original history is kept in this repository; see [NOTICE](NOTICE).
+
 This plugin makes DeepSeek Harness's built-in `web_search` tool use
 [Parallel Search](https://docs.parallel.ai/search/search-quickstart) and its
 built-in `web_fetch` tool use the
@@ -32,17 +34,12 @@ Harness:
 export PARALLEL_API_KEY="your-key"
 ```
 
-Then install the plugin into the `web` profile:
+Then install the plugin into a profile (it is part of the `parallel` pack of
+[ohmydsh](https://github.com/T3-Venture-Labs-Limited/ohmydsh): `omd add parallel`), or by hand:
 
 ```sh
-npx --yes @deepseek-ai/dsh@0.1.0-rc.6 \
-  plugin --profile web add \
-  --allow-build=@parallel-web/dsh-web-search-parallel \
-  "github:parallel-web/dsh-web-search-parallel#main"
+dsh plugin --profile <profile> add @t3labs/ohmydsh-web-search-parallel
 ```
-
-The `--allow-build` flag lets pnpm build this plugin and nothing else. For a
-reproducible install, replace `main` with a full commit SHA.
 
 Stop any running Harness process, then start it again:
 
@@ -130,7 +127,7 @@ built-in `http` and `deepseek-fetch-api` providers).
 
 ```sh
 npx --yes @deepseek-ai/dsh@0.1.0-rc.6 \
-  plugin --profile web remove @parallel-web/dsh-web-search-parallel
+  plugin --profile web remove @t3labs/ohmydsh-web-search-parallel
 ```
 
 Restart Harness after removing the plugin.

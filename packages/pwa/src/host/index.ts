@@ -37,7 +37,7 @@ import { PAIR_CSP, pairPageHtml, pairScriptSource } from './pair-page.ts'
 import { chooseOrigin } from './origin.ts'
 import { installAdmitGate, trackDeviceSockets, type UpgradeServer } from './revocation.ts'
 
-export const name = 'dsh-pwa'
+export const name = '@t3labs/ohmydsh-pwa'
 export const inject = ['webServer', 'connection']
 
 const VERSION = '0.3.0'

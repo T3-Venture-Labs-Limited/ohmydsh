@@ -1,4 +1,4 @@
-# dsh-notebook
+# @t3labs/ohmydsh-notebook
 
 Jupyter notebooks in the DeepSeek Harness sidebar that **you and the agent work in together**.
 
@@ -17,7 +17,7 @@ Click any `.ipynb` file in the Files tree and it opens as a real notebook in the
 
 ```sh
 pnpm install --ignore-scripts && pnpm run build
-dsh plugin --profile <profile> add "dsh-notebook@link:$PWD"
+dsh plugin --profile <profile> add "@t3labs/ohmydsh-notebook@link:$PWD"
 # then restart DSH
 ```
 

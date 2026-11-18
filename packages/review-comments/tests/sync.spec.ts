@@ -56,7 +56,8 @@ describe('host sync', () => {
     fail = false
     store.add(draft('back'))
     await settle(async () => { expect((await host.get('s1')).items.map(i => i.body)).toEqual(['offline', 'back']) })
-    expect(sync.online()).toBe(true)
+    // The host copy lands slightly before the online flag flips, so wait for it like the other assertions do.
+    await settle(() => { expect(sync.online()).toBe(true) })
     sync.dispose(); store.dispose()
   })
   it('a delete on the page is not resurrected by the Host copy', async () => {

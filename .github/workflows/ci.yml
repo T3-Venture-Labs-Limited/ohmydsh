@@ -55,7 +55,7 @@ jobs:
       - run: sh -n install.sh
 
   integration:
-    name: integration (omd setup into a clean DSH home)
+    name: integration (omd setup --dev, linked packages)
     needs: [packages, cli]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -100,6 +100,61 @@ jobs:
       - name: Web boot (no import failures)
         run: |
           dsh omd --no-open --port 3190 > boot.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 60); do grep -q 'dsh web: http' boot.log && break; sleep 1; done
+          sleep 5
+          kill $PID || true
+          cat boot.log
+          grep -q 'dsh web: http' boot.log || { echo "::error::web server did not start"; exit 1; }
+          if grep -E 'failed to import|startup failed|fatal load failure|did not activate|client bundle not found' boot.log; then echo "::error::plugin load failures"; exit 1; fi
+
+  integration-tarballs:
+    name: integration (omd setup from packed tarballs, the published shape)
+    needs: [packages, cli]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DSH_HOME: ${{ github.workspace }}/.tmp/dsh-home-tarballs
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install and build the workspace packages (lib/ is not committed)
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+      - name: Install the pinned DeepSeek Harness
+        run: |
+          PIN=$(node -p "require('./ohmydsh.json').dsh")
+          npm install -g "@deepseek-ai/dsh@$PIN"
+          dsh --version
+      - name: Pack every package and audit the tarballs (private strings, absolute paths, required files)
+        run: node scripts/pack-all.mjs
+      - name: omd setup from the packed tarballs (installed from files, not linked, no registry)
+        run: |
+          node packages/cli/bin/omd.js setup --manifest .tmp/tarballs/ohmydsh.json --no-dsh-install --pack composio,langfuse,parallel,omarchy
+          if grep -q '"link:' "$DSH_HOME/profiles/omd/ohmydsh.lock.json"; then echo "::error::a plugin was linked, not installed from its tarball"; exit 1; fi
+      - name: Composed config has every row and no unapplied rows
+        run: |
+          dsh --profile omd --dump-config > dump.yml 2> dump.err
+          cat dump.err
+          if grep -E 'not found|invalid|error' dump.err; then echo "::error::composed config reported problems"; exit 1; fi
+          for id in studio dsh-pwa; do grep -q -E "^- id: $id\$" dump.yml || { echo "::error::row $id missing"; exit 1; }; done
+          for pkg in $(node -p "const m=require('./ohmydsh.json'); [...Object.keys(m.plugins.core), ...Object.values(m.plugins.packs).flatMap(Object.keys)].join(' ')"); do
+            grep -q -F "# == $pkg" dump.yml || { echo "::error::plugin $pkg did not contribute to the config"; exit 1; }
+          done
+      - name: Activated plugins
+        run: node packages/cli/bin/omd.js list
+      - name: omd doctor
+        run: node packages/cli/bin/omd.js doctor
+      - name: Web boot (no import failures)
+        run: |
+          dsh omd --no-open --port 3191 > boot.log 2>&1 &
           PID=$!
           for i in $(seq 1 60); do grep -q 'dsh web: http' boot.log && break; sleep 1; done
           sleep 5

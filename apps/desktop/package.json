@@ -19,8 +19,8 @@
   "scripts": {
     "start": "node scripts/bundle.mjs && electron .",
     "bundle": "node scripts/bundle.mjs",
-    "test": "node --test tests/",
-    "check": "node --check src/main.js && node --check src/smoke.js && node --test tests/",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "check": "node --check src/main.js && node --check src/smoke.js && node --test \"tests/**/*.test.js\"",
     "icons": "node scripts/make-icons.mjs",
     "pack": "node scripts/bundle.mjs && electron-builder --dir",
     "dist:linux": "node scripts/bundle.mjs && electron-builder --linux AppImage deb --x64 --publish never",

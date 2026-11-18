@@ -14,7 +14,7 @@ export function writeLock(profileDir, lock) {
   writeFileSync(join(profileDir, LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`)
 }
 
-export function makeLock({ manifest, source, dev, packs, plugins, official, now = new Date() }) {
+export function makeLock({ manifest, source, dev, packs, plugins, official, trustedHosts = [], now = new Date() }) {
   return {
     lockVersion: 1,
     manifest: { version: manifest.version, dsh: manifest.dsh, source },
@@ -22,6 +22,7 @@ export function makeLock({ manifest, source, dev, packs, plugins, official, now 
     updatedAt: now.toISOString(),
     packs: [...packs].sort(),
     official: [...official],
+    trustedHosts: [...trustedHosts],
     plugins: Object.fromEntries([...plugins].map(([name, p]) => [name, { version: p.version, spec: p.spec, origin: [...p.origin] }])),
   }
 }

@@ -5,6 +5,7 @@ import { composeCheck, describeCompose, dshVersion, installedVersion, isProfileR
 import { classifyDeps, diffLock, readLock } from './lock.js'
 import { defaultManifestSource, loadManifest, packNames, resolveDesired } from './manifest.js'
 import { describeLock, prevName, profileDir, rollbackSwap, syncProfile } from './profile.js'
+import { mergeHosts, tailnetHosts } from './tailnet.js'
 import { OmdError, c, which } from './util.js'
 
 const profileNameOf = (ctx, manifest) => ctx.flags.profile ?? ctx.env.OMD_PROFILE ?? manifest?.profile?.name ?? 'omd'
@@ -64,7 +65,8 @@ export async function setup(ctx) {
   ensureDsh(ctx, manifest)
   const lock = readLock(profileDir(ctx.home, name))
   const packs = [...new Set([...(lock?.packs ?? []), ...splitList(ctx.flags.pack)])]
-  const res = await syncProfile(ctx, { loaded, name, packs, dev: Boolean(ctx.flags.dev) || Boolean(lock?.dev && !ctx.flags.manifest), force: Boolean(ctx.flags.force), bootCheck: Boolean(ctx.flags['boot-check']) })
+  const res = await syncProfile(ctx, { loaded, name, packs, dev: Boolean(ctx.flags.dev) || Boolean(lock?.dev && !ctx.flags.manifest), force: Boolean(ctx.flags.force), bootCheck: Boolean(ctx.flags['boot-check']), trustedHosts: splitList(ctx.flags['trusted-host']) })
+  if (res.trustedHosts?.length > 0) ctx.log.ok(`trusted hosts saved in the profile: ${res.trustedHosts.join(', ')}`)
   printDiff(ctx, res.diff)
   finish(ctx, name, res)
   await doctor(ctx, { quietHeader: true })
@@ -105,7 +107,7 @@ export async function update(ctx) {
   ctx.log.step(`ohmydsh ${lock.manifest.version} -> ${manifest.version}`)
   if (lock.manifest.dsh !== manifest.dsh) ctx.log.warn(`this set needs DSH ${manifest.dsh} (you have ${dshVersion(ctx) ?? 'none'}); omd update does not swap the DSH binary, run \`omd setup\` for that.`)
   const dev = ctx.flags.dev !== undefined ? Boolean(ctx.flags.dev) : lock.dev
-  const res = await syncProfile(ctx, { loaded, name, packs: lock.packs, dev, dryRun: Boolean(ctx.flags['dry-run']), force: Boolean(ctx.flags.force), bootCheck: Boolean(ctx.flags['boot-check']) })
+  const res = await syncProfile(ctx, { loaded, name, packs: lock.packs, dev, dryRun: Boolean(ctx.flags['dry-run']), force: Boolean(ctx.flags.force), bootCheck: Boolean(ctx.flags['boot-check']), trustedHosts: splitList(ctx.flags['trusted-host']) })
   printDiff(ctx, res.diff)
   if (!res.applied) { ctx.log.info('dry run: nothing changed'); return }
   finish(ctx, name, res)
@@ -204,6 +206,11 @@ export async function doctor(ctx, { quietHeader = false } = {}) {
     if (p === 'omarchy' && !which('omarchy-theme-current', ctx.env) && !existsSync(join(ctx.env.HOME ?? '', '.config', 'omarchy'))) todos.push('pack omarchy: this does not look like an Omarchy desktop; the theme plugin will have nothing to follow')
   }
   if ('@t3labs/ohmydsh-pwa' in (lock?.plugins ?? {})) log.info('phone app: needs DSH served over HTTPS (e.g. Tailscale) to install on a phone')
+  if (lock) {
+    const untrusted = tailnetHosts(ctx).filter((h) => !mergeHosts(lock.trustedHosts).includes(h))
+    if (untrusted.length > 0) todos.push(`this machine's Tailscale name (${untrusted.join(', ')}) is not saved in the profile: after a reboot a phone or other device would load the page but stay on "Reconnecting". Run \`omd setup\` to save it.`)
+    else if ((lock.trustedHosts ?? []).length > 0) log.ok(`trusted hosts saved in the profile: ${lock.trustedHosts.join(', ')}`)
+  }
 
   for (const p of problems) log.error(p)
   for (const t of todos) log.warn(`todo: ${t}`)

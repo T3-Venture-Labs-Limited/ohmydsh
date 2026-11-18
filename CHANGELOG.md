@@ -9,6 +9,8 @@ First release.
 
 - **`omd` command** (`npm i -g @t3labs/ohmydsh`): `setup`, `add`, `remove`, `update`, `rollback`, `doctor`, `list`. It installs into its
   own DSH profile (`omd`), tested as a set, with rollback.
+- **Phones keep connecting after a reboot**: `omd setup`/`update` save this machine's Tailscale name (and any
+  `--trusted-host`) in the profile, so DSH accepts it even when it starts before Tailscale. `omd doctor` warns if it is missing.
 - **Our plugins**, published as `@t3labs/ohmydsh-*`: Studio, Phone app, Browser takeover, Review comments, Skill studio, Notebook,
   Triggers, Automation models; optional packs Composio, Langfuse, Parallel web search, and Omarchy (Theme, HUD).
 - **Community plugins** pinned from npm at tested versions (subscriptions, memory, genui, better sidebar and more).

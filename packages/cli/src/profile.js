@@ -5,6 +5,7 @@ import { composeCheck, describeCompose, isProfileRunning } from './health.js'
 import { diffLock, makeLock, readLock, writeLock } from './lock.js'
 import { readBlock, rewriteBlock, rewriteWorkspaceYaml } from './managed.js'
 import { registryPins, resolveDesired } from './manifest.js'
+import { mergeHosts, tailnetHosts, trustedHostsRow } from './tailnet.js'
 import { OmdError } from './util.js'
 
 export const BASE_BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
@@ -44,7 +45,7 @@ export function buildPackageJson(existing, { desired, lock, official, profile })
 }
 
 /** YAML for the managed block of cordis.patch.yml: default rows plus the rows of every enabled pack. */
-export async function managedPatchYaml(loaded, packs) {
+export async function managedPatchYaml(loaded, packs, trustedHosts = []) {
   const parts = []
   const { manifest, readRelative } = loaded
   if (manifest.profile.defaults) parts.push((await readRelative(manifest.profile.defaults)).trimEnd())
@@ -52,7 +53,9 @@ export async function managedPatchYaml(loaded, packs) {
     const rows = manifest.packInfo[p]?.rows
     if (rows) parts.push((await readRelative(rows)).trimEnd())
   }
-  return parts.join('\n\n')
+  const hostsRow = trustedHostsRow(trustedHosts)
+  if (hostsRow) parts.push(hostsRow)
+  return parts.filter(Boolean).join('\n\n')
 }
 
 /** Copy everything but node_modules, so the staging profile keeps the user's rows and settings. */
@@ -83,8 +86,10 @@ export async function syncProfile(ctx, opts) {
   const { plugins: desired } = resolveDesired(manifest, { packs, dev: opts.dev, source: loaded.source })
   const diff = diffLock(lock, desired)
   const official = manifest.profile.official
-  const managedYaml = await managedPatchYaml(loaded, packs)
-  const plan = { diff, packs, desired, official, managedYaml, live: existsSync(liveDir), lock }
+  // Hosts saved earlier stay, so a run while Tailscale is down never drops them. A dry run starts no processes.
+  const trustedHosts = mergeHosts(lock?.trustedHosts, opts.dryRun ? [] : tailnetHosts(ctx), opts.trustedHosts)
+  const managedYaml = await managedPatchYaml(loaded, packs, trustedHosts)
+  const plan = { diff, packs, desired, official, managedYaml, trustedHosts, live: existsSync(liveDir), lock }
   if (opts.dryRun) return { ...plan, applied: false }
 
   const log = ctx.log
@@ -120,7 +125,7 @@ export async function syncProfile(ctx, opts) {
       log.ok(`web boot check passed (${boot.url})`)
     }
 
-    const newLock = makeLock({ manifest, source: loaded.source, dev: opts.dev, packs, plugins: desired, official })
+    const newLock = makeLock({ manifest, source: loaded.source, dev: opts.dev, packs, plugins: desired, official, trustedHosts })
     writeLock(stageDir, newLock)
     const running = (ctx.isRunning ?? isProfileRunning)(liveDir)
     if (existsSync(liveDir) && running === true && !opts.force) {

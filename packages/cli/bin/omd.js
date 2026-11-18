@@ -28,6 +28,8 @@ Options:
   --boot-check           also boot the staged web app briefly and look for load failures
   --force                swap the profile even if a DSH is running on it
   --no-dsh-install       setup: do not install the pinned DSH
+  --trusted-host <a,b>   setup/update: also accept browsers on these hosts (this machine's Tailscale name is added
+                         automatically; saved in the profile so it works right after a reboot)
   --profile <name>       profile to manage (default: omd)
 
 omd never restarts a running DSH, never edits rows outside its own block, and never copies logins.

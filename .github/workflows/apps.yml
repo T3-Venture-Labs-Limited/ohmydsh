@@ -1,7 +1,8 @@
 name: Apps (desktop + Android)
 
 # Builds the ohmydsh desktop app (Windows, macOS, Linux) and the Android APK and attaches them to the GitHub Release.
-# Runs on a version tag (v*) and by hand. Desktop builds are UNSIGNED for now (see docs/APPS.md).
+# Runs as the last stage of release.yml (called with workflow_call on a v* tag, after the npm publish and after the release
+# exists) and by hand. Desktop builds are UNSIGNED for now (see docs/APPS.md).
 #
 # Repository secrets used (all optional; without them the Android release is signed with a generated key and says so):
 #   ANDROID_KEYSTORE_BASE64    base64 of the release .jks
@@ -10,8 +11,7 @@ name: Apps (desktop + Android)
 #   ANDROID_KEY_PASSWORD
 
 on:
-  push:
-    tags: ['v*']
+  workflow_call:
   workflow_dispatch:
     inputs:
       release_tag:
@@ -106,8 +106,8 @@ jobs:
         shell: bash
         run: |
           npm install -g pnpm@12.15.0
-          pnpm install --frozen-lockfile --filter dsh-pwa...
-          pnpm --filter dsh-pwa run build
+          pnpm install --frozen-lockfile --filter @t3labs/ohmydsh-pwa...
+          pnpm --filter @t3labs/ohmydsh-pwa run build
       - name: Unpack the AppImage
         if: matrix.name == 'linux'
         shell: bash

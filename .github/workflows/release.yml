@@ -1,0 +1,104 @@
+name: Release
+
+# Push a tag v<ohmydsh.json version> (for example v0.1.0) to release:
+#   1. every check runs, the tag must equal ohmydsh.json's version;
+#   2. every public package whose version is not on npm yet is published (re-runs are safe: published versions are skipped);
+#   3. the GitHub Release is created with the notes from CHANGELOG.md;
+#   4. the desktop apps and the Android APK are built and attached (apps.yml).
+#
+# Needs the repository secret NPM_TOKEN: an npm automation (or granular, read+write on @t3labs) token.
+# Provenance is on: the packages show a verified build badge on npmjs.com.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: check and publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write   # npm provenance
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Is NPM_TOKEN set?
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error title=NPM_TOKEN is missing::Add the repository secret NPM_TOKEN (Settings > Secrets and variables > Actions) with publish rights on the @t3labs npm organisation, then re-run this workflow."
+            exit 1
+          fi
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: The tag must equal the manifest version
+        run: |
+          VERSION=$(node -p "require('./ohmydsh.json').version")
+          if [ "${GITHUB_REF_NAME}" != "v${VERSION}" ]; then
+            echo "::error title=Tag does not match ohmydsh.json::Tag is ${GITHUB_REF_NAME} but ohmydsh.json says version ${VERSION}. Delete the tag, fix the version and tag again."
+            exit 1
+          fi
+          echo "releasing ${VERSION}"
+      - name: ffmpeg (the Studio tests build a tiny test video)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r run check
+      - run: pnpm run build
+      - run: pnpm run check:manifest
+      - run: node scripts/check-private-strings.mjs
+      - name: Pack audit (contents of every tarball)
+        run: node scripts/pack-all.mjs
+      - name: Publish packages that are not on npm yet
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
+        # pnpm skips a package whose exact version is already on the registry, so a re-run after a partial failure
+        # publishes only what is missing.
+        run: pnpm -r publish --access public --no-git-checks --provenance
+
+  github-release:
+    name: GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Release notes from CHANGELOG.md
+        run: node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" > release-notes.md
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "ohmydsh ${GITHUB_REF_NAME#v}" --notes-file release-notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" --title "ohmydsh ${GITHUB_REF_NAME#v}" --notes-file release-notes.md --verify-tag
+          fi
+
+  apps:
+    name: desktop apps and Android APK
+    needs: github-release
+    uses: ./.github/workflows/apps.yml
+    permissions:
+      contents: write
+    secrets: inherit

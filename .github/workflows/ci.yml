@@ -36,6 +36,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: ffmpeg (the Studio tests build a tiny test video)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r run check
       - run: pnpm run check:manifest
@@ -49,7 +51,7 @@ jobs:
         with:
           node-version: 24
       - run: node --check packages/cli/bin/omd.js
-      - run: node --test packages/cli/tests/
+      - run: node --test "packages/cli/tests/**/*.test.*js"
       - run: sh -n install.sh
 
   integration:

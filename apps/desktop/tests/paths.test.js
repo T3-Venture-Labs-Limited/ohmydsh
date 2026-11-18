@@ -1,7 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const path = require('node:path')
+const path = require('node:path').posix // linux paths are built with posix rules on every runner
 const { resolvePaths, pnpmTarget } = require('../src/paths')
 
 test('uses its own DSH home in the app data folder by default', () => {
@@ -18,5 +18,5 @@ test('OHMYDSH_DSH_HOME points the app at an existing DSH home; OHMYDSH_MANIFEST 
 })
 test('pnpm target per platform and arch', () => {
   assert.equal(pnpmTarget('win32', 'x64'), 'win32-x64'); assert.equal(pnpmTarget('darwin', 'arm64'), 'darwin-arm64'); assert.equal(pnpmTarget('linux', 'x64'), 'linux-x64')
-  assert.match(resolvePaths({ userData: '/u', resources: '/r', appPath: '/a', platform: 'win32' }).pnpmExe, /exe\.win32-x64[\\/]pnpm\.exe$/)
+  assert.match(resolvePaths({ userData: '/u', resources: '/r', appPath: '/a', platform: 'win32', arch: 'x64' }).pnpmExe, /exe\.win32-x64[\\/]pnpm\.exe$/)
 })

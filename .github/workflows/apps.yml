@@ -123,7 +123,8 @@ jobs:
           OHMYDSH_USER_DATA: ${{ runner.temp }}/ohmydsh-userdata
           OHMYDSH_MANIFEST: ${{ github.workspace }}/apps/desktop/tests/smoke/ohmydsh.json
           OHMYDSH_OMD_ARGS: --dev
-        run: timeout 1500 ./squashfs-root/ohmydsh --no-sandbox squashfs-root/resources/app.asar/src/smoke.js
+        # ELECTRON_RUN_AS_NODE makes the binary behave as Node, which rejects Chromium flags such as --no-sandbox.
+        run: timeout 1500 ./squashfs-root/ohmydsh squashfs-root/resources/app.asar/src/smoke.js
       - name: "Smoke test the window under xvfb (the same checks, inside a real BrowserWindow)"
         if: matrix.name == 'linux'
         shell: bash

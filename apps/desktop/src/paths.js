@@ -1,12 +1,14 @@
 'use strict'
 // Where everything lives. Pure functions of (platform, dirs, env) so they are unit-tested without Electron.
-const path = require('node:path')
+const nodePath = require('node:path')
 
 /**
  * @param {{ userData: string, resources: string, appPath: string, env?: NodeJS.ProcessEnv, platform?: string }} o
  * userData: Electron's app.getPath('userData'); resources: process.resourcesPath (packaged) or the apps/desktop folder (dev).
  */
-function resolvePaths({ userData, resources, appPath, env = process.env, platform = process.platform }) {
+function resolvePaths({ userData, resources, appPath, env = process.env, platform = process.platform, arch = process.arch }) {
+  // Join with the target platform's separator rules, not the runner's, so the result is the same on every OS.
+  const path = platform === 'win32' ? nodePath.win32 : nodePath.posix
   const dshHome = env.OHMYDSH_DSH_HOME && env.OHMYDSH_DSH_HOME !== '' ? path.resolve(env.OHMYDSH_DSH_HOME) : path.join(userData, 'dsh-home')
   const runtime = path.join(userData, 'runtime')
   return {
@@ -20,7 +22,7 @@ function resolvePaths({ userData, resources, appPath, env = process.env, platfor
     stateFile: path.join(userData, 'runtime-state.json'),
     // The DSH CLI the runtime installs, and the pnpm executable it needs.
     dshBin: path.join(runtime, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
-    pnpmExe: path.join(runtime, 'node_modules', '@pnpm', `exe.${pnpmTarget(platform, process.arch)}`, platform === 'win32' ? 'pnpm.exe' : 'pnpm'),
+    pnpmExe: path.join(runtime, 'node_modules', '@pnpm', `exe.${pnpmTarget(platform, arch)}`, platform === 'win32' ? 'pnpm.exe' : 'pnpm'),
     // What ships inside the app: the omd CLI and the manifest it installs from.
     omdBin: path.join(resources, 'ohmydsh', 'packages', 'cli', 'bin', 'omd.js'),
     // OHMYDSH_MANIFEST points the installer at another ohmydsh.json (tests, a release candidate); relative profile/ files resolve next to it.

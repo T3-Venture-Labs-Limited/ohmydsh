@@ -12,7 +12,8 @@ test('writes node/dsh/omd launchers that run Electron as Node (unix and windows 
   assert.deepEqual(files.map((f) => path.basename(f)), ['node', 'dsh', 'omd'])
   const dsh = fs.readFileSync(path.join(dir, 'dsh'), 'utf8')
   assert.match(dsh, /ELECTRON_RUN_AS_NODE=1 exec "\/opt\/ohmydsh\/ohmydsh" "\/rt\/dsh\.js" "\$@"/)
-  assert.equal(fs.statSync(path.join(dir, 'dsh')).mode & 0o111, 0o111)
+  // Windows has no exec bits; the .cmd shims are what run there.
+  if (process.platform !== 'win32') assert.equal(fs.statSync(path.join(dir, 'dsh')).mode & 0o111, 0o111)
   const win = writeShims({ bin: dir, electron: 'C:\\ohmydsh.exe', dshBin: 'C:\\dsh.js', omdBin: 'C:\\omd.js', platform: 'win32' })
   assert.match(fs.readFileSync(win[1], 'utf8'), /set ELECTRON_RUN_AS_NODE=1\r\n"C:\\ohmydsh\.exe" "C:\\dsh\.js" %\*/)
   fs.rmSync(dir, { recursive: true })

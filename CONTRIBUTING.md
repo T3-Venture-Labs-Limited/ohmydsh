@@ -11,7 +11,8 @@ You need Node 24 and pnpm 12 (`corepack enable` or `npm i -g pnpm`).
 pnpm install            # builds every package once (each plugin's `prepare` script)
 pnpm run check          # every package's typecheck, lint, tests and build
 pnpm run check:private  # the private-strings audit CI also runs
-pnpm run check:manifest # ohmydsh.json matches packages/*
+pnpm run check:manifest # ohmydsh.json matches packages/* (versions equal their pins)
+pnpm run pack:all       # pack every public package, audit the tarballs, write .tmp/tarballs/ohmydsh.json
 ```
 
 If your environment can't write to the usual pnpm/npm folders, `source scripts/dev-env.sh` first: it points the
@@ -24,7 +25,7 @@ packages/<name>/     one plugin (or the CLI) per folder, each with its own packa
 profile/             default patch rows for the omd profile (defaults.cordis.yml, packs/*.cordis.yml)
 ohmydsh.json         the manifest: DSH version + exact version of every plugin and pack
 scripts/             repo tooling (private-strings audit, manifest check, dev-env)
-.changeset/          pending version bumps
+CHANGELOG.md         release notes (the section of the tagged version becomes the GitHub Release)
 ```
 
 ## Working on a plugin
@@ -54,14 +55,21 @@ the first home out.
 - Don't rename a plugin's patch-row id: people's settings are keyed by it.
 - Community plugins are never vendored or forked here. Send the fix upstream and list the PR in `docs/UPSTREAM.md`.
 
-## Changesets and releases
+## Versions and releases
 
-A pull request that changes a package adds a changeset (`pnpm changeset`). Releases and npm publishing are not set
-up yet; until then the manifest points at the GitHub release tarballs.
+Our plugins are published to npm as `@t3labs/ohmydsh-<name>` and the CLI as `@t3labs/ohmydsh`. The manifest pins every
+plugin at an exact version and `omd` installs exactly those from the registry.
 
-When you bump a plugin, also update its version in `ohmydsh.json` (`pnpm run check:manifest` tells you if they
-drift). To bump a community plugin, change its exact version in `ohmydsh.json`; CI installs the whole manifest into a
-clean profile and boots DSH before it can merge.
+- To change a plugin: bump `version` in its `package.json` **and** its pin in `ohmydsh.json` (`pnpm run check:manifest`
+  fails unless they are equal). Plugins you did not change keep their version, so only changed packages are published.
+- To bump a community plugin, change its exact version in `ohmydsh.json`; CI installs the whole manifest into a clean
+  profile and boots DSH before it can merge.
+- To release: set `ohmydsh.json` `version` and the CLI's (`packages/cli/package.json`) to the new number, add a
+  `## <version>` section to `CHANGELOG.md`, merge, then push the tag `v<version>`. `release.yml` runs every check, publishes
+  the packages that are not on npm yet (with provenance), creates the GitHub Release from the changelog and builds the apps.
+  It needs the repository secret `NPM_TOKEN`.
+- CI also installs the whole set from packed tarballs (`pnpm run pack:all`, then `omd setup --manifest .tmp/tarballs/ohmydsh.json`)
+  to catch a package that works linked but breaks once published.
 
 ## Pull requests
 

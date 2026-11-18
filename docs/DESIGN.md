@@ -1,6 +1,6 @@
 # ohmydsh design
 
-Status: plan, agreed 2026-11-17. Milestone 1 is built: monorepo skeleton, imported packages, `ohmydsh.json`, the `omd` CLI, installer script and CI. Not yet done: the npm scope and renaming, publishing, the release workflow.
+Status: plan, agreed 2026-11-17. Milestone 1 is built: monorepo skeleton, imported packages, `ohmydsh.json`, the `omd` CLI, installer script and CI. Milestone 2 is built: the packages are renamed to the `@t3labs` scope, `ohmydsh.json` installs them from npm and a tag-driven release workflow publishes them. Waiting on: the first `v0.1.0` tag and the `NPM_TOKEN` secret.
 
 ## Goals
 
@@ -16,10 +16,10 @@ Status: plan, agreed 2026-11-17. Milestone 1 is built: monorepo skeleton, import
 | Where do our plugins live? | **One monorepo** (`packages/*`), history imported from the existing `deestax/dsh-*` repos, which are then archived with a pointer here. | Shared kit becomes a real package instead of copied code; one CI, one release; cross-plugin changes are one pull request. |
 | Submodules? | **No.** | Every change would need two commits in two repos, detached-HEAD mistakes are easy, and users don't need source checkouts at all. |
 | Community plugins? | **Pinned from npm, never vendored or forked.** Fixes go upstream as PRs. | They keep their authors and licences; we don't inherit their maintenance. |
-| How do users get our plugins? | **npm under the `@ohmydsh` scope** (e.g. `@ohmydsh/studio`). | DSH's plugin manager can then check versions and update them itself; registry installs avoid build scripts. GitHub release tarballs stay as a fallback. |
+| How do users get our plugins? | **npm under the `@t3labs` organisation** (e.g. `@t3labs/ohmydsh-studio`). | DSH's plugin manager can then check versions and update them itself; registry installs avoid build scripts. A `--manifest` pointing at packed tarballs stays as an escape hatch (CI uses it). |
 | Where does it install? | **Its own DSH profile, `omd`.** | Never touches the user's `web` profile; can be made the default later with one command. |
 | What's on by default? | **Core set on; account- or desktop-specific plugins as opt-in packs.** | A new user gets something that works without any accounts beyond a model. |
-| npm name for the CLI | **`@ohmydsh/cli`** (binary `omd`). | `oh-my-dsh` on npm already belongs to a different project (amplifthq/oh-my-dsh); we avoid that name to prevent confusion. |
+| npm name for the CLI | **`@t3labs/ohmydsh`** (binary `omd`). | `oh-my-dsh` on npm already belongs to a different project (amplifthq/oh-my-dsh); we avoid that name to prevent confusion. |
 
 ## The manifest: `ohmydsh.json`
 
@@ -32,16 +32,16 @@ The single source of truth. A release of ohmydsh is a new version of this file.
   "node": ">=24",
   "plugins": {
     "core": {
-      "@ohmydsh/studio": "0.1.0",
+      "@t3labs/ohmydsh-studio": "0.1.0",
       "dsh-better-sidebar": "0.32.1",
       "dsh-plugin-subscriptions": "0.9.13"
       // … every core plugin, exact versions
     },
     "packs": {
-      "composio": { "@ohmydsh/composio": "0.1.0" },
-      "langfuse": { "@ohmydsh/langfuse": "0.1.0" },
-      "parallel": { "@ohmydsh/web-search-parallel": "0.1.0" },
-      "omarchy":  { "@ohmydsh/theme": "0.1.0", "@ohmydsh/hud": "0.1.0" }
+      "composio": { "@t3labs/ohmydsh-composio": "0.1.0" },
+      "langfuse": { "@t3labs/ohmydsh-langfuse": "0.1.0" },
+      "parallel": { "@t3labs/ohmydsh-web-search-parallel": "0.1.0" },
+      "omarchy":  { "@t3labs/ohmydsh-theme": "0.1.0", "@t3labs/ohmydsh-hud": "0.1.0" }
     }
   },
   "allowBuilds": ["agent-browser@0.43.0"]  // install scripts we have reviewed
@@ -86,12 +86,12 @@ Lessons already learned in our own setup that the CLI must handle:
 
 ## Installer: `install.sh`
 
-POSIX sh, readable in one screen. Checks OS, finds or installs Node 24 (via mise if present, else prints the one-line instruction), runs `npm i -g @ohmydsh/cli@latest`, then `omd setup`. No sudo. Windows: WSL only.
+POSIX sh, readable in one screen. Checks OS, finds or installs Node 24 (via mise if present, else prints the one-line instruction), runs `npm i -g @t3labs/ohmydsh@latest`, then `omd setup`. No sudo. Windows: WSL only.
 
 ## Release and maintenance
 
-- **Changesets** for versioning: each PR that changes a plugin adds a changeset; merging the release PR bumps versions, publishes changed `@ohmydsh/*` packages to npm and cuts a new `ohmydsh.json`.
-- **CI on every PR:** each package's `check` (typecheck, lint, token lint, tests, build), then an **integration job**: fresh `DSH_HOME`, `omd setup` from the PR's manifest, boot DSH, assert every plugin row activates (journal has no `failed to import`, `--dump-config` has no unapplied rows), check every plugin's routes answer 401 without a cookie.
+- **One tag, one release** (no changesets: with one manifest version and exact pins a release PR adds nothing): a PR that changes a plugin bumps its version and its pin; pushing `v<ohmydsh.json version>` runs `release.yml`, which checks everything, publishes the `@t3labs/*` packages that are not on npm yet (with provenance, so re-runs are safe), creates the GitHub Release from `CHANGELOG.md` and attaches the desktop and Android apps.
+- **CI on every PR:** each package's `check` (typecheck, lint, token lint, tests, build), then an **integration job**: fresh `DSH_HOME`, `omd setup` from the PR's manifest, boot DSH, assert every plugin row activates (journal has no `failed to import`, `--dump-config` has no unapplied rows), check every plugin's routes answer 401 without a cookie. A second integration job packs every package and installs the set from the tarballs, so a package that only works linked fails before it is published.
 - **Weekly canary:** try the newest versions of community plugins and the next DSH release in CI; open a PR bumping `ohmydsh.json` when green, an issue when red.
 - **Upstream fixes:** keep a short list of open upstream PRs in `docs/UPSTREAM.md`; when one merges, bump that plugin in the manifest.
 - **Privacy:** the existing private-strings check from `scripts/publish-github.sh` runs in CI on every commit.
@@ -99,49 +99,52 @@ POSIX sh, readable in one screen. Checks OS, finds or installs Node 24 (via mise
 ## Migration of our existing plugins
 
 1. `git subtree add`/`git filter-repo` each `deestax/dsh-*` repo into `packages/<name>` keeping history (dsh-kit, studio, pwa, review-comments, skill-studio, notebook, triggers, automation-models, composio, langfuse, theme, hud, agent-browser-takeover, web-search-parallel fork; dsh-hud-qt stays its own repo, it is a C++ desktop app).
-2. Replace each plugin's copied `src/kit` with a dependency on `@ohmydsh/kit` (bundled at build time, so nothing changes at runtime).
-3. Rename packages to `@ohmydsh/<name>`, keep the plugin row ids unchanged so existing user settings keep working.
+2. Replace each plugin's copied `src/kit` with a dependency on `@t3labs/ohmydsh-kit` (private, bundled at build time, so nothing changes at runtime).
+3. Rename packages to `@t3labs/ohmydsh-<name>`, keep the plugin row ids unchanged so existing user settings keep working.
 4. Archive the `deestax/dsh-*` repos with a README pointer.
 5. Move the maintainers' own setups onto the `omd` profile (or keep `web` linked to the monorepo for development).
 
 ## Open items
 
-- An npm organisation `ohmydsh` must be created and owned by T3 Venture Labs (needs a human with an npm account).
+- The npm organisation `t3labs` exists; the repository secret `NPM_TOKEN` must be added before the first tag.
 - Decide whether the phone-app plugin should default on (it needs HTTPS to be useful).
 - Licences: Studio and Notebook are Apache-2.0 forks; their NOTICE files move with them.
 
-## Milestone 1 status and planned names
+## Milestone 1 status and names
 
 Built: `packages/*` (history imported from the public deestax repos, which were already squashed), `ohmydsh.json`,
 `profile/` defaults and pack rows, `packages/cli` (`omd setup | doctor | list | add | remove | update | rollback`),
 `install.sh`, CI (`ci.yml`, `canary.yml` skeleton) and the private-strings audit.
 
-Plugin names stay as they are until milestone 2, because renaming changes plugin row ids and paths. Planned npm names:
+Package names (renamed in milestone 2). **Plugin row ids did not change**: a row id is what users' settings are keyed by,
+only the row's `name:` (the package it loads) is new.
 
-| Folder | Today | Planned npm name |
-|---|---|---|
-| `packages/kit` | `dsh-kit` (private) | `@ohmydsh/kit` |
-| `packages/studio` | `dsh-studio` | `@ohmydsh/studio` |
-| `packages/pwa` | `dsh-pwa` | `@ohmydsh/pwa` |
-| `packages/browser-takeover` | `dsh-agent-browser-takeover` | `@ohmydsh/browser-takeover` |
-| `packages/review-comments` | `dsh-review-comments` | `@ohmydsh/review-comments` |
-| `packages/skill-studio` | `dsh-skill-studio` | `@ohmydsh/skill-studio` |
-| `packages/notebook` | `dsh-notebook` | `@ohmydsh/notebook` |
-| `packages/triggers` | `dsh-triggers` | `@ohmydsh/triggers` |
-| `packages/automation-models` | `dsh-automation-models` | `@ohmydsh/automation-models` |
-| `packages/composio` | `dsh-composio` | `@ohmydsh/composio` |
-| `packages/langfuse` | `dsh-langfuse` | `@ohmydsh/langfuse` |
-| `packages/theme` | `dsh-theme` | `@ohmydsh/theme` |
-| `packages/hud` | `dsh-hud` | `@ohmydsh/hud` |
-| `packages/web-search-parallel` | `@parallel-web/dsh-web-search-parallel` | `@ohmydsh/web-search-parallel` (it is a fork of Parallel's plugin) |
-| `packages/cli` | `@ohmydsh/cli` | `@ohmydsh/cli` |
+| Folder | Was | npm name | Row id (unchanged) |
+|---|---|---|---|
+| `packages/cli` | `@ohmydsh/cli` | `@t3labs/ohmydsh` (binary `omd`) | n/a |
+| `packages/kit` | `dsh-kit` (private) | `@t3labs/ohmydsh-kit` (stays private: plugins copy its source, no runtime dependency) | n/a |
+| `packages/studio` | `dsh-studio` | `@t3labs/ohmydsh-studio` | `studio` |
+| `packages/pwa` | `dsh-pwa` | `@t3labs/ohmydsh-pwa` | `dsh-pwa` |
+| `packages/browser-takeover` | `dsh-agent-browser-takeover` | `@t3labs/ohmydsh-browser-takeover` | `agent-browser-takeover` |
+| `packages/review-comments` | `dsh-review-comments` | `@t3labs/ohmydsh-review-comments` | `review-comments` |
+| `packages/skill-studio` | `dsh-skill-studio` | `@t3labs/ohmydsh-skill-studio` | `skill-studio` |
+| `packages/notebook` | `dsh-notebook` | `@t3labs/ohmydsh-notebook` | `dsh-notebook` |
+| `packages/triggers` | `dsh-triggers` | `@t3labs/ohmydsh-triggers` | `dsh-triggers` |
+| `packages/automation-models` | `dsh-automation-models` | `@t3labs/ohmydsh-automation-models` | `dsh-automation-models` |
+| `packages/composio` | `dsh-composio` | `@t3labs/ohmydsh-composio` | `dsh-composio` |
+| `packages/langfuse` | `dsh-langfuse` | `@t3labs/ohmydsh-langfuse` | `dsh-langfuse` |
+| `packages/theme` | `dsh-theme` | `@t3labs/ohmydsh-theme` | `dsh-theme` |
+| `packages/hud` | `dsh-hud` | `@t3labs/ohmydsh-hud` | `dsh-hud` |
+| `packages/web-search-parallel` | `@parallel-web/dsh-web-search-parallel` | `@t3labs/ohmydsh-web-search-parallel` (our fork; keeps Parallel's LICENSE, adds a NOTICE) | `web-search-parallel` |
 
-Until publishing exists, `ohmydsh.json` installs our plugins from the GitHub release tarballs listed under `sources`,
-or links `packages/<name>` when `omd setup --dev` is used.
+Hard-coded HTTP paths are API paths, not package names, and did not change: `/plugins/dsh-studio/...` (Studio) and
+`/dsh-notebook/...` (Notebook). Everything DSH derives from the package name (the client bundle id and the
+`/plugins/<package>/client.js` URL, the remote-stream package id, the settings slot key) was changed together with the
+package.
 
 ### Decisions made while building
 
-- The manifest has `sources` (per plugin: workspace folder and release tarball), `packInfo` (summary, requirements,
+- The manifest has `sources` (per plugin: the workspace folder for `--dev`, and an optional `tarball` escape hatch), `packInfo` (summary, requirements,
   optional rows file) and `profile` (profile name, defaults file, official optional bundles to switch on).
 - Both managed blocks (`cordis.patch.yml` and `pnpm-workspace.yaml`) are rewritten between the markers; rows outside them
   are never touched, and the managed block sits first so the user's rows win.

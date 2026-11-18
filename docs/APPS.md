@@ -8,7 +8,7 @@ Two apps, one idea: run DeepSeek Harness on your computer, and reach it from a w
 | **Android** | A small app that links to the DSH on your computer by QR code, then shows the normal DSH UI full-screen. | [`apps/android`](../apps/android) |
 
 > [!NOTE]
-> **Coming with the first release.** The apps are built by CI when a version tag is pushed ([`.github/workflows/apps.yml`](../.github/workflows/apps.yml)). Until the first `v*` tag exists, the links below point at an empty Releases page. You can build both from a checkout today (see [Building](#building)).
+> **Coming with the first release.** The apps are built by CI as the last step of a release: pushing a `v*` tag runs [`release.yml`](../.github/workflows/release.yml), which publishes the npm packages, creates the GitHub Release and then calls [`apps.yml`](../.github/workflows/apps.yml) to attach the apps. Until the first `v*` tag exists, the links below point at an empty Releases page. You can build both from a checkout today (see [Building](#building)).
 
 ## Download
 

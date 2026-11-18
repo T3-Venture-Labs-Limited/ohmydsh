@@ -6,22 +6,22 @@ those files carry the full licence texts and are the authority. This file is an 
 
 Packages and their licences
 ---------------------------
-  packages/cli                 MIT   @ohmydsh/cli
-  packages/kit                 MIT   dsh-kit        (see packages/kit/NOTICE, THIRD_PARTY_NOTICES.md)
-  packages/studio              Apache-2.0   dsh-studio (modified version of dsh-image-gen; see packages/studio/LICENSE, NOTICE, THIRD_PARTY_NOTICES.md)
-  packages/notebook            Apache-2.0   dsh-notebook (modified version of dsh-jupyter, with code ported from beihzb's dsh-notebook;
+  packages/cli                 MIT   @t3labs/ohmydsh
+  packages/kit                 MIT   @t3labs/ohmydsh-kit        (see packages/kit/NOTICE, THIRD_PARTY_NOTICES.md)
+  packages/studio              Apache-2.0   @t3labs/ohmydsh-studio (modified version of dsh-image-gen; see packages/studio/LICENSE, NOTICE, THIRD_PARTY_NOTICES.md)
+  packages/notebook            Apache-2.0   @t3labs/ohmydsh-notebook (modified version of dsh-jupyter, with code ported from beihzb's dsh-notebook;
                                             see packages/notebook/LICENSE, NOTICE, THIRD_PARTY_NOTICES.md)
-  packages/pwa                 MIT   dsh-pwa
-  packages/review-comments     MIT   dsh-review-comments (ports patterns from dsh-sidenote, MIT, (c) gyixuan; see its NOTICE)
-  packages/skill-studio        MIT   dsh-skill-studio
-  packages/triggers            MIT   dsh-triggers
-  packages/automation-models   MIT   dsh-automation-models
-  packages/composio            MIT   dsh-composio
-  packages/langfuse            MIT   dsh-langfuse (ports code from pi-observability-plugin, MIT, (c) Langfuse GmbH; see its NOTICE)
-  packages/theme               MIT   dsh-theme (palette ideas from dsh-codex-ui, Apache-2.0, (c) MichengAI; see its NOTICE)
-  packages/hud                 MIT   dsh-hud (protocol adapted from dsh-quorfloat, MIT, (c) Azetus; see its NOTICE)
-  packages/browser-takeover    MIT   dsh-agent-browser-takeover
-  packages/web-search-parallel MIT   @parallel-web/dsh-web-search-parallel (a fork of Parallel's plugin, (c) 2026 Parallel;
+  packages/pwa                 MIT   @t3labs/ohmydsh-pwa
+  packages/review-comments     MIT   @t3labs/ohmydsh-review-comments (ports patterns from dsh-sidenote, MIT, (c) gyixuan; see its NOTICE)
+  packages/skill-studio        MIT   @t3labs/ohmydsh-skill-studio
+  packages/triggers            MIT   @t3labs/ohmydsh-triggers
+  packages/automation-models   MIT   @t3labs/ohmydsh-automation-models
+  packages/composio            MIT   @t3labs/ohmydsh-composio
+  packages/langfuse            MIT   @t3labs/ohmydsh-langfuse (ports code from pi-observability-plugin, MIT, (c) Langfuse GmbH; see its NOTICE)
+  packages/theme               MIT   @t3labs/ohmydsh-theme (palette ideas from dsh-codex-ui, Apache-2.0, (c) MichengAI; see its NOTICE)
+  packages/hud                 MIT   @t3labs/ohmydsh-hud (protocol adapted from dsh-quorfloat, MIT, (c) Azetus; see its NOTICE)
+  packages/browser-takeover    MIT   @t3labs/ohmydsh-browser-takeover
+  packages/web-search-parallel MIT   @t3labs/ohmydsh-web-search-parallel (a fork of @parallel-web/dsh-web-search-parallel, (c) 2026 Parallel;
                                      its upstream history is kept in this repository)
 
 Apps

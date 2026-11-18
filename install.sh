@@ -1,7 +1,7 @@
 #!/bin/sh
 # ohmydsh installer.
 #
-# NOTE: this works once @ohmydsh/cli is published to npm (milestone 2). Until then, from a checkout use:
+# NOTE: this works once @t3labs/ohmydsh is published to npm (the first v* release). Until then, from a checkout use:
 #   pnpm install && node packages/cli/bin/omd.js setup --dev
 #
 # What it does: checks OS and Node >= 24, installs the omd command with npm, runs `omd setup`.
@@ -32,8 +32,8 @@ if [ "$node_major" -lt 24 ]; then
   exit 1
 fi
 
-say "Installing the omd command (npm i -g @ohmydsh/cli)..."
-npm install -g @ohmydsh/cli@latest || die "npm install failed. If it is a permissions error, set a user prefix: npm config set prefix ~/.local"
+say "Installing the omd command (npm i -g @t3labs/ohmydsh)..."
+npm install -g @t3labs/ohmydsh@latest || die "npm install failed. If it is a permissions error, set a user prefix: npm config set prefix ~/.local"
 
 command -v omd >/dev/null 2>&1 || die "omd was installed but is not on your PATH. Add \"$(npm prefix -g)/bin\" to PATH and run: omd setup"
 

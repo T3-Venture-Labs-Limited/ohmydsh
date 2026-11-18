@@ -17,6 +17,8 @@
 
 <p align="center">
   <img alt="DeepSeek Harness 0.2.2-rc.3" src="https://img.shields.io/badge/dsh-0.2.2--rc.3-2447D6?style=flat-square">
+  <img alt="Release" src="https://img.shields.io/github/v/release/T3-Venture-Labs-Limited/ohmydsh?style=flat-square&color=2447D6&label=release&include_prereleases">
+  <img alt="npm" src="https://img.shields.io/npm/v/@t3labs/ohmydsh?style=flat-square&color=2447D6&label=npm">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-5EEAD4?style=flat-square">
   <img alt="Status: preview" src="https://img.shields.io/badge/status-preview-FFB547?style=flat-square">
 </p>
@@ -32,8 +34,8 @@ DeepSeek Harness is a plugin framework: the core is small and everything else is
 
 ## Install
 
-> [!IMPORTANT]
-> **Work in progress.** The installer and the `omd` command are being built now; the commands below don't work yet. Until then, the plugins are available one by one from their [release pages](https://github.com/deestax?tab=repositories&q=dsh-). See [docs/DESIGN.md](docs/DESIGN.md) for the plan. From a checkout, `pnpm install && node packages/cli/bin/omd.js setup --dev` already works.
+> [!NOTE]
+> **First release pending.** The installer downloads `@t3labs/ohmydsh` from npm, which exists once `v0.1.0` is released; until then the one-liner below fails with a clear message. From a checkout, `pnpm install && node packages/cli/bin/omd.js setup --dev` works today. See [docs/DESIGN.md](docs/DESIGN.md) for the plan.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/T3-Venture-Labs-Limited/ohmydsh/main/install.sh | sh
@@ -55,7 +57,7 @@ What the installer does:
 Prefer to look before you run? Read [`install.sh`](install.sh) first, or install by hand:
 
 ```sh
-npm install -g @ohmydsh/cli
+npm install -g @t3labs/ohmydsh
 omd setup
 ```
 
@@ -147,7 +149,7 @@ omd list             show installed plugins and versions
 ohmydsh is a thin layer over DeepSeek Harness, not a fork.
 
 - **One manifest decides everything.** [`ohmydsh.json`](ohmydsh.json) lists the DSH version and the exact version of every plugin, ours and the community's. A release of ohmydsh is just a new tested version of that file.
-- **Our plugins live in this repo** under [`packages/`](packages), built and released together. Each is also published to npm as `@ohmydsh/<name>`, so DSH's own plugin page can show and update it.
+- **Our plugins live in this repo** under [`packages/`](packages), built and released together. Each is published to npm as `@t3labs/ohmydsh-<name>` (the command itself is `@t3labs/ohmydsh`), so DSH's own plugin page can show and update it.
 - **Community plugins stay upstream.** They're installed from npm at the pinned version. When we need a change, we open a pull request there rather than keep a fork.
 - **A profile, not a patch to your system.** Everything goes into the `omd` DSH profile, configured by one layered settings file, with your own overrides kept in a separate file that updates never rewrite.
 - **Tested as a set.** CI installs the whole manifest into a clean profile, boots DSH, and checks that every plugin loads before a release is published. A weekly job tries the newest community versions and opens a pull request when they pass.

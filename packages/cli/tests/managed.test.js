@@ -55,8 +55,13 @@ test('damaged markers are refused instead of guessed at', () => {
   assert.throws(() => rewriteBlock(`${END}\n# >>> ohmydsh\n`, '- id: x\n'), /markers are damaged/)
 })
 
-test('rowIds finds ids at any indent', () => {
+test('rowIds finds top-level rows and inserted rows', () => {
   assert.deepEqual(rowIds('- insert:\n    - id: a-b\n      name: x\n- id: "c"\n  name: y\n'), ['a-b', 'c'])
+})
+
+test('rowIds skips ids nested inside a row (a provider\'s model list is not a row)', () => {
+  const patch = '- id: llm-pi-ai\n  config:\n    providers:\n      - name: x\n        models:\n          - id: claude-haiku-5-5\n          - id: kimi-k3\n- id: agent-default-model\n  config: {}\n- insert:\n    - id: added\n      config:\n        list:\n          - id: deep\n'
+  assert.deepEqual(rowIds(patch), ['llm-pi-ai', 'agent-default-model', 'added'])
 })
 
 test('workspace yaml: our block carries allowBuilds and release-age pins; user keys win', () => {

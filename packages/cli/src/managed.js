@@ -58,10 +58,30 @@ export function removeBlock(text, kind = 'list') {
   return kind === 'list' ? normalizeEmpty(out) : out
 }
 
-/** Ids of the rows in a patch file (`- id: x`, at any indent). */
+/**
+ * Ids of the rows in a patch file: top-level `- id: x` rows and the rows directly inside a top-level `- insert:` list.
+ * Ids nested deeper (for example the model list inside a provider row's config) are not rows and are skipped.
+ */
 export function rowIds(text) {
   const ids = []
-  for (const m of text.matchAll(/^\s*-\s+id:\s*['"]?([^'"\s#]+)/gm)) ids.push(m[1])
+  const ID_RE = /^(\s*)-\s+id:\s*['"]?([^'"\s#]+)/
+  let inInsert = false
+  let itemIndent = -1
+  for (const line of text.split('\n')) {
+    if (line.trim() === '' || line.trim().startsWith('#')) continue
+    const indent = line.length - line.trimStart().length
+    if (indent === 0) {
+      inInsert = /^-\s+insert:\s*(#.*)?$/.test(line)
+      itemIndent = -1
+      const m = ID_RE.exec(line)
+      if (m) ids.push(m[2])
+      continue
+    }
+    if (!inInsert) continue
+    if (itemIndent === -1 && line.trimStart().startsWith('- ')) itemIndent = indent
+    const m = ID_RE.exec(line)
+    if (m && indent === itemIndent) ids.push(m[2])
+  }
   return ids
 }
 

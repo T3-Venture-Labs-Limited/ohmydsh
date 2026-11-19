@@ -8,10 +8,18 @@
 // with the palette in BOTH the light and the dark slot. This plugin never calls setTheme: the Appearance preference is one
 // value shared by every browser signed in to the Host, so writing it from here would also recolour a phone.
 // Everything is undone by one disposer.
+//
+// dsh-theme-endfield compatibility: when that plugin (square corners, its own accent) is mounted on the page, its token layer
+// and its body-scoped `--edge-*` variables would otherwise win over ours. While it is present the layer additionally carries
+// its tokens/variables mapped to the palette (src/shared/endfield.ts), is re-registered after endfield re-registers (at most
+// MAX_REAPPLY times in a row, so two plugins cannot fight forever), and an ink bridge stylesheet (endfield-dom.ts) keeps text
+// on accent fills readable. Corners/geometry are never touched. Without endfield none of this runs.
 import { isHex } from '../shared/color.ts'
 import { PALETTE_KEYS } from '../shared/omarchy.ts'
 import type { Colors, Mode, OmarchyPalette } from '../shared/omarchy.ts'
 import { paletteTokens, toLayer } from '../shared/tokens.ts'
+import { withEndfield } from '../shared/endfield.ts'
+import type { EndfieldFace } from './endfield-dom.ts'
 import type { TokenOptions } from '../shared/tokens.ts'
 import { paletteById, PALETTES } from '../artwork/palettes.ts'
 import { subscribePush } from '../kit/push/client.ts'
@@ -22,6 +30,9 @@ export const SNAPSHOT_URL = '/api/dsh-theme/omarchy'
 export const STREAM_ID = 'dsh-theme:omarchy'
 /** While the live stream cannot be opened the page re-reads the snapshot at this period (never faster than 15 s). */
 export const FALLBACK_POLL_MS = 15_000
+/** At most this many re-registrations per REAPPLY_WINDOW_MS to win a token layer back, so two plugins can never ping-pong. */
+export const MAX_REAPPLY = 4
+export const REAPPLY_WINDOW_MS = 2000
 const KEY_CHOICE = 'dsh-theme.choice'
 const KEY_SEMANTIC = 'dsh-theme.semantic'
 
@@ -44,13 +55,15 @@ export interface ControllerState {
   omarchy: { name: string; mode: Mode; generation: string; colors: Colors } | undefined
   /** Colour scheme DSH currently renders (Appearance resolved), when known. */
   scheme: Mode | undefined
+  /** dsh-theme-endfield is mounted on this page and the compatibility layer is in effect. */
+  endfield: boolean
   /** Colours of the palette currently applied, for the preview swatches. */
   applied: { mode: Mode; colors: Colors } | undefined
 }
 
 /** The slice of ctx.theme used here (matches ThemeRuntime). */
 export interface ThemeFace {
-  getTheme(): { preference: string; active?: { colorScheme: Mode } }
+  getTheme(): { preference: string; active?: { colorScheme: Mode; tokens?: Readonly<Record<string, string>> } }
   overrideTokens(source: string, tokens: Record<string, { light: string; dark: string }>): () => void
 }
 
@@ -59,7 +72,9 @@ export interface ControllerDeps {
   /** Host name of the page; Omarchy is followed by default only when it is this computer. Defaults to location.hostname. */
   hostname?: string | undefined
   /** Subscribe to `theme/change`; returns a disposer. */
-  onThemeChange(listener: (snapshot: { preference: string; active?: { colorScheme: Mode } }) => void): () => void
+  onThemeChange(listener: (snapshot: { preference: string; active?: { colorScheme: Mode; tokens?: Readonly<Record<string, string>> } }) => void): () => void
+  /** Detects dsh-theme-endfield on the page; omit in tests and on pages without a document. */
+  endfield?: EndfieldFace | undefined
   storage?: Pick<Storage, 'getItem' | 'setItem'> | undefined
   /** Open the live stream (items are wire snapshots); it must end when the signal aborts. Omit to fall back to snapshot fetches. */
   open?: ((signal: AbortSignal) => AsyncIterable<unknown>) | undefined
@@ -85,6 +100,9 @@ export class ThemeController {
   private offLayer: (() => void) | undefined
   private unsubscribe: (() => void) | undefined
   private disposed = false
+  /** Tokens of the layer we registered (per scheme), to notice another plugin out-ranking them. */
+  private ours: Record<string, { light: string; dark: string }> | undefined
+  private reapplyTimes: number[] = []
 
   constructor(private readonly deps: ControllerDeps) {
     const stored = read(deps.storage, KEY_CHOICE)
@@ -92,7 +110,7 @@ export class ThemeController {
     this.state = {
       choice,
       semanticColors: read(deps.storage, KEY_SEMANTIC) === 'omarchy' ? 'omarchy' : 'dsh',
-      status: 'idle', omarchy: undefined, scheme: deps.theme.getTheme().active?.colorScheme, applied: undefined,
+      status: 'idle', omarchy: undefined, endfield: false, scheme: deps.theme.getTheme().active?.colorScheme, applied: undefined,
     }
   }
 
@@ -109,7 +127,16 @@ export class ThemeController {
 
   // ---- lifecycle ----
   start(): () => void {
-    this.offs.push(this.deps.onThemeChange((s) => { this.onScheme(s.active?.colorScheme) }))
+    this.offs.push(this.deps.onThemeChange((s) => { this.onThemeChange(s) }))
+    const ef = this.deps.endfield
+    if (ef !== undefined) {
+      this.set({ endfield: ef.present() })
+      this.offs.push(ef.subscribe(() => {
+        const present = ef.present()
+        if (present !== this.state.endfield) this.set({ endfield: present })
+        this.sync()
+      }))
+    }
     const doc = this.deps.doc
     if (doc !== undefined) {
       const resync = (): void => { if (doc.visibilityState !== 'hidden') void this.refetch() }
@@ -169,7 +196,12 @@ export class ThemeController {
 
   private engage(palette: OmarchyPalette): void {
     this.offLayer?.()
-    this.offLayer = this.deps.theme.overrideTokens(SOURCE, toLayer(paletteTokens(palette, { semanticColors: this.state.semanticColors })))
+    const options = { semanticColors: this.state.semanticColors }
+    const base = toLayer(paletteTokens(palette, options))
+    const layer = this.state.endfield ? withEndfield(base, palette, options) : base
+    this.deps.endfield?.bridge(this.state.endfield)
+    this.ours = layer
+    this.offLayer = this.deps.theme.overrideTokens(SOURCE, layer)
     this.set({ applied: palette, scheme: this.deps.theme.getTheme().active?.colorScheme ?? this.state.scheme })
   }
 
@@ -177,12 +209,26 @@ export class ThemeController {
   private disengage(): void {
     this.offLayer?.()
     this.offLayer = undefined
+    this.ours = undefined
+    this.deps.endfield?.bridge(false)
   }
 
-  /** Track the rendered colour scheme, used only for the "does not match your Omarchy theme" hint. */
-  private onScheme(scheme: Mode | undefined): void {
-    if (scheme === undefined || scheme === this.state.scheme) return
-    this.set({ scheme })
+  /** Track the rendered colour scheme (for the "does not match your Omarchy theme" hint) and, with endfield present, win tokens back. */
+  private onThemeChange(snapshot: { active?: { colorScheme: Mode; tokens?: Readonly<Record<string, string>> } }): void {
+    const scheme = snapshot.active?.colorScheme
+    if (scheme !== undefined && scheme !== this.state.scheme) this.set({ scheme })
+    if (!this.state.endfield || this.ours === undefined || this.disposed || scheme === undefined) return
+    const tokens = snapshot.active?.tokens
+    if (tokens === undefined) return
+    const lost = Object.entries(this.ours).some(([name, modes]) => tokens[name] !== modes[scheme])
+    if (!lost) return
+    // Another layer registered after ours and overrides some of our tokens: register again on top. Re-registering emits
+    // theme/change, so it is rate-limited: a peer that re-registers on every change cannot start a loop.
+    const now = Date.now()
+    this.reapplyTimes = this.reapplyTimes.filter((at) => now - at < REAPPLY_WINDOW_MS)
+    if (this.reapplyTimes.length >= MAX_REAPPLY) return
+    this.reapplyTimes.push(now)
+    this.sync()
   }
 
   /**

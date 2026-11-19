@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "dsh": "0.2.2-rc.3",
   "node": ">=24",
   "profile": {
@@ -49,7 +49,7 @@
         "@t3labs/ohmydsh-web-search-parallel": "0.1.0"
       },
       "omarchy": {
-        "@t3labs/ohmydsh-theme": "0.1.0",
+        "@t3labs/ohmydsh-theme": "0.1.1",
         "@t3labs/ohmydsh-hud": "0.1.0"
       }
     }

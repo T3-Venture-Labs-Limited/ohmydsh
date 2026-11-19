@@ -3,6 +3,12 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
+## 0.1.1
+
+- Theme (`@t3labs/ohmydsh-theme` 0.1.1): keeps the Omarchy colours when the community theme dsh-theme-endfield is installed, while its square corners stay.
+- Desktop: platform-independent paths and tests, so the Windows and macOS builds pass their checks.
+- Release: the CLI test glob and the review-comments sync test are stable on CI.
+
 ## 0.1.0
 
 First release.

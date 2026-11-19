@@ -24,3 +24,9 @@ UI controls (src/kit/) are adapted, via dsh-kit (https://github.com/deestax/dsh-
 MIT License, Copyright (c) 2026 DeepSeek: markup, sizes and behaviour of Button, Switch, SegmentedControl, Input, Modal
 and Tooltip, and the modal-layer and tooltip-placement helpers. The MIT permission notice is identical to the one in
 this repository's LICENSE file and applies to those portions as well.
+
+dsh-theme-endfield compatibility (src/shared/endfield.ts, src/client/endfield-dom.ts)
+--------------------------------------------------------------------------------------
+Written against the public behaviour and variable names of dsh-theme-endfield
+(https://github.com/ymh0000123/dsh-theme-endfield, MIT). No source is copied; the plugin is read at runtime
+(its stylesheet selectors) and left unmodified.

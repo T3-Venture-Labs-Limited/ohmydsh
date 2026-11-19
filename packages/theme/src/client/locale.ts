@@ -32,6 +32,8 @@ export const locale = defineLocale('dsh-theme', {
   semanticTitle: 'Use Omarchy status colours',
   semanticDescription: 'Off keeps DSH’s own red, amber and green for errors, warnings and success. Some Omarchy themes use these keys for other hues.',
   semanticLabel: 'Use Omarchy status colours',
+  endfieldTitle: 'dsh-theme-endfield detected',
+  endfieldDescription: 'Its square corners stay. Its colours and accent follow the palette above instead of its own yellow or cyan.',
   previewLabel: 'Colours currently applied',
 })
 

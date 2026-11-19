@@ -62,6 +62,9 @@ export default function SettingsPage({ t, controller }: { t: T; controller: Them
               description={t(state.applied.mode === 'light' ? 'schemeHintLight' : 'schemeHintDark')}
             />
           )}
+          {state.applied !== undefined && state.endfield && (
+            <SettingsRow title={t('endfieldTitle')} description={t('endfieldDescription')} />
+          )}
           {state.applied !== undefined && (
             <SettingsRow title={t('previewLabel')}>
               <span role="img" aria-label={t('previewLabel')} style={{ display: 'inline-flex', gap: 4 }}>

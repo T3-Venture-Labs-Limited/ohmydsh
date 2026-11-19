@@ -4,6 +4,7 @@
 import { Suspense, lazy } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import { ThemeController } from './controller.ts'
+import { createEndfieldFace } from './endfield-dom.ts'
 import { createPushTransport } from '../kit/push/transport.ts'
 import type { ThemeFace } from './controller.ts'
 import { locale } from './locale.ts'
@@ -31,6 +32,7 @@ export function apply(ctx: Context): void {
     onThemeChange: (listener) => ctx.on('theme/change' as never, listener as never) as unknown as () => void,
     storage: typeof localStorage === 'undefined' ? undefined : localStorage,
     doc: typeof document === 'undefined' ? undefined : document,
+    endfield: typeof document === 'undefined' ? undefined : createEndfieldFace(document),
   })
   // The single revert path: layer, stream and listeners.
   ctx.effect(() => controller.start(), 'dsh-theme: follow/palette layer')

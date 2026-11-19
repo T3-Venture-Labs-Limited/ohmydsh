@@ -9,18 +9,18 @@ const path = require('node:path')
 const JOB = `
 const { createRequire } = require('node:module')
 const dir = process.argv[1]
+;(async () => {
 let sharp, sharpPkg
 for (const from of [dir + '/@deepseek-ai/dsh-attachment-local/package.json', dir + '/package.json']) {
   try { const req = createRequire(from); sharp = req('sharp'); sharpPkg = req('sharp/package.json'); break } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e }
 }
 if (!sharp) throw new Error('sharp is not installed under ' + dir)
-;(async () => {
   const png = await sharp({ create: { width: 16, height: 16, channels: 3, background: '#cc4400' } }).png().toBuffer()
   const small = await sharp(png).resize(4, 4).png().toBuffer()
   const meta = await sharp(small).metadata()
   if (meta.width !== 4 || meta.height !== 4 || meta.format !== 'png') throw new Error('unexpected result ' + JSON.stringify(meta))
   console.log('sharp ' + sharpPkg.version + ' on node ' + process.versions.node + (process.versions.electron ? ' (electron ' + process.versions.electron + ')' : '') + ': 16x16 png (' + png.length + ' B) -> ' + meta.width + 'x' + meta.height + ' png (' + small.length + ' B)')
-})().catch((e) => { console.error(e.stack || e); process.exit(2) })
+})().catch((e) => { console.error(String(e && e.message || e).split('\\n')[0]); process.exit(2) })
 `
 
 /**
@@ -37,7 +37,7 @@ function runSharpJob({ exe, env, nodeModules, timeoutMs = 60_000 }) {
     child.on('error', (e) => { clearTimeout(timer); reject(new Error(`could not start ${exe}: ${e.message}`)) })
     child.on('close', (code, signal) => {
       clearTimeout(timer)
-      const text = out.trim().split(/\r?\n/).slice(-6).join(' | ')
+      const text = out.trim().split(/\r?\n/).slice(0, 4).join(' | ')
       if (code === 0) resolve(text)
       else reject(new Error(`sharp job ${signal ? `was killed by ${signal}` : `exited with ${code}`}${text ? `: ${text}` : ''}`))
     })

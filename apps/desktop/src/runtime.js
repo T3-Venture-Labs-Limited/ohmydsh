@@ -1,7 +1,7 @@
 'use strict'
 // First-run provisioning, entirely inside the app's data folder:
 //   1. <runtime>/node_modules: the pinned DSH CLI (@deepseek-ai/dsh) and the matching pnpm executable, installed with the
-//      npm that ships inside the app, run by Electron's own Node. No system Node, npm or pnpm is needed.
+//      npm that ships inside the app, run by the app's own Node (bundled on Linux, else Electron as Node). No system Node, npm or pnpm is needed.
 //   2. The omd profile in DSH_HOME: `omd setup --no-dsh-install` (the CLI that ships inside the app) installs the plugin
 //      set from the bundled ohmydsh.json.
 // Every step reports progress; every failure carries the last lines of the tool's output.
@@ -73,21 +73,22 @@ async function unpackNpm(paths, env, log) {
 /**
  * @param {object} o
  * @param {ReturnType<import('./paths').resolvePaths>} o.paths
- * @param {string} o.electron           path of the Electron executable (acts as Node)
+ * @param {string} o.electron           executable that runs DSH, npm and omd: a real Node, or Electron acting as Node
+ * @param {boolean} [o.electronAsNode]  `electron` is Electron, so children get ELECTRON_RUN_AS_NODE=1 (default true)
  * @param {string} o.pnpmVersion        pnpm version to install (pinned in the app's package.json)
  * @param {(p: { step: string, detail?: string, fraction?: number }) => void} o.progress
  * @param {(line: string) => void} [o.log]
  */
-async function provision({ paths, electron, pnpmVersion, progress, log, platform = process.platform }) {
+async function provision({ paths, electron, electronAsNode = true, pnpmVersion, progress, log, platform = process.platform }) {
   const wanted = wantedVersions(paths, pnpmVersion)
   const todo = needs(paths, wanted)
   // Every start, not only on install: an AppImage mounts at a new random path each launch, so yesterday's shims
   // would point at a folder that no longer exists.
-  writeShims({ bin: paths.bin, electron, dshBin: paths.dshBin, omdBin: paths.omdBin, platform })
+  writeShims({ bin: paths.bin, electron, dshBin: paths.dshBin, omdBin: paths.omdBin, platform, electronAsNode })
   if (!todo.runtime && !todo.profile) return { changed: false, wanted }
   fs.mkdirSync(paths.runtime, { recursive: true })
   fs.mkdirSync(paths.dshHome, { recursive: true })
-  const env = childEnv({ bin: paths.bin, pnpmDir: path.dirname(paths.pnpmExe), dshHome: paths.dshHome, platform })
+  const env = childEnv({ bin: paths.bin, pnpmDir: path.dirname(paths.pnpmExe), dshHome: paths.dshHome, platform, electronAsNode })
   const state = readState(paths)
 
   if (todo.runtime) {

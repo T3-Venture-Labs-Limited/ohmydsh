@@ -2,14 +2,20 @@
 // The checks behind `--headless-test` (window-less boot inside Electron, run on CI under xvfb) and `smoke.js` (the same
 // checks with Electron acting as plain Node, runnable on a machine with no display). Pure HTTP against the started DSH.
 
-/** @returns {Promise<{ ok: boolean, results: { name: string, ok: boolean, detail: string }[] }>} */
-async function runChecks(url) {
+/**
+ * @param {string} url
+ * @param {{ sharp?: () => Promise<string>, runtimeNote?: string }} [extra]
+ *   sharp: runs an image job under the runtime DSH runs on (see sharp-check.js); runtimeNote: which runtime that is
+ * @returns {Promise<{ ok: boolean, results: { name: string, ok: boolean, detail: string }[] }>}
+ */
+async function runChecks(url, extra = {}) {
   const origin = new URL(url).origin
   const results = []
   const check = async (name, fn) => {
     try { results.push({ name, ok: true, detail: await fn() }) } catch (e) { results.push({ name, ok: false, detail: e.message }) }
   }
   const jar = {}
+  if (extra.sharp) await check(`an image job (sharp) runs under the DSH runtime without crashing${extra.runtimeNote ? ` [${extra.runtimeNote}]` : ''}`, extra.sharp)
   await check('token URL signs the app in (303 + HttpOnly cookie)', async () => {
     const r = await fetch(url, { redirect: 'manual' })
     const cookie = r.headers.get('set-cookie') ?? ''

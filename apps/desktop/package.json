@@ -37,7 +37,9 @@
   },
   "ohmydsh": {
     "pnpm": "12.15.0",
-    "electronPinReason": "DSH's native add-on only accepts Electron 43.0.0, 44.0.0, 44.7.0 or 45.0.0-alpha.6 when DSH runs under ELECTRON_RUN_AS_NODE; see docs/APPS.md",
-    "npm": "11.21.2"
+    "electronPinReason": "On macOS and Windows (and as the Linux fallback) DSH runs under Electron-as-Node, and its native add-on only accepts Electron 43.0.0, 44.0.0, 44.7.0 or 45.0.0-alpha.6 there; see docs/APPS.md",
+    "npm": "11.21.2",
+    "node": "24.22.3",
+    "nodeNote": "Linux x64 bundles this official Node and runs DSH on it (sharp crashes under Electron-as-Node there); DSH needs Node >= 24.9; see docs/APPS.md"
   }
 }

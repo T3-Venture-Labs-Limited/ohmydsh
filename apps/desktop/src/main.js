@@ -11,21 +11,16 @@ const { loadSettings, saveSettings } = require('./settings')
 const { createLogger } = require('./logger')
 const { provision, ProvisionError } = require('./runtime')
 const { childEnv } = require('./shims')
+const { chooseNodeRuntime } = require('./node-runtime')
 const { Supervisor } = require('./supervisor')
 const { startUpdater } = require('./updater')
 const pkg = require('../package.json')
 
 const HEADLESS_TEST = process.argv.includes('--headless-test')
-// OHMYDSH_NODE: run DSH, omd and the `node` shim on this Node binary instead of the app's Electron. On Linux the
-// Electron binary loads the system GLib, and sharp's prebuilt libvips (with its own GLib) then crashes the DSH server
-// with SIGSEGV on its first image job. A real Node (>= 24.9) avoids that.
-const nodeRuntime = (() => {
-  const want = process.env.OHMYDSH_NODE
-  if (!want) return process.execPath
-  const p = path.resolve(want)
-  return fs.existsSync(p) ? p : process.execPath
-})()
 const PROFILE = 'omd'
+// What runs DSH, omd, npm and the `node` shim (see node-runtime.js): OHMYDSH_NODE > the Node bundled on Linux > Electron as Node.
+// On Linux Electron loads the system GLib and sharp's own GLib then crashes DSH with SIGSEGV on its first image job, so a real Node is used there.
+let nodeRuntime
 
 // Headless smoke test and CI: no GPU, no sandbox complaints inside containers.
 if (HEADLESS_TEST) { app.disableHardwareAcceleration(); app.commandLine.appendSwitch('no-sandbox') }
@@ -112,9 +107,8 @@ async function boot() {
   provisioning = true
   try {
     showLoading()
-    if (nodeRuntime !== process.execPath) log(`running DSH on ${nodeRuntime} (OHMYDSH_NODE)`)
-    else if (process.env.OHMYDSH_NODE) log(`OHMYDSH_NODE=${process.env.OHMYDSH_NODE} does not exist; using the built-in Electron`)
-    await provision({ paths, electron: nodeRuntime, pnpmVersion: pkg.ohmydsh.pnpm, progress, log })
+    log(`running DSH on ${nodeRuntime.note}`)
+    await provision({ paths, electron: nodeRuntime.exe, electronAsNode: nodeRuntime.electronAsNode, pnpmVersion: pkg.ohmydsh.pnpm, progress, log })
   } catch (e) {
     provisioning = false
     const detail = e instanceof ProvisionError ? e.message : String(e?.stack ?? e)
@@ -127,9 +121,9 @@ async function boot() {
 
 function startDsh() {
   progress({ step: 'Starting DeepSeek Harness', fraction: 1 })
-  const env = childEnv({ bin: paths.bin, pnpmDir: path.dirname(paths.pnpmExe), dshHome: paths.dshHome })
+  const env = childEnv({ bin: paths.bin, pnpmDir: path.dirname(paths.pnpmExe), dshHome: paths.dshHome, electronAsNode: nodeRuntime.electronAsNode })
   supervisor = new Supervisor({
-    electron: nodeRuntime, dshBin: paths.dshBin, profile: PROFILE, port: settings.port, host: settings.host, trustedHosts: settings.trustedHosts, env, log,
+    electron: nodeRuntime.exe, dshBin: paths.dshBin, profile: PROFILE, port: settings.port, host: settings.host, trustedHosts: settings.trustedHosts, env, log,
   })
   supervisor.on('ready', ({ url }) => {
     appUrl = url
@@ -168,7 +162,12 @@ function finishTest(code) {
 }
 async function runHeadlessTest(url) {
   const { runChecks, report } = require('./checks')
-  const { ok, results } = await runChecks(url)
+  const { runSharpJob } = require('./sharp-check')
+  const env = childEnv({ bin: paths.bin, pnpmDir: path.dirname(paths.pnpmExe), dshHome: paths.dshHome, electronAsNode: nodeRuntime.electronAsNode })
+  const { results } = await runChecks(url, { runtimeNote: nodeRuntime.kind, sharp: () => runSharpJob({ exe: nodeRuntime.exe, env, nodeModules: path.join(paths.runtime, 'node_modules') }) })
+  // CI sets this on Linux: the window test must be running DSH on the bundled Node, not silently on Electron.
+  if (process.env.OHMYDSH_REQUIRE_BUNDLED_NODE === '1') results.push({ name: 'DSH runs on the bundled Node', ok: nodeRuntime.kind === 'bundled', detail: nodeRuntime.note })
+  const ok = results.every((r) => r.ok)
   console.log(report(results, `ohmydsh ${pkg.version} headless test (electron ${process.versions.electron}, node ${process.versions.node}, DSH home ${paths.usesOwnHome ? 'app data' : 'custom'})`))
   console.log(ok ? 'HEADLESS-TEST OK' : 'HEADLESS-TEST FAILED')
   finishTest(ok ? 0 : 1)
@@ -235,6 +234,7 @@ if (!HEADLESS_TEST && !app.requestSingleInstanceLock()) {
     settings = loadSettings(paths.settingsFile)
     if (HEADLESS_TEST && process.env.OHMYDSH_TEST_PORT) settings = { ...settings, port: Number(process.env.OHMYDSH_TEST_PORT) }
     logger = createLogger(paths.logs)
+    nodeRuntime = chooseNodeRuntime({ resources: resources(), execPath: process.execPath })
     log(`ohmydsh ${pkg.version} starting (electron ${process.versions.electron}, ${process.platform}-${process.arch}); DSH home ${paths.dshHome}`)
     // The window may only load our own DSH or the local loading page; never grant device permissions silently.
     session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(['clipboard-sanitized-write', 'notifications', 'fullscreen'].includes(permission)))

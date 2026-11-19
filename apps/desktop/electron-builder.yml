@@ -27,6 +27,12 @@ publish:
 artifactName: ohmydsh-${version}-${os}-${arch}.${ext}
 linux:
   target: [AppImage, deb]
+  # The official Node.js binary (bundle.mjs downloads and checksums it): the app runs DSH on it, not on Electron, because
+  # sharp crashes under Electron-as-Node on Linux. macOS and Windows have no resources/node and keep Electron as Node.
+  extraResources:
+    - from: bundle/node
+      to: node
+      filter: ["**/*"]
   executableName: ohmydsh
   category: Development
   icon: build/icon.png

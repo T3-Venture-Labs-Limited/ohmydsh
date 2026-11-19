@@ -3,6 +3,12 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
+## 0.1.2
+
+- Desktop (Linux): the app no longer crashes DSH on the first image job. It now ships the official Node.js 24.22.3 and runs DSH on it instead of on Electron, because sharp (image handling) segfaults under Electron-as-Node on Linux. macOS and Windows still run DSH on Electron's Node. `OHMYDSH_NODE=/path/to/node` overrides the choice.
+- Desktop: the launchers (`node`, `dsh`, `omd`) are rewritten on every start, so they follow the AppImage's new mount path each launch. The smoke tests now run a sharp image job under the runtime the app really uses.
+- CLI (`@t3labs/ohmydsh`): `omd doctor` no longer misreads a provider's nested model ids as missing rows, which blocked the desktop app's first start after a profile move.
+
 ## 0.1.1
 
 - Theme (`@t3labs/ohmydsh-theme` 0.1.1): keeps the Omarchy colours when the community theme dsh-theme-endfield is installed, while its square corners stay.

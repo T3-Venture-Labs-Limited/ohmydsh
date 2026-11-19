@@ -120,6 +120,9 @@ jobs:
         shell: bash
         env:
           ELECTRON_RUN_AS_NODE: '1'
+          # smoke.js picks the DSH runtime exactly like the app (bundled Node on Linux), fails if that is not the bundled Node,
+          # and runs a sharp image job under it (the regression test for the Electron-as-Node SIGSEGV).
+          OHMYDSH_REQUIRE_BUNDLED_NODE: '1'
           OHMYDSH_USER_DATA: ${{ runner.temp }}/ohmydsh-userdata
           OHMYDSH_MANIFEST: ${{ github.workspace }}/apps/desktop/tests/smoke/ohmydsh.json
           OHMYDSH_OMD_ARGS: --dev
@@ -132,6 +135,7 @@ jobs:
           OHMYDSH_USER_DATA: ${{ runner.temp }}/ohmydsh-userdata
           OHMYDSH_MANIFEST: ${{ github.workspace }}/apps/desktop/tests/smoke/ohmydsh.json
           OHMYDSH_OMD_ARGS: --dev
+          OHMYDSH_REQUIRE_BUNDLED_NODE: '1'
           OHMYDSH_TEST_PORT: '43183'
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgbm1 libasound2t64 >/dev/null

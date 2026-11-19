@@ -84,7 +84,11 @@ The app updates itself from GitHub Releases through `electron-updater`:
 The DSH and plugin versions are separate: they follow `ohmydsh.json`. A new app version that pins a newer set re-installs the plugins on its first start. Turn the app's self-update off with `"autoUpdate": false` or `OHMYDSH_NO_UPDATE=1`.
 
 > [!IMPORTANT]
-> **Why the app pins Electron 44.7.0.** DSH's native add-on (`node-addon-require-builtin`) only runs under an exact list of Electron builds: 43.0.0, 44.0.0, 44.7.0 and 45.0.0-alpha.6 (it matches the V8 version). Any other Electron fails with `unsupported Electron runtime fingerprint`. That is what lets the app run DSH with Electron's own Node (`ELECTRON_RUN_AS_NODE=1`) and need no system Node. When you bump DSH or Electron, re-check the table (`strings` on the add-on shows it) and run the smoke test.
+> **Which Node runs DSH.** On **Linux** the app ships the official Node.js binary (`resources/node/bin/node`, version pinned in `apps/desktop/package.json` as `ohmydsh.node`, SHA256 checked against nodejs.org's `SHASUMS256.txt` at build time) and runs DSH, `omd`, npm and the `node` launcher on it. Reason: Electron's binary loads the system GLib, while sharp's prebuilt libvips (DSH's image handling) carries its own GLib; with Electron as Node the first image job crashed DSH with SIGSEGV. On **macOS and Windows** nothing is bundled and DSH still runs on Electron's own Node (`ELECTRON_RUN_AS_NODE=1`), so no system Node is needed there either. Selection order (`src/node-runtime.js`, logged at every start): `OHMYDSH_NODE` (a path to a Node binary, if the file exists; an override for developers) > the bundled Node (if present and executable) > Electron as Node.
+>
+> **Version constraints.** DSH needs Node >= 24.9 (its `engines`); the bundled Node is 24.x (the newest 24 LTS when pinned), and the smoke test loads DSH's native add-on and runs a sharp job on it. **Why the app still pins Electron 44.7.0:** where DSH runs on Electron-as-Node (macOS, Windows, the Linux fallback), its native add-on (`node-addon-require-builtin`) only runs under an exact list of Electron builds: 43.0.0, 44.0.0, 44.7.0 and 45.0.0-alpha.6 (it matches the V8 version); any other Electron fails with `unsupported Electron runtime fingerprint`. On Linux with the bundled Node that restriction no longer applies. When you bump DSH, Electron or Node, re-check the table (`strings` on the add-on shows it) and run the smoke test.
+>
+> The Linux AppImage grows by about 45 MB for the Node binary (compressed).
 
 ## Pairing a phone
 
@@ -150,7 +154,7 @@ Next steps, in the order we would do them:
 # desktop (standalone npm project; Electron is pinned, see above)
 cd apps/desktop
 npm ci && node node_modules/electron/install.js
-npm run check                 # 22 unit tests
+npm run check                 # unit tests (no Electron needed)
 npm run dist:linux            # also dist:win (on Windows), dist:mac (on macOS)
 ELECTRON_RUN_AS_NODE=1 ./dist/linux-unpacked/ohmydsh dist/linux-unpacked/resources/app.asar/src/smoke.js   # first run + HTTP checks, no display needed
 
@@ -161,7 +165,7 @@ cd apps/android
 
 ### Smoke test
 
-`src/smoke.js` runs the shipped binary as Node, performs the real first run (installs DSH and the plugin set from the manifest), starts `dsh omd` through the same supervisor the app uses, and checks over HTTP: the token URL signs in (303 + HttpOnly cookie), the UI loads with the cookie and answers 401 without it, the phone-app plugin is active, pairing routes are protected, and a full pair → session → revoke → 401 round trip works. `OHMYDSH_MANIFEST` and `OHMYDSH_OMD_ARGS` let a test install a reduced set. On CI the same checks also run inside a real window under `xvfb` (`ohmydsh --headless-test`).
+`src/smoke.js` runs the shipped binary as Node, picks the same DSH runtime the app does (set `OHMYDSH_REQUIRE_BUNDLED_NODE=1` to fail unless it is the bundled Node), performs the real first run (installs DSH and the plugin set from the manifest), starts `dsh omd` through the same supervisor the app uses, and checks over HTTP: the token URL signs in (303 + HttpOnly cookie), the UI loads with the cookie and answers 401 without it, the phone-app plugin is active, pairing routes are protected, a sharp image job (build, resize and decode a 16x16 PNG with the sharp DSH loads, in a child started like DSH is: the regression test for the Linux crash), and a full pair → session → revoke → 401 round trip works. `OHMYDSH_MANIFEST` and `OHMYDSH_OMD_ARGS` let a test install a reduced set. On CI the same checks also run inside a real window under `xvfb` (`ohmydsh --headless-test`).
 
 ### CI secrets (Android)
 

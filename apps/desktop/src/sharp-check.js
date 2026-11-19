@@ -12,7 +12,7 @@ const dir = process.argv[1]
 ;(async () => {
 let sharp, sharpPkg
 for (const from of [dir + '/@deepseek-ai/dsh-attachment-local/package.json', dir + '/package.json']) {
-  try { const req = createRequire(from); sharp = req('sharp'); sharpPkg = req('sharp/package.json'); break } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e }
+  try { const req = createRequire(from); sharp = req('sharp'); sharpPkg = JSON.parse(require('node:fs').readFileSync(require('node:path').join(require('node:path').dirname(req.resolve('sharp')), '..', 'package.json'), 'utf8')); break } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e }
 }
 if (!sharp) throw new Error('sharp is not installed under ' + dir)
   const png = await sharp({ create: { width: 16, height: 16, channels: 3, background: '#cc4400' } }).png().toBuffer()

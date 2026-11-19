@@ -81,6 +81,9 @@ async function unpackNpm(paths, env, log) {
 async function provision({ paths, electron, pnpmVersion, progress, log, platform = process.platform }) {
   const wanted = wantedVersions(paths, pnpmVersion)
   const todo = needs(paths, wanted)
+  // Every start, not only on install: an AppImage mounts at a new random path each launch, so yesterday's shims
+  // would point at a folder that no longer exists.
+  writeShims({ bin: paths.bin, electron, dshBin: paths.dshBin, omdBin: paths.omdBin, platform })
   if (!todo.runtime && !todo.profile) return { changed: false, wanted }
   fs.mkdirSync(paths.runtime, { recursive: true })
   fs.mkdirSync(paths.dshHome, { recursive: true })
@@ -101,8 +104,6 @@ async function provision({ paths, electron, pnpmVersion, progress, log, platform
     state.dsh = wanted.dsh; state.pnpm = wanted.pnpm
     fs.writeFileSync(paths.stateFile, `${JSON.stringify(state, null, 2)}\n`)
   }
-
-  writeShims({ bin: paths.bin, electron, dshBin: paths.dshBin, omdBin: paths.omdBin, platform })
 
   if (todo.profile) {
     progress({ step: 'Installing the ohmydsh plugins', detail: 'this takes a few minutes the first time', fraction: 0.4 })

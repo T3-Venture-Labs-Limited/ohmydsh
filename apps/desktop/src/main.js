@@ -16,6 +16,15 @@ const { startUpdater } = require('./updater')
 const pkg = require('../package.json')
 
 const HEADLESS_TEST = process.argv.includes('--headless-test')
+// OHMYDSH_NODE: run DSH, omd and the `node` shim on this Node binary instead of the app's Electron. On Linux the
+// Electron binary loads the system GLib, and sharp's prebuilt libvips (with its own GLib) then crashes the DSH server
+// with SIGSEGV on its first image job. A real Node (>= 24.9) avoids that.
+const nodeRuntime = (() => {
+  const want = process.env.OHMYDSH_NODE
+  if (!want) return process.execPath
+  const p = path.resolve(want)
+  return fs.existsSync(p) ? p : process.execPath
+})()
 const PROFILE = 'omd'
 
 // Headless smoke test and CI: no GPU, no sandbox complaints inside containers.
@@ -103,7 +112,9 @@ async function boot() {
   provisioning = true
   try {
     showLoading()
-    await provision({ paths, electron: process.execPath, pnpmVersion: pkg.ohmydsh.pnpm, progress, log })
+    if (nodeRuntime !== process.execPath) log(`running DSH on ${nodeRuntime} (OHMYDSH_NODE)`)
+    else if (process.env.OHMYDSH_NODE) log(`OHMYDSH_NODE=${process.env.OHMYDSH_NODE} does not exist; using the built-in Electron`)
+    await provision({ paths, electron: nodeRuntime, pnpmVersion: pkg.ohmydsh.pnpm, progress, log })
   } catch (e) {
     provisioning = false
     const detail = e instanceof ProvisionError ? e.message : String(e?.stack ?? e)
@@ -118,7 +129,7 @@ function startDsh() {
   progress({ step: 'Starting DeepSeek Harness', fraction: 1 })
   const env = childEnv({ bin: paths.bin, pnpmDir: path.dirname(paths.pnpmExe), dshHome: paths.dshHome })
   supervisor = new Supervisor({
-    electron: process.execPath, dshBin: paths.dshBin, profile: PROFILE, port: settings.port, host: settings.host, trustedHosts: settings.trustedHosts, env, log,
+    electron: nodeRuntime, dshBin: paths.dshBin, profile: PROFILE, port: settings.port, host: settings.host, trustedHosts: settings.trustedHosts, env, log,
   })
   supervisor.on('ready', ({ url }) => {
     appUrl = url

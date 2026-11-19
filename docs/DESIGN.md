@@ -126,6 +126,7 @@ only the row's `name:` (the package it loads) is new.
 | `packages/studio` | `dsh-studio` | `@t3labs/ohmydsh-studio` | `studio` |
 | `packages/pwa` | `dsh-pwa` | `@t3labs/ohmydsh-pwa` | `dsh-pwa` |
 | `packages/browser-takeover` | `dsh-agent-browser-takeover` | `@t3labs/ohmydsh-browser-takeover` | `agent-browser-takeover` |
+| `packages/agent-browser` | `dsh-agent-browser` (community, modified build) | `@t3labs/ohmydsh-agent-browser` | `browser` |
 | `packages/review-comments` | `dsh-review-comments` | `@t3labs/ohmydsh-review-comments` | `review-comments` |
 | `packages/skill-studio` | `dsh-skill-studio` | `@t3labs/ohmydsh-skill-studio` | `skill-studio` |
 | `packages/notebook` | `dsh-notebook` | `@t3labs/ohmydsh-notebook` | `dsh-notebook` |

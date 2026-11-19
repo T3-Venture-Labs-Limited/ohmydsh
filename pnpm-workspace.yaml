@@ -8,6 +8,7 @@ nodeLinker: isolated
 # Install scripts we have reviewed (union of what the individual plugin repos allowed).
 allowBuilds:
   esbuild: true
+  agent-browser: true
   '@deepseek-ai/dsh-subprocess-local': true
   node-pty: true
   koffi: true

@@ -1,6 +1,6 @@
 {
   "name": "@t3labs/ohmydsh-browser-takeover",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Watch the dsh-agent-browser browser live in a right-sidebar tab, take control to sign in, and hand it back; pauses the agent's browser tools while you drive and keeps logins across restarts.",
   "type": "module",
   "exports": {

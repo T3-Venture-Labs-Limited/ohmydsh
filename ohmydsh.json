@@ -28,10 +28,10 @@
       "@hellokidder/dsh-hotkey": "0.0.3",
       "dsh-sentinel": "0.15.0",
       "dsh-notify-me": "1.20.1",
-      "dsh-agent-browser": "0.2.7",
+      "@t3labs/ohmydsh-agent-browser": "0.2.8",
       "@t3labs/ohmydsh-studio": "0.1.0",
       "@t3labs/ohmydsh-pwa": "0.3.0",
-      "@t3labs/ohmydsh-browser-takeover": "0.1.0",
+      "@t3labs/ohmydsh-browser-takeover": "0.1.1",
       "@t3labs/ohmydsh-review-comments": "0.2.0",
       "@t3labs/ohmydsh-skill-studio": "0.1.0",
       "@t3labs/ohmydsh-notebook": "0.1.0",
@@ -106,6 +106,9 @@
     },
     "@t3labs/ohmydsh-automation-models": {
       "workspace": "packages/automation-models"
+    },
+    "@t3labs/ohmydsh-agent-browser": {
+      "workspace": "packages/agent-browser"
     },
     "@t3labs/ohmydsh-composio": {
       "workspace": "packages/composio"

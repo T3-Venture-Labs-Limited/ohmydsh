@@ -1,0 +1,1 @@
+{ "meta": { "title": "Agent browser", "description": "Native browser tools for the agent (open, snapshot, act, find, get, eval, screenshot, tabs, session) on agent-browser, with a live viewport panel. The collapsed browser button is small and draggable.", "detail": "docs/DETAIL.md" } }

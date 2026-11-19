@@ -1,0 +1,108 @@
+{
+  "name": "@t3labs/ohmydsh-agent-browser",
+  "version": "0.2.8",
+  "description": "Native browser tools for DSH on agent-browser: snapshot+ref automation, batched actions and a live viewport panel with a small, draggable browser button. A modified build of dsh-agent-browser 0.2.7.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "client/index.d.ts",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "UPSTREAM.md"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ],
+      "platform": "web"
+    }
+  },
+  "dependencies": {
+    "dsh-agent-browser-core": "0.1.5",
+    "ws": "^8.18.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "~3.19.0",
+    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.1 <0.3.0-0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs && node scripts/check-artifacts.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint:tokens": "echo 'token lint skipped: this client is upstream code with its own style (see UPSTREAM.md)'",
+    "check": "pnpm run typecheck && pnpm run test && pnpm run build"
+  },
+  "engines": {
+    "node": ">=24.9.0",
+    "dsh": ">=0.2.2-rc.1 <0.3.0-0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
+    "@deepseek-ai/schemastery": "3.19.0",
+    "@types/node": "26.2.0",
+    "@types/react": "~18.3.1",
+    "@types/ws": "^8.18.0",
+    "esbuild": "^0.28.2",
+    "react": "^18.3.1",
+    "typescript": "6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "author": "dsh-agent-browser contributors; modified by Superdao (https://github.com/deestax)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/agent-browser"
+  },
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/agent-browser#readme",
+  "bugs": {
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "agent-browser",
+    "browser-automation",
+    "plugin",
+    "bundle"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  }
+}

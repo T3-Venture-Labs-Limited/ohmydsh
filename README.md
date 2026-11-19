@@ -104,7 +104,7 @@ Everything below is installed and enabled by default unless marked *optional*.
 | Workspace | `dsh-better-sidebar`, `@changfenhuang/dsh-genui`, `dsh-marktext`, `@orderg-x/dsh-video-preview`, `@zseven-w/dsh-openpencil`, `dsh-output-styles` |
 | Keyboard | `dsh-composer-history`, `@hellokidder/dsh-hotkey` |
 | Automation | `dsh-sentinel`, `dsh-notify-me` |
-| Browser | `dsh-agent-browser` |
+| Browser | `@t3labs/ohmydsh-agent-browser` (our build of `dsh-agent-browser` with a small draggable browser button; see `packages/agent-browser/UPSTREAM.md`) |
 
 Every community plugin is used as published and credited to its authors. Where we needed a fix, we sent it upstream first.
 

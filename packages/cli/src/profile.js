@@ -34,10 +34,17 @@ export function buildPackageJson(existing, { desired, lock, official, profile })
   // Official optional bundles we turned on last time but no longer want are switched off again.
   for (const name of lock?.official ?? []) if (!official.includes(name)) { const i = bundles.indexOf(name); if (i >= 0) bundles.splice(i, 1) }
   for (const name of official) if (!bundles.includes(name)) bundles.push(name)
-  for (const [name, p] of desired) {
-    pkg.dependencies[name] = p.spec
-    if (!bundles.includes(name)) bundles.push(name)
-  }
+  // Bundle order is patch order: a plugin whose rows override another's (browser-takeover overrides the `browser` row)
+  // must load after it. A bundle that is new to the profile goes in manifest order, just before the next one of ours
+  // that is already there; appending it at the end would put a renamed or added plugin after the plugins that patch it.
+  const names = [...desired.keys()]
+  names.forEach((name, i) => {
+    pkg.dependencies[name] = desired.get(name).spec
+    if (bundles.includes(name)) return
+    const next = names.slice(i + 1).find((n) => bundles.includes(n))
+    if (next === undefined) bundles.push(name)
+    else bundles.splice(bundles.indexOf(next), 0, name)
+  })
   pkg.dependencies = Object.fromEntries(Object.entries(pkg.dependencies).sort(([a], [b]) => a.localeCompare(b)))
   pkg.dsh.profile.bundles = bundles
   pkg.dsh.profile.patchReload ??= 'live'

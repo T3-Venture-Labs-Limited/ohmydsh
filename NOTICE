@@ -21,6 +21,8 @@ Packages and their licences
   packages/theme               MIT   @t3labs/ohmydsh-theme (palette ideas from dsh-codex-ui, Apache-2.0, (c) MichengAI; see its NOTICE)
   packages/hud                 MIT   @t3labs/ohmydsh-hud (protocol adapted from dsh-quorfloat, MIT, (c) Azetus; see its NOTICE)
   packages/browser-takeover    MIT   @t3labs/ohmydsh-browser-takeover
+  packages/agent-browser       MIT   @t3labs/ohmydsh-agent-browser (a modified build of dsh-agent-browser 0.2.7, MIT, (c) 2026 dsh-agent-browser
+                                     contributors, https://github.com/shantanugoel/dsh-agent-browser; see its LICENSE, NOTICE and UPSTREAM.md)
   packages/web-search-parallel MIT   @t3labs/ohmydsh-web-search-parallel (a fork of @parallel-web/dsh-web-search-parallel, (c) 2026 Parallel;
                                      its upstream history is kept in this repository)
 

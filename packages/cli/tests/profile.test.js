@@ -48,6 +48,17 @@ test('buildPackageJson keeps user deps and bundles, removes only what the lock o
   void m
 })
 
+test('buildPackageJson puts a new bundle before the plugins that come after it in the manifest (patch order)', () => {
+  const lock = { plugins: { 'dsh-old': {}, 'omd-studio': {}, 'omd-takeover': {} }, official: [] }
+  const existing = { name: 'p', dependencies: { 'dsh-old': '1.0.0', 'omd-studio': '1', 'omd-takeover': '1' }, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-old', 'omd-studio', 'omd-takeover'] } } }
+  const mk = (v) => ({ version: v, spec: v, origin: ['core'] })
+  const desired = new Map([['omd-browser', mk('2')], ['omd-studio', mk('1')], ['omd-takeover', mk('1')]])
+  const pkg = buildPackageJson(existing, { desired, lock, official: [], profile: 'omd' })
+  assert.deepEqual(pkg.dsh.profile.bundles, ['@deepseek-ai/dsh-base', 'omd-browser', 'omd-studio', 'omd-takeover'])
+  const none = buildPackageJson(null, { desired, lock: null, official: [], profile: 'omd' })
+  assert.deepEqual(none.dsh.profile.bundles.slice(2), ['omd-browser', 'omd-studio', 'omd-takeover'])
+})
+
 test('swapIn / rollbackSwap exchange directories reversibly and keep prev', () => {
   const home = tmp()
   fakeProfile(home, 'omd', { 'marker.txt': 'old' })

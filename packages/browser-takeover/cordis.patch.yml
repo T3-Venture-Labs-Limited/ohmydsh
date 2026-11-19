@@ -8,7 +8,7 @@
 #    - pruneAfterDays: delete a conversation's browser profile after this many
 #      idle days (0 keeps them forever).
 #    - binaryPath: the same wrapper, used to save logins.
-# 2. Overrides dsh-agent-browser's `browser` row config (a matching override
+# 2. Overrides @t3labs/ohmydsh-agent-browser's `browser` row config (a matching override
 #    replaces the whole config, so every value it needs is restated here):
 #    - allowTakeover: lets the sidebar forward your mouse/keyboard.
 #    - idleTimeoutMinutes 30: an idle conversation's browser shuts down after
@@ -27,7 +27,7 @@
         pruneAfterDays: 14
         binaryPath: !!js "ctx.get('profileContext').dir + '/node_modules/@t3labs/ohmydsh-browser-takeover/bin/agent-browser.mjs'"
 - id: browser
-  name: dsh-agent-browser
+  name: '@t3labs/ohmydsh-agent-browser'
   config:
     autoOpenPanel: false
     idleTimeoutMinutes: 30

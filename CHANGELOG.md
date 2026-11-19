@@ -3,6 +3,11 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
+## 0.1.3
+
+- Agent browser (`@t3labs/ohmydsh-agent-browser` 0.2.8, replaces the community `dsh-agent-browser`): our build of dsh-agent-browser 0.2.7 with a small, draggable browser button. It no longer covers the send button on a phone, snaps to the left or right edge, stays above the on-screen keyboard and remembers its place per window size. The panel's session poll also stops while the tab is hidden and slows down while idle. The `browser` row id is unchanged, so settings carry over; `omd update` removes the old package. Credit and differences: `packages/agent-browser/UPSTREAM.md`; both changes are proposed upstream.
+- Browser takeover (0.1.1): follows the renamed agent-browser package in its settings row.
+
 ## 0.1.2
 
 - Desktop (Linux): the app no longer crashes DSH on the first image job. It now ships the official Node.js 24.22.3 and runs DSH on it instead of on Electron, because sharp (image handling) segfaults under Electron-as-Node on Linux. macOS and Windows still run DSH on Electron's Node. `OHMYDSH_NODE=/path/to/node` overrides the choice.

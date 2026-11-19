@@ -1,0 +1,31 @@
+@t3labs/ohmydsh-agent-browser
+Copyright (c) 2026 Superdao (deestax) for the modifications listed in UPSTREAM.md, licensed under the MIT License.
+
+This package is a modified copy of dsh-agent-browser 0.2.7 (https://github.com/shantanugoel/dsh-agent-browser),
+MIT License, Copyright (c) 2026 dsh-agent-browser contributors. Almost all of the code is theirs. The upstream licence
+text, which must stay with copies of that code, is in the LICENSE file of this package and reads:
+
+    MIT License
+
+    Copyright (c) 2026 dsh-agent-browser contributors
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+At runtime the plugin uses dsh-agent-browser-core (same upstream, MIT) and agent-browser
+(https://github.com/vercel-labs/agent-browser, Apache-2.0, Copyright Vercel, Inc.) from npm, unmodified.

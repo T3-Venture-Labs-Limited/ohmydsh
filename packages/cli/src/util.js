@@ -2,7 +2,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 
 const tty = process.stdout.isTTY && !process.env.NO_COLOR
 const paint = (code) => (s) => (tty ? `\u001b[${code}m${s}\u001b[0m` : s)
@@ -27,9 +27,23 @@ export function dshHome(env = process.env) {
   return env.DSH_HOME && env.DSH_HOME.length > 0 ? env.DSH_HOME : join(homedir(), '.dsh')
 }
 
+/**
+ * Options that let spawn run `dsh` and friends on Windows, where npm and mise install `.cmd` shims: Node's spawn without a
+ * shell finds only .exe files and refuses a .cmd (EINVAL). Arguments omd passes are plain words; any with a space or
+ * a shell character is quoted.
+ */
+export const isWin = () => process.platform === 'win32'
+export function shellFor(cmd, args = []) {
+  if (!isWin() || /\.(exe|com)$/i.test(cmd)) return { cmd, args, opts: {} }
+  const quote = (a) => (/^[\w@%+=:,./\\-]+$/.test(a) ? a : `"${String(a).replace(/"/g, '""')}"`)
+  return { cmd, args: args.map(quote), opts: { shell: true } }
+}
+
 /** Default process runner. Injected in tests. Never throws; spawn failures come back as status null + error. */
 export function run(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, {
+  const sh = shellFor(cmd, args)
+  const r = spawnSync(sh.cmd, sh.args, {
+    ...sh.opts,
     cwd: opts.cwd,
     env: opts.env ?? process.env,
     encoding: 'utf8',
@@ -41,7 +55,9 @@ export function run(cmd, args, opts = {}) {
 }
 
 export function which(cmd, env = process.env) {
-  for (const dir of (env.PATH ?? '').split(':')) if (dir && existsSync(join(dir, cmd))) return join(dir, cmd)
+  const path = env.PATH ?? env.Path ?? ''
+  const exts = isWin() ? ['', ...(env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : ['']
+  for (const dir of path.split(delimiter)) for (const ext of exts) if (dir && existsSync(join(dir, cmd + ext))) return join(dir, cmd + ext)
   return null
 }
 

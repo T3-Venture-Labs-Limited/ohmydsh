@@ -15,7 +15,7 @@ test('parses a valid manifest and fills defaults', () => {
 test('the real ohmydsh.json in this repo is valid and fully pinned', async () => {
   const { readFile } = await import('node:fs/promises')
   const m = parseManifest(await readFile(new URL('../../../ohmydsh.json', import.meta.url), 'utf8'))
-  assert.equal(m.dsh, '0.2.2-rc.3')
+  assert.match(m.dsh, /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/) // the pin moves with every follow release
   for (const core of ['studio', 'pwa', 'browser-takeover', 'review-comments', 'skill-studio', 'notebook', 'triggers', 'automation-models'].map((n) => `@t3labs/ohmydsh-${n}`)) assert.ok(m.plugins.core[core], core)
   assert.deepEqual(Object.keys(m.plugins.packs).sort(), ['composio', 'langfuse', 'omarchy', 'parallel'])
   // Release shape: every one of our plugins resolves from the registry (no tarball URLs left in the manifest).

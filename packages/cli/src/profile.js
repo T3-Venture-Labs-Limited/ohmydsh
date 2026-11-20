@@ -127,25 +127,37 @@ export async function syncProfile(ctx, opts) {
     if (!check.ok) throw new OmdError(`the new profile does not compose cleanly:\n  - ${describeCompose(check).join('\n  - ')}`)
     log.ok('composed config is clean, every row applied')
     if (opts.bootCheck) {
-      const boot = await ctx.bootCheck(stagingName(name))
+      const boot = await ctx.bootCheck(stagingName(name), ctx)
       if (!boot.ok) throw new OmdError(`web boot check failed:\n  - ${boot.problems.join('\n  - ')}`)
       log.ok(`web boot check passed (${boot.url})`)
     }
 
-    const newLock = makeLock({ manifest, source: loaded.source, dev: opts.dev, packs, plugins: desired, official, trustedHosts })
+    const newLock = makeLock({ manifest, source: loaded.source, dev: opts.dev, packs, plugins: desired, official, trustedHosts, dsh: opts.dsh })
     writeLock(stageDir, newLock)
     const running = (ctx.isRunning ?? isProfileRunning)(liveDir)
     if (existsSync(liveDir) && running === true && !opts.force) {
       throw new OmdError(`DSH is running on profile "${name}". Swapping its folder under it would break plugin code it loads lazily.\n  Stop it and re-run, or pass --force to swap anyway. Nothing was changed.`)
     }
-    swapIn(ctx, name, { hadLive: existsSync(liveDir) })
+    const hadLive = existsSync(liveDir)
+    swapIn(ctx, name, { hadLive })
+    const undoSwap = () => {
+      if (hadLive && existsSync(prevDir)) rollbackSwap(ctx, name)
+      else rmSync(liveDir, { recursive: true, force: true })
+    }
     log.step('verifying the swapped profile')
     const after = composeCheck(ctx, { profile: name, plugins: [...desired.keys()], managedYaml })
     if (!after.ok) {
       log.error(`the swapped profile failed its check, rolling back:\n  - ${describeCompose(after).join('\n  - ')}`)
-      if (existsSync(prevDir)) rollbackSwap(ctx, name)
-      else rmSync(liveDir, { recursive: true, force: true })
+      undoSwap()
       throw new OmdError('update rolled back; the previous profile is active again')
+    }
+    // The profile was built and checked with the DSH it is meant for (a staged copy when DSH changes). Only now is
+    // the global DSH switched; if that fails the profile goes back too, so the two always match.
+    if (opts.switchDsh) {
+      try { opts.switchDsh() } catch (e) {
+        undoSwap()
+        throw new OmdError(`${e.message}\n  The previous profile is active again; nothing else was changed.`)
+      }
     }
     return { ...plan, applied: true, lock: newLock, running: running === true }
   } catch (e) {

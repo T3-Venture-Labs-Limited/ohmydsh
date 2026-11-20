@@ -2,7 +2,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { composeCheck, describeCompose, dshVersion, installedVersion, isProfileRunning } from './health.js'
-import { classifyDeps, diffLock, readLock } from './lock.js'
+import { dshSpec, planDsh, stageDsh, switchDsh, warnSkipped } from './dsh.js'
+import { classifyDeps, diffLock, lockedDsh, readLock } from './lock.js'
 import { defaultManifestSource, loadManifest, packNames, resolveDesired } from './manifest.js'
 import { describeLock, prevName, profileDir, rollbackSwap, syncProfile } from './profile.js'
 import { mergeHosts, tailnetHosts } from './tailnet.js'
@@ -40,21 +41,38 @@ function finish(ctx, name, res) {
   else log.info(`start it with: omd`)
 }
 
-/** Make sure the pinned DSH is installed. Never touches a running DSH. */
-export function ensureDsh(ctx, manifest) {
-  const have = dshVersion(ctx)
-  if (have === manifest.dsh) return { version: have, changed: false }
-  if (ctx.flags['no-dsh-install']) {
-    ctx.log.warn(`DSH ${have ?? '(not found)'} is installed, ohmydsh was tested with ${manifest.dsh}. Skipping the install (--no-dsh-install).`)
-    return { version: have, changed: false }
+/**
+ * Run `fn(ctx, extra)` with the DSH this manifest wants.
+ *  - same version, `--no-dsh-install`, or a DSH omd did not install (the desktop app's own runtime): DSH is left alone;
+ *  - no DSH at all: it is installed first (there is nothing that could break);
+ *  - a different version: it is installed into a temporary prefix, `fn` builds and checks the profile with THAT binary
+ *    and only after the swap passed does `extra.switchDsh()` replace the global DSH. A failure anywhere leaves both the
+ *    profile and DSH as they were.
+ * @param {{ repair: boolean }} how  repair: also fix a DSH that drifted from the pin (setup); false: move DSH only when
+ *   the pin changed (update), so a DSH the user picked is never replaced behind their back.
+ */
+export async function withDsh(ctx, manifest, { repair, dryRun = false }, fn) {
+  const plan = planDsh(ctx, manifest.dsh)
+  const have = plan.have
+  const pinMoved = repair || (ctx.lockDsh ?? null) !== manifest.dsh
+  if (plan.action === 'none' || (!pinMoved && plan.action !== 'skip')) return fn(ctx, { dsh: { version: have, previous: null } })
+  if (plan.action === 'skip') {
+    if (pinMoved) warnSkipped(ctx, plan)
+    return fn(ctx, { dsh: { version: have, previous: null } })
   }
-  ctx.log.step(`installing DeepSeek Harness ${manifest.dsh}`)
-  const spec = `@deepseek-ai/dsh@${manifest.dsh}`
-  const r = which('mise', ctx.env) ? ctx.run('mise', ['use', '-g', `npm:${spec}`], { env: ctx.env }) : ctx.run('npm', ['install', '-g', spec], { env: ctx.env })
-  if (r.error || r.status !== 0) throw new OmdError(`could not install ${spec}:\n${(r.error?.message ?? r.stderr).trim().split('\n').slice(-8).join('\n')}\n  Install it yourself and re-run (npm install -g ${spec}).`)
-  const now = dshVersion(ctx)
-  if (now !== manifest.dsh) throw new OmdError(`installed ${spec} but \`dsh --version\` reports ${now ?? 'nothing'}; check your PATH.`)
-  return { version: now, changed: true }
+  if (dryRun) {
+    ctx.log.info(`DSH ${have ?? '(none)'} -> ${plan.want} would be installed first (tried in a temporary folder, switched only if the new set passes its checks)`)
+    return fn(ctx, { dsh: { version: have, previous: null } })
+  }
+  if (have === null) {
+    switchDsh(ctx, plan.install, plan.want, null)
+    return fn(ctx, { dsh: { version: plan.want, previous: null } })
+  }
+  ctx.log.step(`DeepSeek Harness ${have} -> ${plan.want}: trying ${dshSpec(plan.want)} in a temporary folder first`)
+  const staged = stageDsh(ctx, plan.want)
+  try {
+    return await fn({ ...ctx, env: staged.env }, { dsh: { version: plan.want, previous: have }, switchDsh: () => switchDsh(ctx, plan.install, plan.want, have) })
+  } finally { staged.cleanup() }
 }
 
 export async function setup(ctx) {
@@ -62,10 +80,9 @@ export async function setup(ctx) {
   const { manifest } = loaded
   if (Number(process.versions.node.split('.')[0]) < 24) throw new OmdError(`Node ${process.versions.node} is too old; ohmydsh needs Node 24 or newer.`)
   ctx.log.step(`ohmydsh ${manifest.version} for DSH ${manifest.dsh}${ctx.flags.dev ? ' (dev links)' : ''}`)
-  ensureDsh(ctx, manifest)
   const lock = readLock(profileDir(ctx.home, name))
   const packs = [...new Set([...(lock?.packs ?? []), ...splitList(ctx.flags.pack)])]
-  const res = await syncProfile(ctx, { loaded, name, packs, dev: Boolean(ctx.flags.dev) || Boolean(lock?.dev && !ctx.flags.manifest), force: Boolean(ctx.flags.force), bootCheck: Boolean(ctx.flags['boot-check']), trustedHosts: splitList(ctx.flags['trusted-host']) })
+  const res = await withDsh(ctx, manifest, { repair: true }, (on, extra) => syncProfile(on, { loaded, name, packs, dev: Boolean(ctx.flags.dev) || Boolean(lock?.dev && !ctx.flags.manifest), force: Boolean(ctx.flags.force), bootCheck: Boolean(ctx.flags['boot-check']), trustedHosts: splitList(ctx.flags['trusted-host']), ...extra }))
   if (res.trustedHosts?.length > 0) ctx.log.ok(`trusted hosts saved in the profile: ${res.trustedHosts.join(', ')}`)
   printDiff(ctx, res.diff)
   finish(ctx, name, res)
@@ -89,7 +106,7 @@ async function changePacks(ctx, f, mustExist = []) {
   if (!lock) throw new OmdError(`profile "${name}" was not set up by omd; run \`omd setup\` first.`)
   for (const p of mustExist) if (!packNames(loaded.manifest).includes(p)) throw new OmdError(`unknown pack "${p}" (packs: ${packNames(loaded.manifest).join(', ')})`)
   const packs = f(lock.packs)
-  const res = await syncProfile(ctx, { loaded, name, packs, dev: lock.dev, force: Boolean(ctx.flags.force), bootCheck: Boolean(ctx.flags['boot-check']) })
+  const res = await syncProfile(ctx, { loaded, name, packs, dev: lock.dev, force: Boolean(ctx.flags.force), bootCheck: Boolean(ctx.flags['boot-check']), dsh: { version: lockedDsh(lock), previous: lock.dsh?.previous ?? null } })
   printDiff(ctx, res.diff)
   finish(ctx, name, res)
   for (const p of packs) {
@@ -105,9 +122,10 @@ export async function update(ctx) {
   if (!lock) throw new OmdError(`profile "${name}" was not set up by omd; run \`omd setup\` first.`)
   const { manifest } = loaded
   ctx.log.step(`ohmydsh ${lock.manifest.version} -> ${manifest.version}`)
-  if (lock.manifest.dsh !== manifest.dsh) ctx.log.warn(`this set needs DSH ${manifest.dsh} (you have ${dshVersion(ctx) ?? 'none'}); omd update does not swap the DSH binary, run \`omd setup\` for that.`)
   const dev = ctx.flags.dev !== undefined ? Boolean(ctx.flags.dev) : lock.dev
-  const res = await syncProfile(ctx, { loaded, name, packs: lock.packs, dev, dryRun: Boolean(ctx.flags['dry-run']), force: Boolean(ctx.flags.force), bootCheck: Boolean(ctx.flags['boot-check']), trustedHosts: splitList(ctx.flags['trusted-host']) })
+  const dryRun = Boolean(ctx.flags['dry-run'])
+  // The pin this profile was set up for; DSH is only moved when the new manifest pins another one.
+  const res = await withDsh({ ...ctx, lockDsh: lock.manifest.dsh }, manifest, { repair: false, dryRun }, (on, extra) => syncProfile(on, { loaded, name, packs: lock.packs, dev, dryRun, force: Boolean(ctx.flags.force), bootCheck: Boolean(ctx.flags['boot-check']), trustedHosts: splitList(ctx.flags['trusted-host']), ...extra }))
   printDiff(ctx, res.diff)
   if (!res.applied) { ctx.log.info('dry run: nothing changed'); return }
   finish(ctx, name, res)
@@ -122,6 +140,20 @@ export async function rollback(ctx) {
   if (running === true && !ctx.flags.force) throw new OmdError(`DSH is running on profile "${name}"; stop it first or pass --force.`)
   rollbackSwap(ctx, name)
   const after = readLock(live)
+  // The profile we returned to was built for its own DSH (kept in its lock). Put DSH back to match; if that fails the
+  // swap is undone, so profile and DSH never disagree.
+  const wantDsh = lockedDsh(after)
+  const have = dshVersion(ctx)
+  if (after && wantDsh && have !== wantDsh) {
+    const plan = planDsh(ctx, wantDsh)
+    if (plan.action === 'install') {
+      try { switchDsh(ctx, plan.install, wantDsh, have) } catch (e) {
+        rollbackSwap(ctx, name)
+        throw new OmdError(`${e.message}\n  The rollback was undone: the profile is back at ${describeLock(before)}.`)
+      }
+      ctx.log.ok(`DSH ${have ?? '(none)'} -> ${wantDsh}`)
+    } else if (plan.action === 'skip') warnSkipped(ctx, plan)
+  }
   ctx.log.ok(`rolled back: ${describeLock(before)}  ->  ${describeLock(after)}`)
   if (before) ctx.log.info('run `omd rollback` again to undo this.')
   if (running === true) ctx.log.warn('restart DSH to load it.')
@@ -168,7 +200,9 @@ export async function doctor(ctx, { quietHeader = false } = {}) {
 
   const pin = manifest?.dsh ?? lock?.manifest?.dsh
   const have = dshVersion(ctx)
+  const locked = lockedDsh(lock)
   if (!have) problems.push('dsh is not installed or not on PATH (run `omd setup`)')
+  else if (lock && locked && have !== locked) problems.push(`dsh ${have} is installed but this profile was installed and checked with dsh ${locked} (the lock file says so): run \`omd setup\` to bring them together, or \`omd rollback\` if you just switched DSH`)
   else if (pin && have !== pin) problems.push(`dsh ${have} installed, this set was tested with ${pin} (run \`omd setup\`)`)
   else log.ok(`dsh ${have}`)
 

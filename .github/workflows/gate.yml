@@ -1,0 +1,68 @@
+name: Gate
+
+# The release gate (scripts/gate.mjs) on Linux and macOS. Called by ci.yml (the checkout as it is) and by follow.yml
+# (a set of candidate versions; scripts/follow-run.mjs tries them all, then bisects, and uploads one result per OS).
+# Read scripts/gate.mjs for the steps. Every child process runs in a throwaway HOME and DSH_HOME.
+
+on:
+  workflow_call:
+    inputs:
+      candidates:
+        description: 'Space-separated name@version list to test (follow.yml); empty tests the checkout as it is (ci.yml)'
+        type: string
+        default: ''
+      artifact_prefix:
+        type: string
+        default: gate
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ inputs.candidates != '' && 300 || 75 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # check:private reads the whole history
+      - uses: ./.github/actions/setup
+      - name: Install the workspace
+        run: pnpm install --frozen-lockfile
+      - name: Gate (the checkout as it is)
+        if: inputs.candidates == ''
+        # The package checks (typecheck, lint, tests) run on Linux; the macOS leg tests the install, boot and upgrade path.
+        run: node scripts/gate.mjs --skip-install ${{ runner.os != 'Linux' && '--skip-checks' || '' }}
+      - name: Gate (candidates, bisecting when red)
+        if: inputs.candidates != ''
+        env:
+          CANDIDATES: ${{ inputs.candidates }}
+        run: |
+          mkdir -p result
+          node scripts/follow-run.mjs --candidates "$CANDIDATES" --out result/follow-result.json --work .tmp/follow \
+            --gate-args "${{ runner.os != 'Linux' && '--skip-checks' || '' }}"
+      - name: Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_prefix }}-logs-${{ matrix.os }}
+          path: |
+            .tmp/gate/**/logs/*.log
+            .tmp/gate/gate-result.json
+            .tmp/follow/**/logs/*.log
+            .tmp/follow/**/gate-result.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Result
+        if: always() && inputs.candidates != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_prefix }}-result-${{ matrix.os }}
+          path: result/follow-result.json
+          if-no-files-found: error
+          retention-days: 14

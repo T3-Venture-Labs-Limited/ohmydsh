@@ -3,7 +3,7 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
-## Unreleased
+## 0.1.4
 
 - Wording: it now says ohmydsh wherever you use it, not "DSH"/"DeepSeek Harness". Phone app (`@t3labs/ohmydsh-pwa` 0.3.2): the sign-in and pairing pages, the offline page, notifications, the install description and the Settings copy use one product name from the plugin config (`name`/`shortName`, default ohmydsh; set `DeepSeek Harness`/`DSH` on stock DSH). Desktop: loading screen, tray ("Restart ohmydsh"), About box and error messages; Android: every screen and message. Settings copy of studio 0.1.1, triggers 0.1.1, composio 0.1.1, theme 0.1.2 and skill-studio 0.1.1. DeepSeek Harness is still named where it is the engine ("Built on DeepSeek Harness", the first-run download, technical docs).
 - Follow upstream: a daily workflow (`follow.yml`) tests the newest DeepSeek Harness and community plugin versions against the whole set (install from tarballs, every pack, web boot, and `omd update` from the last release, on Linux and macOS) and releases what passes, by itself. What fails gets one `follow` issue per package; a `hold` issue keeps a package where it is. `release.yml` can also be started with a tag.
@@ -15,6 +15,16 @@ community plugins. Add a section here before tagging; the text under the version
 - Desktop: updates are checked every 6 hours (and after the computer wakes), not only at start; the tray has **Check for updates…**. Updates download in the background and install when you quit; a running agent turn is never interrupted. An AppImage started through a symlink keeps its symlink pointed at the new file. Builds that cannot self-update (macOS while unsigned, `.deb`) tell you once per version that a newer release exists.
 - Desktop: the launchers quote paths with spaces (`C:\Users\First Last\...`), and the Windows build unpacks npm with System32's `tar.exe`.
 - Release: the Windows, macOS and Linux desktop builds each run the full headless first run in CI (provision DSH, start it on the bundled Node, token sign-in, UI, sharp JPEG job, phone pairing round trip, Pair phone in the real window) before they are attached; `apps.yml` takes a `release_tag` input so a release started by hand builds the right tag.
+
+### Followed upstream
+
+- DeepSeek Harness 0.2.2-rc.3 -> 0.2.2-rc.5 ([npm](https://www.npmjs.com/package/@deepseek-ai/dsh/v/0.2.2-rc.5))
+- @kenz1117/dsh-engram 0.13.10 -> 0.13.15 ([npm](https://www.npmjs.com/package/@kenz1117/dsh-engram/v/0.13.15))
+- dsh-composer-history 0.8.16 -> 0.8.17 ([npm](https://www.npmjs.com/package/dsh-composer-history/v/0.8.17))
+- dsh-context 0.84.1 -> 0.86.0 ([npm](https://www.npmjs.com/package/dsh-context/v/0.86.0))
+- dsh-model-logos 0.7.0 -> 0.8.0 ([npm](https://www.npmjs.com/package/dsh-model-logos/v/0.8.0))
+- dsh-notify-me 1.20.1 -> 1.21.6 ([npm](https://www.npmjs.com/package/dsh-notify-me/v/1.21.6))
+- dsh-plugin-subscriptions 0.9.13 -> 0.9.14 ([npm](https://www.npmjs.com/package/dsh-plugin-subscriptions/v/0.9.14))
 
 ## 0.1.3
 

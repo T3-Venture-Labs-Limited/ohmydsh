@@ -28,7 +28,7 @@ The single source of truth. A release of ohmydsh is a new version of this file.
 ```jsonc
 {
   "version": "0.1.0",
-  "dsh": "0.2.2-rc.3",                // exact DSH version this set was tested with
+  "dsh": "0.2.2-rc.5",                // exact DSH version this set was tested with
   "node": ">=24",
   "plugins": {
     "core": {

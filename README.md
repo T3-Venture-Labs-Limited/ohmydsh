@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img alt="DeepSeek Harness 0.2.2-rc.3" src="https://img.shields.io/badge/dsh-0.2.2--rc.3-2447D6?style=flat-square">
+  <img alt="DeepSeek Harness 0.2.2-rc.5" src="https://img.shields.io/badge/dsh-0.2.2--rc.5-2447D6?style=flat-square">
   <img alt="Release" src="https://img.shields.io/github/v/release/T3-Venture-Labs-Limited/ohmydsh?style=flat-square&color=2447D6&label=release&include_prereleases">
   <img alt="npm" src="https://img.shields.io/npm/v/@t3labs/ohmydsh?style=flat-square&color=2447D6&label=npm">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-5EEAD4?style=flat-square">

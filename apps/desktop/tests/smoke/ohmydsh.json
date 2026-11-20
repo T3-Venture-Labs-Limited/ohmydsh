@@ -1,6 +1,6 @@
 {
   "version": "0.0.0-smoke",
-  "dsh": "0.2.2-rc.3",
+  "dsh": "0.2.2-rc.5",
   "node": ">=24",
   "profile": { "name": "omd", "defaults": "profile/defaults.cordis.yml", "official": [] },
   "plugins": { "core": { "@t3labs/ohmydsh-pwa": "0.3.2" }, "packs": {} },

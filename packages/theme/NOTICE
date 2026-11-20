@@ -30,3 +30,14 @@ dsh-theme-endfield compatibility (src/shared/endfield.ts, src/client/endfield-do
 Written against the public behaviour and variable names of dsh-theme-endfield
 (https://github.com/ymh0000123/dsh-theme-endfield, MIT). No source is copied; the plugin is read at runtime
 (its stylesheet selectors) and left unmodified.
+
+Endfield look (src/shared/endfield-look.ts, src/client/endfield-look-css.ts, src/artwork/endfield-palettes.ts,
+src/artwork/endfield-own-tokens.ts)
+--------------------------------------------------------------------------------------------------------------
+A lighter port of the visible design of dsh-theme-endfield (https://github.com/ymh0000123/dsh-theme-endfield),
+MIT License, Copyright (c) 2026 ymh0000123: square corners, the solid-accent controls, the hero wordmark, the
+"standard" glass composer and sidebar sheen, table and badge styling, and Endfield's paper/ink palettes. The rules
+were rewritten (cheaper selectors, no runtime layout reads), and the token values used when colours are on Stock were
+measured from a page running that plugin. The MIT permission notice is identical to the one in this repository's
+LICENSE file and applies to those portions as well. "Arknights: Endfield" and its wordmark belong to their owners;
+the wordmark text is drawn only while the Endfield look is switched on.

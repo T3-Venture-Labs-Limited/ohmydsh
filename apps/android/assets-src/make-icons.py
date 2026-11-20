@@ -4,11 +4,11 @@ import re, subprocess, sys, pathlib
 root = pathlib.Path(__file__).resolve().parent
 res = root.parent / 'app/src/main/res'
 src = (root / 'logo.svg').read_text()
-inner = re.search(r'<defs>.*</svg>', src, re.S).group(0)[:-len('</svg>')].strip()
+inner = re.search(r'<svg[^>]*>(.*)</svg>', src, re.S).group(1).strip()
 SIZES = {'mdpi': 108, 'hdpi': 162, 'xhdpi': 216, 'xxhdpi': 324, 'xxxhdpi': 432}
 
 def layer(size, mono):
-    scale = (size * 60 / 108) / 448  # the mark's circle (r=224) fills the 60dp safe zone of the 108dp layer
+    scale = (size * 66 / 108) / 448  # the mark's circle (448 across) fills the 66dp safe zone of the 108dp layer
     off = size / 2 - 256 * scale
     body = inner.replace('#4D6BFE', '#FFFFFF') if mono else inner
     return f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}"><g transform="translate({off} {off}) scale({scale})">{body}</g></svg>'

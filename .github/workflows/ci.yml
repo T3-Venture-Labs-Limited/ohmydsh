@@ -36,7 +36,7 @@ jobs:
           node-version: 24
       - run: node --check packages/cli/bin/omd.js
       - run: node --test "packages/cli/tests/**/*.test.*js"
-      - run: node --test scripts/tests/
+      - run: node --test "scripts/tests/**/*.test.mjs"
       - run: sh -n install.sh
 
   # Package checks, manifest, private strings, pack audit, omd setup from the packed tarballs into a clean home (with the

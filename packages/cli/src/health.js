@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { rowIds } from './managed.js'
+import { shellFor } from './util.js'
 
 /** dsh only warns when a patch row names a plugin that is not there. Those warnings are failures for us. */
 export function parseUnapplied(stderr) {
@@ -100,7 +101,8 @@ export function isProfileRunning(profileDir, procRoot = '/proc') {
  */
 export function bootCheck(ctx, profile, { port = 0, graceMs = 4000, timeoutMs = 60_000 } = {}) {
   return new Promise((resolve) => {
-    const child = spawn('dsh', [profile, '--no-open', '--port', String(port)], { env: ctx.env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const sh = shellFor('dsh', [profile, '--no-open', '--port', String(port)])
+    const child = spawn(sh.cmd, sh.args, { ...sh.opts, env: ctx.env, stdio: ['ignore', 'pipe', 'pipe'] })
     let text = ''
     let url = null
     let done = false

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from '../src/args.js'
 import * as cmd from '../src/commands.js'
 import { bootCheck } from '../src/health.js'
-import { OmdError, dshHome, makeLog, run } from '../src/util.js'
+import { OmdError, dshHome, makeLog, run, shellFor } from '../src/util.js'
 
 const HELP = `omd: ohmydsh for DeepSeek Harness
 
@@ -49,7 +49,8 @@ if (first === '--help' || first === '-h' || first === 'help') { process.stdout.w
 if (first === undefined || !COMMANDS.has(first)) {
   // Default: hand over to DSH on the omd profile, passing everything through.
   const profile = process.env.OMD_PROFILE ?? 'omd'
-  const r = spawnSync('dsh', [profile, ...argv], { stdio: 'inherit' })
+  const sh = shellFor('dsh', [profile, ...argv])
+  const r = spawnSync(sh.cmd, sh.args, { ...sh.opts, stdio: 'inherit' })
   if (r.error) { process.stderr.write(`omd: could not run dsh: ${r.error.message}\n`); process.exit(127) }
   process.exit(r.status ?? 1)
 }

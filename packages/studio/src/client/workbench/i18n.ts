@@ -54,7 +54,7 @@ export const en = {
   hfTitle: 'HyperFrames Studio', hfHint: 'Edit clips, captions and titles in HyperFrames Studio, then bring renders back to the gallery.', hfMissing: 'HyperFrames CLI not found',
   hfInstall: 'Install it with: npm i -g hyperframes. Then press Retry.', hfOpen: 'Open project', hfNew: 'New project', hfFromSelection: 'New project from selected clips',
   hfNewEmpty: 'New empty project', hfStop: 'Stop preview', hfImport: 'Import renders', hfImported: 'Imported {n} render(s)', hfNoRenders: 'No new renders found', hfOpenExternal: 'Open externally',
-  hfRemote: 'The preview listens on the machine running DSH. Open this address there:', hfStarting: 'Starting preview…', hfProjects: 'Projects', hfRunning: 'running', hfIdle: 'stopped',
+  hfRemote: 'The preview listens on the machine running ohmydsh. Open this address there:', hfStarting: 'Starting preview…', hfProjects: 'Projects', hfRunning: 'running', hfIdle: 'stopped',
   hfSlug: 'Project name', hfFailed: 'Could not open HyperFrames', hfPickClips: 'Select videos in the gallery first, then open them here.', retryBtn: 'Retry', hfBack: 'Projects',
   // legacy import
   legacyImport: 'Import from Image Studio', legacyHint: 'Brings the gallery of the old Image Studio plugin into Studio. Safe to run again: nothing is imported twice.', legacyRun: 'Import', legacyFound: '{n} records in the old gallery · {left} still to import', legacySummary: 'Imported {imported}, already there {skipped}, file missing {missing}.',

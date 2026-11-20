@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Theme",
-    "description": "Follow Omarchy: DSH takes its colours from your Omarchy desktop theme and updates live when you switch it. Also ships bundled palettes (Catppuccin, Dracula, Gruvbox, Solarized, Nord, Tokyo Night, Rosé Pine). One switch back to Stock removes every override.",
+    "description": "Follow Omarchy: ohmydsh takes its colours from your Omarchy desktop theme and updates live when you switch it. Also ships bundled palettes (Catppuccin, Dracula, Gruvbox, Solarized, Nord, Tokyo Night, Rosé Pine). One switch back to Stock removes every override.",
     "detail": "docs/DETAIL.md"
   }
 }

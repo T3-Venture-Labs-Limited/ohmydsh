@@ -202,7 +202,7 @@ export const locale = defineLocale('dsh-triggers', {
   webhookExample: 'Example',
   webhookStandardNote: 'Signed with the webhook-id, webhook-timestamp and webhook-signature headers (5-minute tolerance).',
   webhookNoneNote: 'No secret: accepted from this computer (loopback) only.',
-  webhookTailnet: 'Reachable from other machines on your tailnet at https://<tailnet-host>/hooks/{id} when DSH is served with tailscale serve.',
+  webhookTailnet: 'Reachable from other machines on your tailnet at https://<tailnet-host>/hooks/{id} when ohmydsh is served with tailscale serve.',
   secretLabel: 'Secret',
   secretFresh: 'Copy it now — it will not be shown again.',
   secretHidden: 'Shown once when created. Rotate to get a new one.',

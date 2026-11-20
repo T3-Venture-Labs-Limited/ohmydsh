@@ -14,7 +14,7 @@ describe('config', () => {
     const c = readConfig(undefined)
     expect(c.startUrl).toBe('/app'); expect(c.share.maxMiB).toBe(25); expect(c.serviceWorker).toBe(true); expect(c.push.enabled).toBe(true); expect(c.push.allowInsecureEndpoints).toBe(false)
     expect(readConfig({ startUrl: 'https://evil', themeColor: 'red', share: { maxMiB: 9999 }, push: { subject: 'nope' } })).toMatchObject({ startUrl: '/app', themeColor: '#ffffff', share: { maxMiB: 200 }, push: { subject: 'mailto:dsh-pwa@localhost.invalid' } })
-    expect(readConfig('nonsense').name).toBe('DeepSeek Harness')
+    expect(readConfig('nonsense').name).toBe('ohmydsh'); expect(readConfig('nonsense').shortName).toBe('ohmydsh')
   })
   it('a leftover startUrl of the removed phone page falls back to the normal UI', () => {
     expect(readConfig({ startUrl: '/m' }).startUrl).toBe('/app'); expect(readConfig({ startUrl: '/m/x' }).startUrl).toBe('/app'); expect(readConfig({ startUrl: '/' }).startUrl).toBe('/')
@@ -94,7 +94,7 @@ describe('route table and gates', () => {
       }
     }
     const html = (await run(boot({}).routes.get('exact /app')!.handler, { method: 'GET', url: '/app' })).body
-    expect(html).toContain('Paste your DSH login link')
+    expect(html).toContain('Paste your ohmydsh login link')
   })
   it('POST /share answers JSON {id} for Accept: application/json and 303 otherwise, behind the same gates', async () => {
     const { routes } = boot({})

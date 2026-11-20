@@ -114,7 +114,7 @@ export function registerPairing(d: PairDeps): void {
       const code = typeof body['code'] === 'string' ? body['code'] : ''
       if (!d.codes.consume(code)) {
         d.claimLimiter.fail(key)
-        json(res, 401, { ok: false, error: 'this pairing code is invalid, expired or already used; make a new one in DSH' })
+        json(res, 401, { ok: false, error: 'this pairing code is invalid, expired or already used; make a new one in Settings > Phone app' })
         return
       }
       const cookieMode = body['mode'] === 'cookie'

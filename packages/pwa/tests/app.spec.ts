@@ -48,7 +48,7 @@ describe('/app page markup', () => {
     expect(html.replace(/<script src="\/app\.js"><\/script>/, '')).not.toMatch(/<script/i)
     expect(html).not.toMatch(/https?:\/\//i)
     expect(html).not.toMatch(/\son\w+=/i)
-    expect(html).toContain('Paste your DSH login link'); expect(html).toContain('>Sign in</button>')
+    expect(html).toContain('Paste your ohmydsh login link'); expect(html).toContain('>Sign in</button>')
     expect(html).toContain('color-scheme')
   })
   it('contains no secret or token value, and the CSP blocks everything but the own script and one inline style', () => {
@@ -77,10 +77,10 @@ describe('/app.js signed in', () => {
   })
   it('shows the form on 401 and a connection message when the host is unreachable', async () => {
     const out = await boot('?openSession=abc', { probe: 401 })
-    expect(out.replaced).toEqual([]); expect(out.el['login'].hidden).toBe(false); expect(out.el['title'].textContent).toBe('Sign in to DSH')
-    expect(out.el['message'].textContent).toBe('Get the link from the computer running DSH.')
+    expect(out.replaced).toEqual([]); expect(out.el['login'].hidden).toBe(false); expect(out.el['title'].textContent).toBe('Sign in to ohmydsh')
+    expect(out.el['message'].textContent).toBe('Get the link from the computer running ohmydsh.')
     const down = await boot('', { probe: 'throw' })
-    expect(down.replaced).toEqual([]); expect(down.el['title'].textContent).toBe('Cannot reach DSH'); expect(down.el['login'].hidden).toBe(true)
+    expect(down.replaced).toEqual([]); expect(down.el['title'].textContent).toBe('Cannot reach ohmydsh'); expect(down.el['login'].hidden).toBe(true)
   })
 })
 
@@ -98,7 +98,7 @@ describe('/app.js paste-link sign-in', () => {
       const r = await boot('', { probe: 401 })
       r.submit(input)
       expect(r.replaced, JSON.stringify(input)).toEqual([])
-      expect(r.el['error'].textContent, JSON.stringify(input)).toMatch(/not a DSH login link/)
+      expect(r.el['error'].textContent, JSON.stringify(input)).toMatch(/not a ohmydsh login link/)
     }
     const r = await boot('', { probe: 401 })
     r.submit(`x=${TOKEN}`); expect(r.replaced).toEqual([])
@@ -135,5 +135,16 @@ describe('/app.js share hand-over', () => {
     expect(bad.fetched.some((f) => f.url === '/share')).toBe(false); expect(bad.replaced).toEqual(['/'])
     const err = await boot('?shareError=1')
     expect(err.replaced).toEqual([]); expect(err.el['title'].textContent).toMatch(/Could not share/)
+  })
+})
+
+describe('product name is configurable', () => {
+  const stock = { name: 'DeepSeek Harness', shortName: 'DSH' }
+  it('the pages and scripts take the name from the product, escaped', () => {
+    const html = appPageHtml(stock)
+    expect(html).toContain('<title>DeepSeek Harness</title>'); expect(html).toContain('Paste your DeepSeek Harness login link')
+    expect(appScriptSource(stock)).toContain('var PRODUCT = "DeepSeek Harness"')
+    expect(appPageHtml({ name: '<b>x</b>', shortName: 'x' })).not.toContain('<b>x</b>')
+    expect(appScriptSource({ name: '</script>', shortName: 'x' })).not.toContain('</script>')
   })
 })

@@ -1,7 +1,10 @@
+import { DEFAULT_PRODUCT } from './product.ts'
+
 /** Plugin configuration (`cordis.patch.yml` -> `config:`). Every field is optional; invalid values fall back to the default. */
 export interface PwaConfig {
-  /** Application name shown on the install prompt and launcher. */
+  /** Product name shown on the install prompt, the app pages, offline page and notifications. Default ohmydsh; set `DeepSeek Harness` on stock DSH. */
   readonly name: string
+  /** Launcher label (max 12 characters). Default ohmydsh; `DSH` on stock DSH. */
   readonly shortName: string
   /** Where the installed app opens. Default `/app`: a launch from the home screen is cross-site, so the page there signs in first, then goes to the normal DSH UI. `/` is accepted but loses the sign-in on Android. */
   readonly startUrl: string
@@ -58,8 +61,8 @@ export function readConfig(raw: unknown): PwaConfig {
   const start = requested === '/m' || requested.startsWith('/m/') ? '/app' : requested
   const maxMiB = typeof share['maxMiB'] === 'number' && Number.isFinite(share['maxMiB']) ? Math.min(Math.max(share['maxMiB'], 1), 200) : 25
   return {
-    name: text(cfg['name'], 'DeepSeek Harness'),
-    shortName: text(cfg['shortName'], 'DSH', 12),
+    name: text(cfg['name'], DEFAULT_PRODUCT.name),
+    shortName: text(cfg['shortName'], DEFAULT_PRODUCT.shortName, 12),
     startUrl: start,
     themeColor: typeof cfg['themeColor'] === 'string' && COLOR.test(cfg['themeColor']) ? cfg['themeColor'] : '#ffffff', // artwork:ok
     backgroundColor: typeof cfg['backgroundColor'] === 'string' && COLOR.test(cfg['backgroundColor']) ? cfg['backgroundColor'] : '#ffffff', // artwork:ok

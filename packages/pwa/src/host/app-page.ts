@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { DEFAULT_PRODUCT, html, js, type Product } from './product.ts'
 
 /**
  * The `/app` launch page and its script (`/app.js`).
@@ -31,7 +32,7 @@ const STYLE_HASH = `sha256-${createHash('sha256').update(STYLE).digest('base64')
 
 export const APP_CSP = `default-src 'none'; script-src 'self'; style-src '${STYLE_HASH}'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
 
-export function appPageHtml(): string {
+export function appPageHtml(product: Product = DEFAULT_PRODUCT): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -39,20 +40,20 @@ export function appPageHtml(): string {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="referrer" content="no-referrer">
-<title>DSH</title>
+<title>${html(product.name)}</title>
 <style>${STYLE}</style>
 </head>
 <body>
 <main>
-<h1 id="title">Opening DSH</h1>
+<h1 id="title">Opening ${html(product.name)}</h1>
 <p id="message" class="hint">One moment.</p>
 <form id="login" hidden autocomplete="off">
-<label for="link">Paste your DSH login link</label>
+<label for="link">Paste your ${html(product.name)} login link</label>
 <input id="link" name="link" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required>
 <p id="error" class="error" role="alert"></p>
 <button id="submit" type="submit">Sign in</button>
 </form>
-<p><a id="open" href="/" hidden>Open DSH</a></p>
+<p><a id="open" href="/" hidden>Open ${html(product.name)}</a></p>
 </main>
 <script src="/app.js"></script>
 </body>
@@ -61,9 +62,10 @@ export function appPageHtml(): string {
 }
 
 /** Plain browser script (no inline script in the page; served from `/app.js`). */
-export function appScriptSource(): string {
+export function appScriptSource(product: Product = DEFAULT_PRODUCT): string {
   return `'use strict'
 ;(function () {
+  var PRODUCT = ${js(product.name)}
   var TOKEN = /^[A-Za-z0-9_-]{16,256}$/
   var ID = /^[A-Za-z0-9_-]{1,128}$/
   var LOCAL = /^[a-f0-9]{24}$/
@@ -99,13 +101,13 @@ export function appScriptSource(): string {
   }
 
   function showForm() {
-    show('Sign in to DSH', 'Get the link from the computer running DSH.')
+    show('Sign in to ' + PRODUCT, 'Get the link from the computer running ' + PRODUCT + '.')
     var form = $('login')
     form.hidden = false
     form.addEventListener('submit', function (event) {
       event.preventDefault()
       var token = parseToken($('link').value)
-      if (token === '') { $('error').textContent = 'That is not a DSH login link. Copy the whole link again.'; return }
+      if (token === '') { $('error').textContent = 'That is not a ' + PRODUCT + ' login link. Copy the whole link again.'; return }
       $('error').textContent = ''
       signIn(token)
     })
@@ -167,19 +169,19 @@ export function appScriptSource(): string {
 
   function proceed() {
     var local = params.get('shareLocal')
-    if (params.get('shareError') !== null) { showProblem('Could not share to DSH', 'The shared content was empty or too large. Try sharing again.'); return }
+    if (params.get('shareError') !== null) { showProblem('Could not share to ' + PRODUCT, 'The shared content was empty or too large. Try sharing again.'); return }
     if (local !== null && LOCAL.test(local)) {
-      show('Opening DSH', 'Delivering your share.')
+      show('Opening ' + PRODUCT, 'Delivering your share.')
       deliverShare(local).then(function (id) {
         location.replace(id === '' ? '/' : '/?share=' + id)
-      }, function () { showProblem('Could not share to DSH', 'DSH did not accept the shared content. Try sharing again.') })
+      }, function () { showProblem('Could not share to ' + PRODUCT, PRODUCT + ' did not accept the shared content. Try sharing again.') })
       return
     }
     location.replace('/' + forwarded())
   }
 
   probe().then(function (signedIn) { if (signedIn) proceed(); else showForm() }, function () {
-    showProblem('Cannot reach DSH', 'Check that the computer running DSH is on and reachable, then open the app again.')
+    showProblem('Cannot reach ' + PRODUCT, 'Check that the computer running ' + PRODUCT + ' is on and reachable, then open the app again.')
   })
 })()
 `

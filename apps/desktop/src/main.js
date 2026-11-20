@@ -27,6 +27,8 @@ let nodeRuntime
 if (HEADLESS_TEST) { app.disableHardwareAcceleration(); app.commandLine.appendSwitch('no-sandbox') }
 if (process.env.OHMYDSH_USER_DATA) app.setPath('userData', path.resolve(process.env.OHMYDSH_USER_DATA))
 app.setName('ohmydsh')
+// About box (macOS app menu, Linux): ohmydsh is the product; DeepSeek Harness is named once, as what it is built on.
+app.setAboutPanelOptions({ applicationName: 'ohmydsh', applicationVersion: pkg.version, version: pkg.version, copyright: 'Built on DeepSeek Harness', website: 'https://github.com/T3-Venture-Labs-Limited/ohmydsh' })
 
 let paths, settings, logger, supervisor, win, tray, appUrl, quitting = false, updater
 let provisioning = false
@@ -133,7 +135,7 @@ async function boot() {
   } catch (e) {
     provisioning = false
     const detail = e instanceof ProvisionError ? e.message : String(e?.stack ?? e)
-    fail('Could not set up DeepSeek Harness', 'Check your internet connection and try again. The first start downloads about 700 MB.', detail.split('\n').slice(-12).join('\n'))
+    fail('Could not set up ohmydsh', 'Check your internet connection and try again. The first start downloads about 700 MB.', detail.split('\n').slice(-12).join('\n'))
     return
   }
   provisioning = false
@@ -141,7 +143,7 @@ async function boot() {
 }
 
 function startDsh() {
-  progress({ step: 'Starting DeepSeek Harness', fraction: 1 })
+  progress({ step: 'Starting ohmydsh', fraction: 1 })
   const env = childEnv({ bin: paths.bin, pnpmDir: path.dirname(paths.pnpmExe), dshHome: paths.dshHome, electronAsNode: nodeRuntime.electronAsNode })
   supervisor = new Supervisor({
     electron: nodeRuntime.exe, dshBin: paths.dshBin, profile: PROFILE, port: settings.port, host: settings.host, trustedHosts: settings.trustedHosts, env, log,
@@ -156,9 +158,9 @@ function startDsh() {
   })
   supervisor.on('exit', ({ code, willRestart }) => {
     log(`DSH exited (${code}); ${willRestart ? 'restarting' : 'not restarting'}`)
-    if (willRestart) { appUrl = undefined; signedIn = false; showLoading(); progress({ step: 'DeepSeek Harness stopped, restarting…' }) }
+    if (willRestart) { appUrl = undefined; signedIn = false; showLoading(); progress({ step: 'ohmydsh stopped, restarting…' }) }
   })
-  supervisor.on('failed', (message) => fail('DeepSeek Harness keeps stopping', message, tailLog()))
+  supervisor.on('failed', (message) => fail('ohmydsh keeps stopping', message, tailLog()))
   supervisor.start()
 }
 
@@ -276,7 +278,7 @@ function updateTray() {
     { label: 'Open ohmydsh', click: () => (appUrl ? openApp() : ensureWindow().show()) },
     { label: 'Pair phone…', enabled: appUrl !== undefined, click: pairPhone },
     { type: 'separator' },
-    { label: 'Restart DeepSeek Harness', enabled: supervisor !== undefined, click: () => { appUrl = undefined; signedIn = false; showLoading(); progress({ step: 'Restarting DeepSeek Harness…' }); supervisor.restart() } },
+    { label: 'Restart ohmydsh', enabled: supervisor !== undefined, click: () => { appUrl = undefined; signedIn = false; showLoading(); progress({ step: 'Restarting ohmydsh…' }); supervisor.restart() } },
     { label: 'Open the log', click: () => shell.showItemInFolder(logger.file) },
     { label: 'Check for updates…', click: checkForUpdates },
     { label: `Version ${pkg.version}`, enabled: false },

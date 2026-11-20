@@ -26,7 +26,7 @@ function cookieOf(headers: IncomingMessage['headers'] | Headers): string | undef
  * Wrap `connection.admit` so a revoked device cookie is refused with 401. The original runs first, so its Host/Origin
  * rejection still wins. Returns the disposer that restores the original.
  */
-export function installAdmitGate(connection: GateTarget, devices: DeviceStore): () => void {
+export function installAdmitGate(connection: GateTarget, devices: DeviceStore, productName = 'ohmydsh'): () => void {
   const original = connection.admit
   const originalIndex = connection.authorizeIndex
   if (typeof original !== 'function') return () => {}
@@ -42,7 +42,7 @@ export function installAdmitGate(connection: GateTarget, devices: DeviceStore): 
     wrappedIndex = function (this: unknown, request, response) {
       if (devices.isRevokedCookie(cookieOf(request.headers))) {
         response.writeHead(401, { 'cache-control': 'no-store', 'content-type': 'text/plain; charset=utf-8' })
-        response.end('This device was removed in DSH. Pair it again.\n')
+        response.end(`This device was removed in ${productName}. Pair it again.\n`)
         return false
       }
       return originalIndex.call(this ?? connection, request, response)

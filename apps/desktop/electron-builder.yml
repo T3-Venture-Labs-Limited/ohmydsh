@@ -42,7 +42,7 @@ linux:
   desktop:
     entry:
       Name: ohmydsh
-      Comment: DeepSeek Harness, batteries included
+      Comment: ohmydsh, DeepSeek Harness with batteries included
       StartupWMClass: ohmydsh
       Categories: Development;
 deb:

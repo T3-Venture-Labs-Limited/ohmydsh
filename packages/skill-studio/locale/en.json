@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Skill studio",
-    "description": "See, edit, create and disable every agent skill in one page. Disabling hides a skill in DSH only; skill files are never touched.",
+    "description": "See, edit, create and disable every agent skill in one page. Disabling hides a skill in ohmydsh only; skill files are never touched.",
     "detail": "docs/DETAIL.md"
   }
 }

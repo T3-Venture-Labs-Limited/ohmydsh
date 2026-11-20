@@ -1,17 +1,20 @@
 // English dictionary: the typed source of truth for every UI string of the settings page.
 import { defineLocale } from '../kit/locale.ts'
 
+/** Product name in the settings copy. The host half takes it from the plugin config (`name`); the dictionary is static, so on stock DeepSeek Harness change this one constant. */
+const PRODUCT = 'ohmydsh'
+
 export const locale = defineLocale('dsh-pwa', {
   nav: 'Phone app',
   pageTitle: 'Phone app',
-  pageDescription: 'Install DSH as an app and get notifications on your phone. Everything here runs on your own computer.',
+  pageDescription: `Install ${PRODUCT} as an app and get notifications on your phone. Everything here runs on your own computer.`,
   sectionInstall: 'Install',
-  installTitle: 'Install DSH',
-  installDescription: 'Adds DSH to your home screen or app launcher. It opens the normal DSH UI full-screen and keeps you signed in. Works over HTTPS or on localhost.',
+  installTitle: `Install ${PRODUCT}`,
+  installDescription: `Adds ${PRODUCT} to your home screen or app launcher. It opens the normal ${PRODUCT} UI full-screen and keeps you signed in. Works over HTTPS or on localhost.`,
   installButton: 'Install',
   installUnavailable: 'Not available here',
   installDone: 'Installed',
-  insecure: 'This page is not a secure context (plain http over the network). Open DSH at its HTTPS address (for example Tailscale HTTPS) to install it and to get notifications.',
+  insecure: `This page is not a secure context (plain http over the network). Open ${PRODUCT} at its HTTPS address (for example Tailscale HTTPS) to install it and to get notifications.`,
   swTitle: 'Offline shell',
   swDescription: 'A service worker caches public, versioned files so the app opens faster. It never caches /api or anything signed-in.',
   swActive: 'Active',
@@ -29,17 +32,17 @@ export const locale = defineLocale('dsh-pwa', {
   notifyDisable: 'Disable',
   notifyBusy: 'Working…',
   notifyTestTitle: 'Test notification',
-  notifyTestDescription: 'Sends one notification to this device from your DSH host.',
+  notifyTestDescription: `Sends one notification to this device from your computer running ${PRODUCT}.`,
   notifyTestButton: 'Send test notification',
   notifyTestSent: 'Sent. It should appear in a moment.',
   notifyErrorTitle: 'Notification problem',
   notifyError: '{message}',
   sectionPair: 'Pair a phone',
-  pairTitle: 'Link the ohmydsh Android app',
-  pairDescription: 'Make a code, then scan it with the ohmydsh app (Link a computer). The code works once and expires in 10 minutes. A paired phone can do everything you can do here, so only pair your own devices.',
+  pairTitle: `Link the ${PRODUCT} Android app`,
+  pairDescription: `Make a code, then scan it with the ${PRODUCT} app (Link a computer). The code works once and expires in 10 minutes. A paired phone can do everything you can do here, so only pair your own devices.`,
   pairMake: 'Pair a phone',
   pairNew: 'New code',
-  pairScan: 'Scan this with the ohmydsh app',
+  pairScan: `Scan this with the ${PRODUCT} app`,
   pairValid: 'Valid for {time}, one use.',
   pairAddress: 'The phone will connect to {origin}',
   pairCopy: 'Copy link',
@@ -59,7 +62,7 @@ export const locale = defineLocale('dsh-pwa', {
   pairDaysAgo: '{n} d ago',
   pairRemove: 'Remove',
   pairRemoveLabel: 'Remove {name}',
-  shareTitle: 'Share to DSH',
-  shareDescription: 'After installing on Android, share text, links or files to DSH from any app. They open as a draft in a new session; nothing is sent until you press Send.',
+  shareTitle: `Share to ${PRODUCT}`,
+  shareDescription: `After installing on Android, share text, links or files to ${PRODUCT} from any app. They open as a draft in a new session; nothing is sent until you press Send.`,
 })
 export type T = ReturnType<typeof locale.bind>

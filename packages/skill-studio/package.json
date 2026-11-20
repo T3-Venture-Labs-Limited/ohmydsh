@@ -1,6 +1,6 @@
 {
   "name": "@t3labs/ohmydsh-skill-studio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Skills manager for DeepSeek Harness: see, edit, create and disable skills in DSH only.",
   "type": "module",
   "exports": {

@@ -20,7 +20,7 @@ export const locale = defineLocale('dsh-composio', {
   healthBad: 'The Composio CLI is not usable: {error}',
   listenerLive: 'Listening for trigger events',
   listenerConnecting: 'Connecting to the event stream…',
-  listenerStandby: 'Another DSH process on this home holds the listener',
+  listenerStandby: 'Another ohmydsh process on this home holds the listener',
   listenerError: 'Event stream error: {error}',
   listenerOff: 'Event stream is off',
   pauseAll: 'Pause all triggers',

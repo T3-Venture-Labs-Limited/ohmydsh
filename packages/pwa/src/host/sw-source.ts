@@ -1,3 +1,5 @@
+import { DEFAULT_PRODUCT, js, type Product } from './product.ts'
+
 /**
  * Source of `/sw.js`. Kept as a string (not bundled) because it runs in the ServiceWorker global scope, and tested by
  * evaluating it against a fake scope.
@@ -16,7 +18,8 @@
  *    (never `/` directly: that launch is cross-site and would not carry the Strict sign-in cookie).
  *  - `POST /share` is answered by the worker (see the share target section), which stashes it and redirects to /app.
  */
-export function serviceWorkerSource(version: string, options: { maxShareBytes?: number } = {}): string {
+export function serviceWorkerSource(version: string, options: { maxShareBytes?: number; product?: Product } = {}): string {
+  const product = options.product ?? DEFAULT_PRODUCT
   const maxShareBytes = Math.max(1, Math.floor(options.maxShareBytes ?? 25 * 1024 * 1024))
   return `'use strict'
 // dsh-pwa service worker ${JSON.stringify(version).slice(1, -1)}
@@ -27,9 +30,10 @@ const SHARE_CACHE = 'dsh-share'
 const SHARE_TTL_MS = 10 * 60 * 1000
 const MAX_SHARE_BYTES = ${maxShareBytes}
 
+const PRODUCT = ${js(product.name)}
 const OFFLINE_HTML = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title>'
   + '<body style="font:16px system-ui;margin:0;display:grid;place-items:center;min-height:100vh;text-align:center;padding:24px">'
-  + '<div><h1 style="font-size:20px">You are offline</h1><p>DSH needs a connection to your computer. This page will work again when the connection returns.</p>'
+  + '<div><h1 style="font-size:20px">You are offline</h1><p>' + PRODUCT.replace(/[&<>]/g, '') + ' needs a connection to your computer. This page will work again when the connection returns.</p>'
   + '<button onclick="location.reload()" style="font:inherit;padding:8px 16px">Retry</button></div></body>'
 
 /** Public, content-addressed paths only. Keep in sync with the README. */
@@ -87,10 +91,10 @@ function clean(value, max) { return typeof value === 'string' ? value.slice(0, m
 function parsePayload(data) {
   let raw
   try { raw = data ? data.json() : null } catch (e) { raw = null }
-  if (!raw || typeof raw !== 'object') return { kind: 'reply', title: 'DSH', body: '', sessionId: '' }
+  if (!raw || typeof raw !== 'object') return { kind: 'reply', title: PRODUCT, body: '', sessionId: '' }
   return {
     kind: KINDS.includes(raw.kind) ? raw.kind : 'reply',
-    title: clean(raw.title, 120) || 'DSH',
+    title: clean(raw.title, 120) || PRODUCT,
     body: clean(raw.body, 240),
     sessionId: /^[A-Za-z0-9_-]{1,80}$/.test(clean(raw.sessionId, 80)) ? raw.sessionId : '',
   }

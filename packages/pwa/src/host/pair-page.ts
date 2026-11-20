@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { DEFAULT_PRODUCT, html, js, type Product } from './product.ts'
 
 /**
  * `/app/pair#<code>`: the plain https fallback of the pairing QR. The code lives in the URL fragment, which browsers never
@@ -20,7 +21,7 @@ const STYLE_HASH = `sha256-${createHash('sha256').update(STYLE).digest('base64')
 
 export const PAIR_CSP = `default-src 'none'; script-src 'self'; style-src '${STYLE_HASH}'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
 
-export function pairPageHtml(): string {
+export function pairPageHtml(product: Product = DEFAULT_PRODUCT): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -28,14 +29,14 @@ export function pairPageHtml(): string {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="referrer" content="no-referrer">
-<title>Pair with DSH</title>
+<title>Pair with ${html(product.name)}</title>
 <style>${STYLE}</style>
 </head>
 <body>
 <main>
 <h1 id="title">Pair this device</h1>
 <p id="message" class="hint">Checking the link.</p>
-<a id="open-app" class="button" href="#" hidden>Open in the ohmydsh app</a>
+<a id="open-app" class="button" href="#" hidden>Open in the ${html(product.name)} app</a>
 <button id="sign-in" type="button" hidden>Sign in in this browser</button>
 <p id="error" class="error" role="alert"></p>
 </main>
@@ -45,9 +46,10 @@ export function pairPageHtml(): string {
 `
 }
 
-export function pairScriptSource(): string {
+export function pairScriptSource(product: Product = DEFAULT_PRODUCT): string {
   return `'use strict'
 ;(function () {
+  var PRODUCT = ${js(product.name)}
   var CODE = /^[A-Za-z0-9_-]{16,64}$/
   var $ = function (id) { return document.getElementById(id) }
   var code = decodeURIComponent(location.hash.replace(/^#/, ''))
@@ -55,11 +57,11 @@ export function pairScriptSource(): string {
   try { history.replaceState(null, '', location.pathname) } catch (e) { /* ignore */ }
   if (!CODE.test(code)) {
     $('title').textContent = 'This link is not valid'
-    $('message').textContent = 'Open DSH on your computer, go to Settings > Phone app and make a new pairing link.'
+    $('message').textContent = 'Open ' + PRODUCT + ' on your computer, go to Settings > Phone app and make a new pairing link.'
     return
   }
-  $('title').textContent = 'Pair this device with DSH'
-  $('message').textContent = 'Use the ohmydsh app if you have it, or sign in right here.'
+  $('title').textContent = 'Pair this device with ' + PRODUCT
+  $('message').textContent = 'Use the ' + PRODUCT + ' app if you have it, or sign in right here.'
   var app = $('open-app')
   app.href = 'ohmydsh://pair?u=' + encodeURIComponent(location.origin) + '&c=' + encodeURIComponent(code)
   app.hidden = false

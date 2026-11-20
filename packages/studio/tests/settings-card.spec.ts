@@ -364,7 +364,7 @@ describe('settings card host state', () => {
   })
   it('explains remote memory mode instead of telling users to edit a profile file', () => {
     const form = formHarness('en', {}, 'openai-compat', { writable: false, status: 'unavailable', mode: 'memory' })
-    expect(form.cardText()).toContain('This connection cannot save settings to the host. Edit them from the local DSH page.')
+    expect(form.cardText()).toContain('This connection cannot save settings to the host. Edit them from the local ohmydsh page.')
     expect(form.cardText()).not.toContain('Settings come from a profile file and are read-only; edit that source to change them.')
     expect(form.disabled('Save')).toBe(true)
   })

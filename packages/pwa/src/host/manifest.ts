@@ -11,7 +11,7 @@ export function buildManifest(config: PwaConfig): Record<string, unknown> {
     id: '/',
     name: config.name,
     short_name: config.shortName,
-    description: 'DeepSeek Harness as an app, with notifications when a session needs you or a reply is ready.',
+    description: `${config.name} as an app, with notifications when a session needs you or a reply is ready.`,
     start_url: config.startUrl,
     scope: '/',
     display: 'standalone',

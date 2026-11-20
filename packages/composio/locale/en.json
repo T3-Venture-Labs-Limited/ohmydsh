@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Composio",
-    "description": "Use Composio apps from DSH: four agent tools over the Composio CLI (search, execute, link, status), a Composio page for connections, a tool browser and trigger routes, and recipes that turn trigger events into a new session or a wake of an existing one. Trigger runs are restricted: actions outside a recipe's allowlist pause for your approval. Uses your Composio CLI login.",
+    "description": "Use Composio apps from ohmydsh: four agent tools over the Composio CLI (search, execute, link, status), a Composio page for connections, a tool browser and trigger routes, and recipes that turn trigger events into a new session or a wake of an existing one. Trigger runs are restricted: actions outside a recipe's allowlist pause for your approval. Uses your Composio CLI login.",
     "detail": "docs/DETAIL.md"
   }
 }

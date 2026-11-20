@@ -10,10 +10,11 @@
     provider: grok-sub
     showProviderPill: true
 
-# Phone app: the normal DSH UI as an installable app; the share sheet pre-fills a draft and never sends by itself;
+# Phone app: the ohmydsh UI as an installable app; the share sheet pre-fills a draft and never sends by itself;
 # Web Push goes only to devices that subscribed in Settings > Phone app.
 - id: dsh-pwa
   name: '@t3labs/ohmydsh-pwa'
+  # name/shortName equal the plugin defaults; they stay listed because a same-id row replaces the whole config.
   config:
     name: ohmydsh
     shortName: ohmydsh

@@ -1,6 +1,6 @@
 # @t3labs/ohmydsh-pwa
 
-Installs the **normal DeepSeek Harness UI** as an app and sends **Web Push notifications** to phones that opt in. English-only UI, no phone-specific page: the installed app is the same interface you use in the browser, opened full-screen and signed in with the same HttpOnly cookie.
+Installs the **normal ohmydsh UI** (it is a DeepSeek Harness plugin; on stock DSH set `name`/`shortName` below) as an app and sends **Web Push notifications** to phones that opt in. English-only UI, no phone-specific page: the installed app is the same interface you use in the browser, opened full-screen and signed in with the same HttpOnly cookie.
 
 ![Settings > Phone app](docs/screenshots/settings.png)
 
@@ -60,7 +60,7 @@ The push payload is `{ v, kind, title, body, sessionId }` and nothing else: no t
 
 **Opening a session from a notification.** The click handler focuses an existing app window and posts it `{ type: 'dsh-pwa:open-session', sessionId }`; the client half calls `uiWorkspace.openSession(id)`, the host's own navigation service (the same call `dsh-notify-me` uses). With no window open it opens `/app?openSession=<id>`; the client reads that on start, waits for the session list, opens the session and removes the parameter from the address bar.
 
-**Share to DSH.** The share sheet POSTs to `/share` as a cross-site navigation, so the browser withholds the `SameSite=Strict` sign-in cookie. The service worker therefore takes that POST, keeps title, text, url and files in Cache Storage (`dsh-share`, random id, 10 min TTL, cleared once delivered) and redirects to `/app?shareLocal=<id>`; `/app` posts it to `/share` itself (a same-origin fetch, so the cookie is sent) and goes on to `/?share=<id>`. The client fetches it and calls `uiWorkspace.startSession(undefined, { prompt, whenDraftExists: 'append' })`, the same entry the host's New Session flow uses, so the shared text lands in the normal composer as a draft. It is never sent. Shared files are saved under `<share.cwd>/.dsh-shares/<id>/` (or next to the record) and their paths are listed in the draft.
+**Share to ohmydsh.** The share sheet POSTs to `/share` as a cross-site navigation, so the browser withholds the `SameSite=Strict` sign-in cookie. The service worker therefore takes that POST, keeps title, text, url and files in Cache Storage (`dsh-share`, random id, 10 min TTL, cleared once delivered) and redirects to `/app?shareLocal=<id>`; `/app` posts it to `/share` itself (a same-origin fetch, so the cookie is sent) and goes on to `/?share=<id>`. The client fetches it and calls `uiWorkspace.startSession(undefined, { prompt, whenDraftExists: 'append' })`, the same entry the host's New Session flow uses, so the shared text lands in the normal composer as a draft. It is never sent. Shared files are saved under `<share.cwd>/.dsh-shares/<id>/` (or next to the record) and their paths are listed in the draft.
 
 ### Keys and storage
 
@@ -81,8 +81,8 @@ It answers only `GET` requests for public, content-addressed files: hashed `/ass
 - id: dsh-pwa
   name: '@t3labs/ohmydsh-pwa'
   config:
-    name: DeepSeek Harness
-    shortName: DSH
+    name: ohmydsh             # shown in the app pages, offline page and notifications; DeepSeek Harness on stock DSH
+    shortName: ohmydsh        # launcher label (max 12 chars); DSH on stock DSH
     startUrl: /app            # launch page: signs in, then opens the normal UI
     themeColor: '#ffffff'
     backgroundColor: '#ffffff'

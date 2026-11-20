@@ -1,6 +1,6 @@
 {
   "name": "@t3labs/ohmydsh-triggers",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Triggers: DSH plugin",
   "license": "MIT",
   "type": "module",

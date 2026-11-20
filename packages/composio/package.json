@@ -1,6 +1,6 @@
 {
   "name": "@t3labs/ohmydsh-composio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Composio for DSH: agent tools over the Composio CLI, connections and tool browser, trigger listener with recipes that start or wake sessions.",
   "license": "MIT",
   "author": "Superdao (https://github.com/deestax)",

@@ -34,13 +34,14 @@ import { APP_CSP, appPageHtml, appScriptSource } from './app-page.ts'
 import { CodeBook, DeviceStore, FailureLimiter } from './pairing.ts'
 import { registerPairing } from './pair-routes.ts'
 import { PAIR_CSP, pairPageHtml, pairScriptSource } from './pair-page.ts'
+import type { Product } from './product.ts'
 import { chooseOrigin } from './origin.ts'
 import { installAdmitGate, trackDeviceSockets, type UpgradeServer } from './revocation.ts'
 
 export const name = '@t3labs/ohmydsh-pwa'
 export const inject = ['webServer', 'connection']
 
-const VERSION = '0.3.1'
+const VERSION = '0.3.2'
 const SHARE_TTL_MS = 7 * 24 * 3600 * 1000
 const MAX_JSON_BYTES = 8 * 1024
 
@@ -109,6 +110,7 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 
 export function apply(ctx: Ctx, rawConfig?: unknown): void {
   const config: PwaConfig = readConfig(rawConfig)
+  const product: Product = { name: config.name, shortName: config.shortName }
   const log = ctx.logger('dsh-pwa')
   const dir = dataDir()
   const sharesDir = join(dir, 'shares')
@@ -126,7 +128,7 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
   const rejected = (req: IncomingMessage, res: ServerResponse): boolean => {
     const status = ctx.connection.requestRejection({ headers: req.headers })
     if (status === undefined) return false
-    send(res, status, status === 401 ? 'Sign in to DSH first: open the DSH link with its token once on this device.' : 'Forbidden', { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+    send(res, status, status === 401 ? `Sign in to ${product.name} first: open its link with the token once on this device.` : 'Forbidden', { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
     return true
   }
 
@@ -140,7 +142,7 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
     ctx.effect(() => ctx.webServer.register(r), `dsh-pwa: ${r.kind} ${r.path}`)
   }
 
-  const swSource = config.serviceWorker ? serviceWorkerSource(VERSION, { maxShareBytes: config.share.maxMiB * 1024 * 1024 }) : killSwitchSource()
+  const swSource = config.serviceWorker ? serviceWorkerSource(VERSION, { maxShareBytes: config.share.maxMiB * 1024 * 1024, product }) : killSwitchSource()
 
   route({
     kind: 'exact',
@@ -164,8 +166,8 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
       send(res, 200, req.method === 'HEAD' ? '' : body(), { 'content-type': type, 'cache-control': 'no-store', ...extra })
     },
   })
-  const appHtml = appPageHtml()
-  const appJs = appScriptSource()
+  const appHtml = appPageHtml(product)
+  const appJs = appScriptSource(product)
   appAsset('/app', 'text/html; charset=utf-8', () => appHtml, { 'content-security-policy': APP_CSP, 'referrer-policy': 'no-referrer' })
   appAsset('/app.js', 'text/javascript; charset=utf-8', () => appJs)
 
@@ -230,7 +232,7 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
       untrusted: (req) => ctx.connection.requestRejection({ headers: req.headers }) === 403,
       sameOrigin,
       mint: async (req) => {
-        if (conn.authorizeIndex === undefined || conn.authenticatedUrl === undefined) throw new Error('this DSH version cannot sign a device in')
+        if (conn.authorizeIndex === undefined || conn.authenticatedUrl === undefined) throw new Error('this DeepSeek Harness version cannot sign a device in')
         // The launch token is read and spent inside this process: it is never written to a response, a log or the page.
         const token = new URL(conn.authenticatedUrl('http://dsh.invalid/')).searchParams.get('token') ?? ''
         const out: { status: number; cookies: string[] } = { status: 0, cookies: [] }
@@ -238,7 +240,7 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
           { method: 'GET', url: `/?token=${encodeURIComponent(token)}`, headers: { host: req.headers['host'] } },
           { writeHead: (status, headers) => { out.status = status; const c = headers?.['set-cookie']; if (typeof c === 'string') out.cookies.push(c) }, end: () => {} },
         )
-        if (out.status !== 303 || out.cookies.length === 0) throw new Error('DSH did not sign this address in. Open the pairing link at an address DSH trusts (see --trusted-host).')
+        if (out.status !== 303 || out.cookies.length === 0) throw new Error('DeepSeek Harness did not sign this address in. Open the pairing link at an address it trusts (see --trusted-host).')
         return out.cookies
       },
       chooseOrigin: (req) => chooseOrigin({
@@ -246,13 +248,13 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
         requestHost: typeof req.headers['host'] === 'string' ? req.headers['host'] : undefined,
       }),
       log,
-      pageHtml: pairPageHtml(),
-      pageScript: pairScriptSource(),
+      pageHtml: pairPageHtml(product),
+      pageScript: pairScriptSource(product),
       pageCsp: PAIR_CSP,
     })
     // Core's sign-in cookie is stateless, so "Remove" is enforced here: every request whose cookie was minted for a removed
     // device is refused by core's own admission (all plugin routes, /api, the WebSocket upgrade) and its open sockets close.
-    ctx.effect(() => installAdmitGate(ctx.connection as never, devices), 'dsh-pwa: refuse removed devices')
+    ctx.effect(() => installAdmitGate(ctx.connection as never, devices, product.name), 'dsh-pwa: refuse removed devices')
     ctx.effect(() => {
       const tracker = trackDeviceSockets(ctx.webServer.server, devices)
       devices.onRemoved = (id) => { tracker.closeDevice(id) }
@@ -331,7 +333,7 @@ export function apply(ctx: Ctx, rawConfig?: unknown): void {
         const subscription = typeof endpoint === 'string' ? await store.get(endpoint) : undefined
         if (subscription === undefined) { sendJson(res, 404, { ok: false, error: 'this device is not subscribed' }); return }
         try {
-          const result = await (await pusher()).sendTo(subscription, { v: 1, kind: 'test', title: 'DSH notifications work', body: 'This is a test notification from your DSH host.', sessionId: '' })
+          const result = await (await pusher()).sendTo(subscription, { v: 1, kind: 'test', title: `${product.name} notifications work`, body: `This is a test notification from ${product.name} on your computer.`, sessionId: '' })
           sendJson(res, result === 'sent' ? 200 : 502, { ok: result === 'sent', result })
         } catch (error) { unavailable(res, error) }
       },

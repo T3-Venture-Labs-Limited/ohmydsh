@@ -98,12 +98,12 @@ async function provision({ paths, electron, electronAsNode = true, pnpmVersion, 
 
   if (todo.runtime) {
     await unpackNpm(paths, env, log)
-    progress({ step: 'Installing DeepSeek Harness', detail: `version ${wanted.dsh}`, fraction: 0.05 })
+    progress({ step: 'Setting up ohmydsh', detail: `installing DeepSeek Harness ${wanted.dsh}`, fraction: 0.05 })
     fs.writeFileSync(path.join(paths.runtime, 'package.json'), `${JSON.stringify({ name: 'ohmydsh-runtime', private: true, version: '0.0.0', dependencies: {} }, null, 2)}\n`)
     const pkgs = [`@deepseek-ai/dsh@${wanted.dsh}`, `pnpm@${wanted.pnpm}`]
     await run(electron, [paths.npmCli, 'install', ...pkgs, '--save-exact', '--no-audit', '--no-fund', '--loglevel=error', '--foreground-scripts'], {
       env: { ...env, npm_config_cache: path.join(paths.runtime, 'npm-cache') }, cwd: paths.runtime, log,
-      onLine: (l) => progress({ step: 'Installing DeepSeek Harness', detail: l.slice(0, 120), fraction: 0.2 }),
+      onLine: (l) => progress({ step: 'Setting up ohmydsh', detail: l.slice(0, 120), fraction: 0.2 }),
     })
     if (!fs.existsSync(paths.dshBin)) throw new ProvisionError(`installed DSH but ${paths.dshBin} is missing`)
     if (!fs.existsSync(paths.pnpmExe)) throw new ProvisionError(`installed pnpm but ${paths.pnpmExe} is missing (is this platform supported?)`)

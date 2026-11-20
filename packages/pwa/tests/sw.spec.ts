@@ -161,7 +161,7 @@ describe('service worker push', () => {
   })
   it('survives a payload that is not JSON or has a hostile session id', async () => {
     const w = loadWorker()
-    expect(w.policy.parsePayload({ json: () => { throw new Error('no') } })).toMatchObject({ title: 'DSH', sessionId: '' })
+    expect(w.policy.parsePayload({ json: () => { throw new Error('no') } })).toMatchObject({ title: 'ohmydsh', sessionId: '' })
     expect(w.policy.parsePayload({ json: () => ({ ...note, sessionId: '../../x?y' }) }).sessionId).toBe('')
     await w.push(null)
     expect(w.shown).toHaveLength(1)

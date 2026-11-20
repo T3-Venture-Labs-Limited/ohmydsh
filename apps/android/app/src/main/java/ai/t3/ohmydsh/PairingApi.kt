@@ -64,11 +64,11 @@ object PairingApi {
                     val json = JSONObject(text)
                     val token = json.optString("token")
                     val id = json.optJSONObject("device")?.optString("id").orEmpty()
-                    if (token.isEmpty() || id.isEmpty()) Claim.Failed("The computer sent an unexpected answer. Is this a DSH with the ohmydsh phone app plugin?")
+                    if (token.isEmpty() || id.isEmpty()) Claim.Failed("The computer sent an unexpected answer. Is that address ohmydsh, with its phone app turned on?")
                     else Claim.Ok(Computer(id, Computers.nameFor(link.origin), link.origin, token))
                 }
-                status == 401 -> Claim.Failed("This pairing code is invalid, expired or already used. Make a new one in DSH.")
-                status == 403 -> Claim.Failed("The computer refused this address. Start DSH with --trusted-host for it, or use its Tailscale address.")
+                status == 401 -> Claim.Failed("This pairing code is invalid, expired or already used. Make a new one in ohmydsh (Settings → Phone app).")
+                status == 403 -> Claim.Failed("The computer refused this address. Start ohmydsh with --trusted-host for it, or use its Tailscale address.")
                 status == 404 -> Claim.Failed("That server does not offer phone pairing. Update the ohmydsh phone app plugin.")
                 status == 429 -> Claim.Failed("Too many attempts. Wait a few minutes and make a new code.")
                 else -> Claim.Failed(errorText(text, "Pairing failed (HTTP $status)."))
@@ -76,7 +76,7 @@ object PairingApi {
         } catch (e: java.net.UnknownHostException) {
             Claim.Failed("Cannot find that computer. Are the phone and the computer on the same Wi-Fi or Tailscale network?")
         } catch (e: java.net.SocketTimeoutException) {
-            Claim.Failed("The computer did not answer. Check that DSH is running and reachable.")
+            Claim.Failed("The computer did not answer. Check that ohmydsh is running and reachable.")
         } catch (e: javax.net.ssl.SSLException) {
             Claim.Failed("The secure connection failed: ${e.message ?: "certificate problem"}.")
         } catch (e: java.io.IOException) {
@@ -101,14 +101,14 @@ object PairingApi {
                     if (cookies.isEmpty()) Session.Unreachable("The computer did not sign this phone in.") else Session.Ok(cookies)
                 }
                 401 -> Session.Revoked
-                403 -> Session.Unreachable("The computer refused this address (HTTP 403). Is DSH started with --trusted-host for it?")
+                403 -> Session.Unreachable("The computer refused this address (HTTP 403). Is ohmydsh started with --trusted-host for it?")
                 429 -> Session.Unreachable("Too many attempts. Try again in a few minutes.")
                 else -> Session.Unreachable("The computer answered HTTP $status.")
             }
         } catch (e: java.net.UnknownHostException) {
             Session.Unreachable("Cannot find ${Computers.nameFor(computer.origin)}. Is it on, and are you on the same Wi-Fi or Tailscale network?")
         } catch (e: java.net.SocketTimeoutException) {
-            Session.Unreachable("${Computers.nameFor(computer.origin)} did not answer. Check that DSH is running.")
+            Session.Unreachable("${Computers.nameFor(computer.origin)} did not answer. Check that ohmydsh is running.")
         } catch (e: java.io.IOException) {
             Session.Unreachable("Could not reach ${Computers.nameFor(computer.origin)} (${e.message ?: "network error"}).")
         } finally {

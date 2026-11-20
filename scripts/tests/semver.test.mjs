@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { compare, isAlpha, nextPatch, satisfies } from '../lib/semver.mjs'
+import { compare, isAlpha, nextPatch, satisfies } from '../follow-lib/semver.mjs'
 
 test('prerelease tags order numerically per identifier, and a release beats its prereleases', () => {
   const order = ['0.2.2-alpha.3', '0.2.2-rc.1', '0.2.2-rc.3', '0.2.2-rc.5', '0.2.2-rc.10', '0.2.2', '0.2.10', '0.10.0', '1.0.0']

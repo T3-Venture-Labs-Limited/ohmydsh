@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { applyPins, applyReleaseNotes, bumpLine, changelogWith, externalPlugins, findCandidates, issuePackage, issueTitle, parseIssueTitle, pickVersion, splitSpec } from '../lib/follow.mjs'
+import { applyPins, applyReleaseNotes, bumpLine, changelogWith, externalPlugins, findCandidates, issuePackage, issueTitle, parseIssueTitle, pickVersion, splitSpec } from '../follow-lib/follow.mjs'
 
 const packument = (latest, versions, extra = {}) => ({ 'dist-tags': { latest, ...extra }, versions: Object.fromEntries(versions.map((v) => [v, {}])) })
 const manifest = () => ({

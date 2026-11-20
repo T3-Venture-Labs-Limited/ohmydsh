@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { applyPins, applyReleaseNotes, findCandidates, nextPatch, splitSpec } from './lib/follow.mjs'
+import { applyPins, applyReleaseNotes, findCandidates, nextPatch, splitSpec } from './follow-lib/follow.mjs'
 
 const args = process.argv.slice(2)
 const flag = (name) => { const i = args.indexOf(name); return i === -1 ? undefined : args[i + 1] }

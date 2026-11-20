@@ -14,10 +14,13 @@ export function writeLock(profileDir, lock) {
   writeFileSync(join(profileDir, LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`)
 }
 
-export function makeLock({ manifest, source, dev, packs, plugins, official, trustedHosts = [], now = new Date() }) {
+export function makeLock({ manifest, source, dev, packs, plugins, official, trustedHosts = [], dsh, now = new Date() }) {
   return {
     lockVersion: 1,
     manifest: { version: manifest.version, dsh: manifest.dsh, source },
+    // The DSH this profile was installed and checked with (differs from manifest.dsh under --no-dsh-install), and the
+    // DSH of the profile it replaced: `omd rollback` puts DSH back to match, `omd doctor` reports a mismatch.
+    dsh: { version: dsh?.version ?? manifest.dsh, previous: dsh?.previous ?? null },
     dev: Boolean(dev),
     updatedAt: now.toISOString(),
     packs: [...packs].sort(),
@@ -56,3 +59,6 @@ export function classifyDeps(pkg, lock) {
   const user = names.filter((n) => !lock?.plugins?.[n])
   return { ours, user }
 }
+
+/** The DSH version this profile's set is meant to run on. */
+export const lockedDsh = (lock) => lock?.dsh?.version ?? lock?.manifest?.dsh ?? null

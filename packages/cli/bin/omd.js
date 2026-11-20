@@ -15,8 +15,8 @@ Usage: omd [command] [options]
   omd setup            first-time install, or repair an existing install
   omd add <pack>...    add optional packs
   omd remove <pack>... remove optional packs
-  omd update           update to the newest tested set
-  omd rollback         return to the previous set (run it again to undo)
+  omd update           update to the newest tested set (and DSH itself when the set pins another one)
+  omd rollback         return to the previous set and its DSH (run it again to undo)
   omd doctor           health check: versions, plugins, logins, keys
   omd list             show installed plugins and versions
 
@@ -27,7 +27,7 @@ Options:
   --dry-run              update: show what would change
   --boot-check           also boot the staged web app briefly and look for load failures
   --force                swap the profile even if a DSH is running on it
-  --no-dsh-install       setup: do not install the pinned DSH
+  --no-dsh-install       setup/update: never install or replace DSH (the desktop app passes this; it manages its own)
   --trusted-host <a,b>   setup/update: also accept browsers on these hosts (this machine's Tailscale name is added
                          automatically; saved in the profile so it works right after a reboot)
   --profile <name>       profile to manage (default: omd)
@@ -67,7 +67,7 @@ const ctx = {
   cliDir: dirname(fileURLToPath(import.meta.url)),
   exitCode: 0,
 }
-ctx.bootCheck = (profile) => bootCheck(ctx, profile)
+ctx.bootCheck = (profile, on = ctx) => bootCheck(on, profile)
 
 try {
   if (first === 'setup') await cmd.setup(ctx)

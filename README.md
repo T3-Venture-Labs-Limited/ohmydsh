@@ -91,6 +91,7 @@ Everything below is installed and enabled by default unless marked *optional*.
 | 📱 | **Phone app** | Install DSH on your phone as an app, with push notifications for approvals, questions and finished replies, and a share target. |
 | 🖱️ | **Browser takeover** | Watch the agent's browser live and take control to sign in or solve a captcha, then hand it back. |
 | 💬 | **Review comments** | Highlight text in a doc, PDF, deck, sheet, code file or chat reply and leave a comment for the agent. |
+| 🏷️ | **Brand** | ohmydsh's logo, name, tab title and icons instead of DeepSeek Harness's, with a "Built on DeepSeek Harness" credit in Settings. |
 | 🧠 | **Skill studio** | See, edit and switch off agent skills; the agent can propose new skills for you to approve. |
 | 📓 | **Notebook** | Jupyter notebooks in the sidebar, sharing one kernel between you and the agent. |
 | ⚡ | **Triggers** | Event automations: a webhook, a new file or a Composio event opens a chat that runs a prompt. |

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "ohmydsh brand",
+    "description": "Shows ohmydsh instead of the DeepSeek Harness logo and name: sidebar mark and wordmark, new-session hero, browser tab title, favicon and installed-app icons. Keeps a clear \"Built on DeepSeek Harness\" credit in Settings and on the sidebar name.",
+    "detail": "docs/DETAIL.md"
+  }
+}

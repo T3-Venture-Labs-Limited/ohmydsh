@@ -3,6 +3,10 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
+## Unreleased
+
+- Brand (`@t3labs/ohmydsh-brand` 0.1.0, new, on by default): DSH now shows ohmydsh instead of the DeepSeek Harness logo and name: the sidebar mark and wordmark (expanded and collapsed), the new-session mark, the tab title and favicon (light and dark), the loading screen and the installed-app icons. Settings → General says "Built on DeepSeek Harness" with a link to DeepSeek's page, so it stays clear what ohmydsh is. Turn it off with `enabled: false` in the `ohmydsh-brand` row. The phone-app name defaults to ohmydsh too (`dsh-pwa` row `name`/`shortName`).
+
 ## 0.1.3
 
 - Agent browser (`@t3labs/ohmydsh-agent-browser` 0.2.8, replaces the community `dsh-agent-browser`): our build of dsh-agent-browser 0.2.7 with a small, draggable browser button. It no longer covers the send button on a phone, snaps to the left or right edge, stays above the on-screen keyboard and remembers its place per window size. The panel's session poll also stops while the tab is hidden and slows down while idle. The `browser` row id is unchanged, so settings carry over; `omd update` removes the old package. Credit and differences: `packages/agent-browser/UPSTREAM.md`; both changes are proposed upstream.

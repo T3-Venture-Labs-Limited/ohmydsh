@@ -12,6 +12,7 @@ Packages and their licences
   packages/notebook            Apache-2.0   @t3labs/ohmydsh-notebook (modified version of dsh-jupyter, with code ported from beihzb's dsh-notebook;
                                             see packages/notebook/LICENSE, NOTICE, THIRD_PARTY_NOTICES.md)
   packages/pwa                 MIT   @t3labs/ohmydsh-pwa
+  packages/brand               MIT   @t3labs/ohmydsh-brand (the ohmydsh brand artwork; uses DSH extension points only; see its NOTICE)
   packages/review-comments     MIT   @t3labs/ohmydsh-review-comments (ports patterns from dsh-sidenote, MIT, (c) gyixuan; see its NOTICE)
   packages/skill-studio        MIT   @t3labs/ohmydsh-skill-studio
   packages/triggers            MIT   @t3labs/ohmydsh-triggers

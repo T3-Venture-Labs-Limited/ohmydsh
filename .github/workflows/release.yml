@@ -1,6 +1,7 @@
 name: Release
 
-# Push a tag v<ohmydsh.json version> (for example v0.1.0) to release:
+# Push a tag v<ohmydsh.json version> (for example v0.1.0), or start this workflow by hand / from follow.yml with the
+# `tag` input (a tag that already exists; the workflow then checks that tag out and behaves exactly like the tag push):
 #   1. every check runs, the tag must equal ohmydsh.json's version;
 #   2. every public package whose version is not on npm yet is published (re-runs are safe: published versions are skipped);
 #   3. the GitHub Release is created with the notes from CHANGELOG.md;
@@ -12,13 +13,23 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release, for example v0.1.4 (must equal ohmydsh.json version in that tag)'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
+
+env:
+  # The tag being released: the pushed tag, or the dispatch input (then github.ref is the branch the run started from).
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   publish:
@@ -31,7 +42,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
+      - name: The tag must exist
+        run: git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}" >/dev/null || { echo "::error title=No such tag::${RELEASE_TAG} does not exist in this repository"; exit 1; }
       - name: Is NPM_TOKEN set?
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -50,8 +64,8 @@ jobs:
       - name: The tag must equal the manifest version
         run: |
           VERSION=$(node -p "require('./ohmydsh.json').version")
-          if [ "${GITHUB_REF_NAME}" != "v${VERSION}" ]; then
-            echo "::error title=Tag does not match ohmydsh.json::Tag is ${GITHUB_REF_NAME} but ohmydsh.json says version ${VERSION}. Delete the tag, fix the version and tag again."
+          if [ "${RELEASE_TAG}" != "v${VERSION}" ]; then
+            echo "::error title=Tag does not match ohmydsh.json::Tag is ${RELEASE_TAG} but ohmydsh.json says version ${VERSION}. Delete the tag, fix the version and tag again."
             exit 1
           fi
           echo "releasing ${VERSION}"
@@ -80,25 +94,29 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - name: Release notes from CHANGELOG.md
-        run: node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" > release-notes.md
+        run: node scripts/release-notes.mjs "${RELEASE_TAG#v}" > release-notes.md
       - name: Create or update the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" --title "ohmydsh ${GITHUB_REF_NAME#v}" --notes-file release-notes.md
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "ohmydsh ${RELEASE_TAG#v}" --notes-file release-notes.md
           else
-            gh release create "$GITHUB_REF_NAME" --title "ohmydsh ${GITHUB_REF_NAME#v}" --notes-file release-notes.md --verify-tag
+            gh release create "$RELEASE_TAG" --title "ohmydsh ${RELEASE_TAG#v}" --notes-file release-notes.md --verify-tag
           fi
 
   apps:
     name: desktop apps and Android APK
     needs: github-release
     uses: ./.github/workflows/apps.yml
+    with:
+      release_tag: ${{ inputs.tag || github.ref_name }}
     permissions:
       contents: write
     secrets: inherit

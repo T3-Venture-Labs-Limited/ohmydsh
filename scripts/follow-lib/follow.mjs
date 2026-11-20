@@ -216,3 +216,86 @@ export function issuePackage(title) {
   const m = /^follow:\s+(\S+)/.exec(title ?? '')
   return m ? m[1] : null
 }
+
+// ---- issues and per-OS results -------------------------------------------------------------------------------------
+
+export const FOLLOW_LABEL = 'follow'
+export const HOLD_LABEL = 'hold'
+
+/**
+ * Combine the follow-run results of several operating systems: a candidate is released only if it passed on all of them.
+ * @param {Array<{ os: string, result: { passed: string[], failed: object[] } }>} runs
+ */
+export function mergeResults(runs) {
+  const specs = new Set()
+  for (const { result } of runs) { for (const s of result.passed) specs.add(s); for (const f of result.failed) if (f.name !== 'combination') specs.add(f.spec) }
+  const passed = []
+  const failed = []
+  for (const spec of [...specs].sort((a, b) => (a.startsWith(`${DSH}@`) ? -1 : b.startsWith(`${DSH}@`) ? 1 : a.localeCompare(b)))) {
+    const bad = runs.map(({ os, result }) => ({ os, entry: result.failed.find((f) => f.spec === spec) })).find((x) => x.entry)
+    if (bad) failed.push({ ...bad.entry, os: bad.os })
+    else if (runs.every(({ result }) => result.passed.includes(spec))) passed.push(spec)
+  }
+  // "each passes alone but not together" on one OS: nothing of that OS's set can be released as a set.
+  for (const { os, result } of runs) for (const f of result.failed) if (f.name === 'combination') { failed.push({ ...f, os }); for (const s of f.spec.split(' ')) { const i = passed.indexOf(s); if (i !== -1) passed.splice(i, 1) } }
+  return { passed, failed }
+}
+
+const FENCE = '```'
+export function issueBody(f, { runUrl, pin } = {}) {
+  const kind = f.class === 'needs-human'
+    ? `**A human has to look at this.** pnpm blocked an install script of this version (a new native dependency or a changed one). ohmydsh never approves install scripts by itself. Review the package, then add it to \`allowBuilds\` in \`ohmydsh.json\` (exact \`name@version\`) and, if it is new, to the allow list in \`pnpm-workspace.yaml\`.`
+    : f.class === 'combination' ? 'Every candidate passes alone, but not together, so none of them was released.'
+      : 'The full gate failed with this version pinned.'
+  return [
+    `${f.name === 'combination' ? 'Candidates' : '`' + f.name + '`'} ${f.version ? '`' + f.version + '`' : ''} (pinned: ${pin ?? 'unknown'}) does not pass the release gate${f.os ? ` on ${f.os}` : ''}.`,
+    '',
+    kind,
+    '',
+    `Failing step: **${f.step ?? 'unknown'}**${f.message ? `: ${f.message}` : ''}`,
+    '',
+    `${FENCE}text`,
+    String(f.tail ?? '').split('\n').slice(-40).join('\n').slice(-6000),
+    FENCE,
+    '',
+    runUrl ? `Run: ${runUrl}` : '',
+    '',
+    `The follow workflow tests the newest version every day and does not retest this exact version while this issue is open (run it by hand with \`only: ${f.name}@${f.version}\` to force a retest). It closes the issue by itself when this or a newer version passes. To keep ${f.name} at the pinned version on purpose, add the \`${HOLD_LABEL}\` label to an issue titled \`follow: ${f.name} hold\`.`,
+  ].filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n')
+}
+
+/**
+ * What to do with the GitHub issues after a run.
+ * One open `follow` issue per package: a failing candidate opens it (or updates it when the version moved on); a pass of
+ * the same or a newer version, or a manual pin at that version or newer, closes it. `hold` issues are never touched.
+ * @param {{ openIssues: Array<{number: number, title: string, labels: string[]}>, passed: string[], failed: object[], pins: Record<string,string>, runUrl?: string }} o
+ */
+export function planIssueActions({ openIssues, passed, failed, pins, runUrl }) {
+  const create = []
+  const update = []
+  const close = []
+  const own = openIssues.filter((i) => i.labels.includes(FOLLOW_LABEL) && !i.labels.includes(HOLD_LABEL) && parseIssueTitle(i.title))
+  const byName = new Map(own.map((i) => [parseIssueTitle(i.title).name, i]))
+  const passedBy = new Map(passed.map((s) => { const { name, version } = splitSpec(s); return [name, version] }))
+  for (const f of failed) {
+    if (f.name === 'combination') continue
+    const issue = byName.get(f.name)
+    const title = issueTitle(f.name, f.version)
+    const body = issueBody(f, { runUrl, pin: pins[f.name] })
+    if (!issue) create.push({ name: f.name, title, body })
+    else {
+      const old = parseIssueTitle(issue.title)
+      update.push({ number: issue.number, title, body, comment: old.version === f.version ? `Still failing on a retest. ${runUrl ?? ''}`.trim() : `Now ${f.version} (was ${old.version}), still failing. ${runUrl ?? ''}`.trim() })
+    }
+    byName.delete(f.name)
+  }
+  for (const issue of own) {
+    const { name, version } = parseIssueTitle(issue.title)
+    if (!byName.has(name) || byName.get(name) !== issue) continue
+    if (update.some((u) => u.number === issue.number)) continue
+    const p = passedBy.get(name)
+    if (p && compare(p, version) >= 0) close.push({ number: issue.number, comment: `${name} ${p} now passes the release gate and was released. ${runUrl ?? ''}`.trim() })
+    else if (pins[name] && compare(pins[name], version) >= 0) close.push({ number: issue.number, comment: `ohmydsh.json pins ${name} ${pins[name]}, which is ${pins[name] === version ? 'this version' : 'newer'}. Closing.` })
+  }
+  return { create, update, close }
+}

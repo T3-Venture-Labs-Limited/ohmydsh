@@ -155,3 +155,50 @@ test('issue titles round-trip and a hold is read from the package name', () => {
   assert.equal(parseIssueTitle('something else'), null)
   assert.equal(issuePackage('follow: dsh-a hold until the fix lands'), 'dsh-a')
 })
+
+import { FOLLOW_LABEL, HOLD_LABEL, mergeResults, planIssueActions } from '../follow-lib/follow.mjs'
+
+const fail = (name, version, extra = {}) => ({ spec: `${name}@${version}`, name, version, step: 'boot', class: 'failure', message: 'x', tail: 'boom', ...extra })
+
+test('mergeResults releases only what passed on every OS', () => {
+  const linux = { passed: ['@deepseek-ai/dsh@0.2.2-rc.5', 'dsh-a@1.1.0'], failed: [] }
+  const mac = { passed: ['dsh-a@1.1.0'], failed: [fail('@deepseek-ai/dsh', '0.2.2-rc.5')] }
+  const m = mergeResults([{ os: 'ubuntu-latest', result: linux }, { os: 'macos-latest', result: mac }])
+  assert.deepEqual(m.passed, ['dsh-a@1.1.0'])
+  assert.deepEqual(m.failed.map((f) => [f.spec, f.os]), [['@deepseek-ai/dsh@0.2.2-rc.5', 'macos-latest']])
+})
+
+test('mergeResults: a combination failure on one OS drops its members and keeps the entry', () => {
+  const ok = { passed: ['a@1.0.1', 'b@1.0.1', 'c@1.0.1'], failed: [] }
+  const bad = { passed: [], failed: [{ spec: 'a@1.0.1 b@1.0.1', name: 'combination', version: '', step: 'boot', class: 'combination', tail: '' }, ...[] ] }
+  bad.passed = ['a@1.0.1', 'b@1.0.1', 'c@1.0.1']
+  const m = mergeResults([{ os: 'linux', result: ok }, { os: 'mac', result: bad }])
+  assert.deepEqual(m.passed, ['c@1.0.1'])
+  assert.equal(m.failed[0].name, 'combination')
+})
+
+const issue = (number, title, labels = [FOLLOW_LABEL]) => ({ number, title, labels })
+
+test('planIssueActions: one issue per failing package, opened, updated, closed on a pass or a manual pin; holds untouched', () => {
+  const failed = [fail('dsh-a', '1.2.0'), fail('dsh-b', '2.0.0', { class: 'needs-human', step: 'setup' })]
+  const open = [
+    issue(1, 'follow: dsh-a 1.1.0 does not pass'),
+    issue(2, 'follow: dsh-c 3.0.0 does not pass'),
+    issue(3, 'follow: dsh-d 4.0.0 does not pass'),
+    issue(4, 'follow: dsh-e hold', [FOLLOW_LABEL, HOLD_LABEL]),
+    issue(5, 'unrelated bug', ['bug']),
+  ]
+  const plan = planIssueActions({ openIssues: open, passed: ['dsh-c@3.1.0'], failed, pins: { 'dsh-a': '1.0.0', 'dsh-d': '4.0.1' }, runUrl: 'https://x/run/1' })
+  assert.deepEqual(plan.create.map((c) => c.title), ['follow: dsh-b 2.0.0 does not pass'])
+  assert.match(plan.create[0].body, /A human has to look at this/)
+  assert.deepEqual(plan.update.map((u) => [u.number, u.title]), [[1, 'follow: dsh-a 1.2.0 does not pass']])
+  assert.match(plan.update[0].comment, /Now 1\.2\.0 \(was 1\.1\.0\)/)
+  assert.deepEqual(plan.close.map((c) => c.number).sort(), [2, 3])
+})
+
+test('planIssueActions: a failing candidate with an open issue for the same version is only commented, nothing is closed twice', () => {
+  const plan = planIssueActions({ openIssues: [issue(7, 'follow: dsh-a 1.1.0 does not pass')], passed: [], failed: [fail('dsh-a', '1.1.0')], pins: { 'dsh-a': '1.0.0' } })
+  assert.equal(plan.create.length, 0)
+  assert.equal(plan.close.length, 0)
+  assert.match(plan.update[0].comment, /Still failing/)
+})

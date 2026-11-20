@@ -1,0 +1,242 @@
+name: Follow
+
+# ohmydsh follows DeepSeek Harness and the community plugins by itself, without pull requests (the organisation does not let
+# Actions open them, and events made with GITHUB_TOKEN do not start other workflows except workflow_dispatch).
+#
+#   plan      newest `latest` of @deepseek-ai/dsh and of every community plugin in ohmydsh.json, minus packages on hold and
+#             exact versions that already have an open `follow` issue; nothing newer -> green and done
+#   test      the gate (scripts/gate.mjs: install, checks, pack, setup from tarballs, packs, upgrade from the released
+#             ohmydsh, boots) on Linux and macOS with ALL candidates; when red, DSH alone and each plugin alone, then the
+#             passing ones together (scripts/follow-run.mjs)
+#   release   what passed on every OS is pinned, committed to main as github-actions[bot], tagged vX.Y.Z, and
+#             `gh workflow run release.yml -f tag=vX.Y.Z` publishes it; failing candidates get ONE `follow` issue each
+#             ("follow: <name> <version> does not pass"), closed again when that version or a newer one passes
+#
+# Never overlaps itself or a Release run. `dry_run` tests and reports but changes nothing (no commit, tag, release, issue).
+# `only: name@version` tests that one version (ignoring holds and open issues).
+#
+# Needs no secrets beyond the automatic token. Issues need the `follow` label; the workflow creates it.
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Test and report only: no commit, tag, release or issue changes'
+        type: boolean
+        default: false
+      only:
+        description: 'Test only this version, e.g. dsh-context@0.86.0 (ignores holds and open issues)'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: follow
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+    outputs:
+      candidates: ${{ steps.list.outputs.candidates }}
+      pending_tag: ${{ steps.pending.outputs.tag }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: A release is running or queued: do nothing today
+        run: |
+          N=$(gh run list --workflow release.yml --json status --jq '[.[] | select(.status=="in_progress" or .status=="queued" or .status=="waiting" or .status=="pending")] | length')
+          if [ "$N" != "0" ]; then echo "::notice title=Release in progress::$N Release run(s) active, skipping this follow run"; echo "busy=true" >> "$GITHUB_ENV"; fi
+      - name: A released-looking tag that never reached npm (an earlier release failed halfway)
+        id: pending
+        if: env.busy != 'true'
+        run: |
+          VERSION=$(node -p "require('./ohmydsh.json').version")
+          TAG="v${VERSION}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1 && ! npm view "@t3labs/ohmydsh@${VERSION}" version >/dev/null 2>&1; then
+            echo "::warning title=Release ${TAG} is tagged but not on npm::Re-starting the Release workflow for ${TAG} (it skips what is already published)."
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Candidates
+        id: list
+        if: env.busy != 'true' && steps.pending.outputs.tag == ''
+        env:
+          ONLY: ${{ inputs.only }}
+        run: |
+          STATE=$(node scripts/follow-issues.mjs --state)
+          echo "state: $STATE"
+          HOLD=$(node -p "JSON.parse(process.argv[1]).hold.join(',')" "$STATE")
+          SKIP=$(node -p "JSON.parse(process.argv[1]).skip.join(',')" "$STATE")
+          ARGS=(--list --hold "$HOLD" --skip "$SKIP")
+          if [ -n "$ONLY" ]; then ARGS=(--list --only "$ONLY"); fi
+          node scripts/follow-upstream.mjs "${ARGS[@]}" | tee candidates.json
+          CAND=$(node -p "JSON.parse(require('fs').readFileSync('candidates.json','utf8')).candidates.map((c) => c.name + '@' + c.to).join(' ')")
+          echo "candidates=${CAND}" >> "$GITHUB_OUTPUT"
+          { echo '### Follow: candidates'; echo; if [ -z "$CAND" ]; then echo 'Nothing newer. Done.'; else node -p "JSON.parse(require('fs').readFileSync('candidates.json','utf8')).candidates.map((c) => '- ' + c.name + ' ' + c.from + ' -> ' + c.to).join('\n')"; fi; } >> "$GITHUB_STEP_SUMMARY"
+
+  restart-release:
+    name: restart a failed release
+    needs: plan
+    if: needs.plan.outputs.pending_tag != '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main -f "tag=${{ needs.plan.outputs.pending_tag }}"
+
+  test:
+    name: test
+    needs: plan
+    if: needs.plan.outputs.candidates != ''
+    uses: ./.github/workflows/gate.yml
+    with:
+      candidates: ${{ needs.plan.outputs.candidates }}
+      artifact_prefix: test
+
+  merge:
+    name: merge results
+    needs: [plan, test]
+    if: always() && needs.plan.outputs.candidates != ''
+    runs-on: ubuntu-latest
+    outputs:
+      passed: ${{ steps.m.outputs.passed }}
+      tested: ${{ steps.m.outputs.tested }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: test-result-*
+          path: results
+      - id: m
+        run: |
+          node scripts/follow-merge.mjs --in results --out merged.json --expect ubuntu-latest,macos-latest | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "passed=$(node -p "require('./merged.json').passed.join(' ')")" >> "$GITHUB_OUTPUT"
+          echo "tested=$(node -p "require('./merged.json').tested")" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: merged-test
+          path: merged.json
+
+  # What passes on Linux but not on macOS (or the reverse) drops out of the set; the remaining set was not tested as such
+  # on every OS, so it goes through the gate once more before anything is released.
+  retest:
+    name: retest the release set
+    needs: merge
+    if: needs.merge.outputs.passed != '' && needs.merge.outputs.tested != 'true'
+    uses: ./.github/workflows/gate.yml
+    with:
+      candidates: ${{ needs.merge.outputs.passed }}
+      artifact_prefix: retest
+
+  release:
+    name: release and issues
+    needs: [plan, merge, retest]
+    if: always() && needs.merge.result == 'success' && (needs.retest.result == 'success' || needs.retest.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+        with:
+          ffmpeg: 'false'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: test-result-*
+          path: results
+      - uses: actions/download-artifact@v4
+        with:
+          name: merged-test
+          path: merged
+      - uses: actions/download-artifact@v4
+        if: needs.retest.result == 'success'
+        with:
+          pattern: retest-result-*
+          path: retest-results
+      - name: Final result (the retest when there was one)
+        id: final
+        run: |
+          DIR=results
+          if [ "${{ needs.retest.result }}" = "success" ]; then DIR=retest-results; fi
+          node scripts/follow-merge.mjs --in "$DIR" --out final.json --expect ubuntu-latest,macos-latest | tee -a "$GITHUB_STEP_SUMMARY"
+          SET=$(node -p "require('./final.json').passed.join(' ')")
+          echo "set=${SET}" >> "$GITHUB_OUTPUT"
+          # Issues come from every failure seen in either round (the retest alone only knows its own).
+          node -e "
+            const fs = require('fs');
+            const first = JSON.parse(fs.readFileSync('merged/merged.json', 'utf8'));
+            const last = JSON.parse(fs.readFileSync('final.json', 'utf8'));
+            const seen = new Set(first.failed.map((f) => f.spec));
+            const failed = [...first.failed, ...last.failed.filter((f) => !seen.has(f.spec))];
+            fs.writeFileSync('issues.json', JSON.stringify({ passed: last.passed, failed }, null, 2));
+          "
+      - name: Pin the passing set, commit, tag, push, start the release
+        id: rel
+        if: steps.final.outputs.set != ''
+        env:
+          SET: ${{ steps.final.outputs.set }}
+        run: |
+          set -euo pipefail
+          BASE=$(git rev-parse HEAD)
+          node scripts/follow-upstream.mjs --apply $SET > /dev/null
+          VERSION=$(node scripts/follow-upstream.mjs --release-notes $SET | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")
+          pnpm install --no-frozen-lockfile
+          pnpm install --frozen-lockfile
+          node scripts/check-manifest.mjs
+          TAG="v${VERSION}"
+          MSG="follow: $(node scripts/follow-upstream.mjs --summary $SET)"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "message=${MSG}" >> "$GITHUB_OUTPUT"
+          git diff --stat | tail -n 5
+          if [ "$DRY_RUN" = "true" ]; then echo "dry run: would commit '${MSG}' and release ${TAG}"; exit 0; fi
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then echo "::error::tag ${TAG} already exists"; exit 1; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -q -m "${MSG}"
+          git tag "${TAG}"
+          # main moved while we tested (a merge, another run): do not guess, the next run starts again from the new main.
+          git fetch -q origin main
+          if [ "$(git rev-parse origin/main)" != "$BASE" ]; then echo "::warning::main moved during the run; nothing was pushed, the next run retries"; exit 0; fi
+          git push origin HEAD:main "refs/tags/${TAG}"
+          gh workflow run release.yml --ref main -f "tag=${TAG}"
+          echo "released=true" >> "$GITHUB_OUTPUT"
+          echo "Started the Release workflow for ${TAG}." >> "$GITHUB_STEP_SUMMARY"
+      - name: Issues (one per failing candidate; closed when a version passes)
+        if: always() && steps.final.conclusion == 'success'
+        run: |
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [ "$DRY_RUN" = "true" ]; then EXTRA=--dry-run; else EXTRA=; fi
+          # Pins as they are now: the tree has the passing set pinned (committed or not), so a package that moved is closed.
+          node scripts/follow-issues.mjs --sync issues.json --run-url "$RUN_URL" $EXTRA

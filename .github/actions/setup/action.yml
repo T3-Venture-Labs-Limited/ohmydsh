@@ -1,0 +1,20 @@
+name: Set up the workspace toolchain
+description: pnpm 12, Node 24 and (on Linux) ffmpeg, which the Studio tests need. Dependencies are installed by the caller (scripts/gate.mjs does it).
+inputs:
+  ffmpeg:
+    description: 'Install ffmpeg (Linux only)'
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 12.15.0
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: pnpm
+    - name: ffmpeg (the Studio tests build a tiny test video)
+      if: runner.os == 'Linux' && inputs.ffmpeg == 'true'
+      shell: bash
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg

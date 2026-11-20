@@ -9,6 +9,8 @@
 //   node scripts/follow-upstream.mjs --release-notes name@ver [name@ver...]
 //       after --apply: bump ohmydsh.json, packages/cli and apps/desktop to the next patch version and add the CHANGELOG
 //       section listing each bump (the bumps are the specs given, compared with the previous pins in git HEAD)
+//   node scripts/follow-upstream.mjs --summary name@ver [name@ver...]
+//       the one-line commit message body: "dsh A -> B, plugin X a -> b"
 //   --root DIR   operate on another checkout (tests)
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -48,6 +50,18 @@ try {
     const specs = rest('--apply')
     if (specs.length === 0) throw new Error('usage: --apply name@version [name@version...]')
     process.stdout.write(`${JSON.stringify(applyPins(root, specs), null, 2)}\n`)
+  } else if (has('--summary')) {
+    // One line for the commit message: "dsh A -> B, plugin X a -> b, ..."
+    const specs = rest('--summary')
+    const head = pinsInHead()
+    const parts = []
+    for (const sp of specs) {
+      const { name, version } = splitSpec(sp)
+      if (name === '@deepseek-ai/dsh') { parts.push(`dsh ${head.dsh} -> ${version}`); continue }
+      const before = [head.plugins.core, ...Object.values(head.plugins.packs)].map((m) => m[name]).find(Boolean)
+      parts.push(`${name} ${before ?? '?'} -> ${version}`)
+    }
+    process.stdout.write(`${parts.join(', ')}\n`)
   } else if (has('--release-notes')) {
     const specs = rest('--release-notes')
     if (specs.length === 0) throw new Error('usage: --release-notes name@version [name@version...]')

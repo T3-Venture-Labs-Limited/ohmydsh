@@ -85,10 +85,11 @@ function must(r, what) {
 
 const omd = (env, a, o) => sh('node', [join(root, 'packages/cli/bin/omd.js'), ...a], { env, ...o })
 
-function checkCompose(env, label, { packs = [] } = {}) {
+function checkCompose(env, label, { packs = [], plugins } = {}) {
   const r = sh('dsh', ['--profile', 'omd', '--dump-config'], { env, log: `${current}-dump-${label}` })
   if (r.status !== 0) throw new StepError(`dsh --dump-config failed (${label})`, r.text)
-  const want = [...Object.keys(manifest.plugins.core), ...packs.flatMap((p) => Object.keys(manifest.plugins.packs[p]))]
+  // `plugins`: the exact list this profile should contain (after a rollback that is the OLD release's set, not this manifest's).
+  const want = plugins ?? [...Object.keys(manifest.plugins.core), ...packs.flatMap((p) => Object.keys(manifest.plugins.packs[p]))]
   const dumped = dumpedBundles(r.stdout)
   const res = { unapplied: parseUnapplied(r.stderr), errors: parseProblems(r.stderr), missingBundles: want.filter((n) => !dumped.has(n)), missingRows: [] }
   for (const id of ['studio', 'dsh-pwa']) if (!new RegExp(`^- id: ${id}$`, 'm').test(r.stdout)) res.missingRows.push(id)
@@ -216,7 +217,8 @@ add('upgrade from the previous release (omd update)', async () => {
   const back = omd(env, ['rollback'], { log: 'upgrade-rollback' })
   must(back, 'omd rollback')
   if (dshOf(env) !== dshBefore) throw new StepError(`omd rollback left DSH at ${dshOf(env)}, expected ${dshBefore}`, back.text)
-  checkCompose(env, 'rolled-back', { packs: PACKS })
+  const oldM = await (await fetch(oldManifest)).json()
+  checkCompose(env, 'rolled-back', { plugins: [...Object.keys(oldM.plugins.core), ...PACKS.flatMap((p) => Object.keys(oldM.plugins.packs[p] ?? {}))] })
   must(omd(env, ['rollback'], { log: 'upgrade-rollforward' }), 'omd rollback (forward again)')
   if (dshOf(env) !== manifest.dsh) throw new StepError(`rolling forward left DSH at ${dshOf(env)}`, '')
   checkCompose(env, 'rolled-forward', { packs: PACKS })

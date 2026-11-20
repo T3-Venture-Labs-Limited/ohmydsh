@@ -58,11 +58,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: A release is running or queued: do nothing today
+      - name: "A release is running or queued: do nothing today"
         run: |
           N=$(gh run list --workflow release.yml --json status --jq '[.[] | select(.status=="in_progress" or .status=="queued" or .status=="waiting" or .status=="pending")] | length')
           if [ "$N" != "0" ]; then echo "::notice title=Release in progress::$N Release run(s) active, skipping this follow run"; echo "busy=true" >> "$GITHUB_ENV"; fi
-      - name: A released-looking tag that never reached npm (an earlier release failed halfway)
+      - name: "A tag that never reached npm (an earlier release failed halfway)"
         id: pending
         if: env.busy != 'true'
         run: |

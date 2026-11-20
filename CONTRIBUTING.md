@@ -62,14 +62,35 @@ plugin at an exact version and `omd` installs exactly those from the registry.
 
 - To change a plugin: bump `version` in its `package.json` **and** its pin in `ohmydsh.json` (`pnpm run check:manifest`
   fails unless they are equal). Plugins you did not change keep their version, so only changed packages are published.
-- To bump a community plugin, change its exact version in `ohmydsh.json`; CI installs the whole manifest into a clean
-  profile and boots DSH before it can merge.
+- Community plugins and DeepSeek Harness itself are bumped by the **follow** workflow (below), not by hand. To bump one
+  by hand anyway, change its exact version in `ohmydsh.json` (for DSH use `node scripts/follow-upstream.mjs --apply @deepseek-ai/dsh@<version>`, which also
+  rewrites the other places the pin is written); CI installs the whole manifest into a clean profile and boots DSH.
 - To release: set `ohmydsh.json` `version` and the CLI's (`packages/cli/package.json`) to the new number, add a
   `## <version>` section to `CHANGELOG.md`, merge, then push the tag `v<version>`. `release.yml` runs every check, publishes
   the packages that are not on npm yet (with provenance), creates the GitHub Release from the changelog and builds the apps.
   It needs the repository secret `NPM_TOKEN`.
 - CI also installs the whole set from packed tarballs (`pnpm run pack:all`, then `omd setup --manifest .tmp/tarballs/ohmydsh.json`)
   to catch a package that works linked but breaks once published.
+
+## Following DeepSeek Harness and the community plugins
+
+`.github/workflows/follow.yml` runs every day. When a newer `@deepseek-ai/dsh` or community plugin exists it pins the
+newest versions, runs the full gate (`node scripts/gate.mjs`, the same script CI runs) on Linux and macOS, and if that is
+green it commits the bump to `main`, tags it and starts the release. No approval is needed. Design: `docs/DESIGN.md`,
+"Release and maintenance".
+
+- **A `follow` issue** (`follow: <package> <version> does not pass`) means that exact version failed the gate; the issue
+  has the failing step and the log tail. Nothing was released for that package. The next run does not retest that version
+  while the issue is open; it closes the issue by itself when that version or a newer one passes. Fix the cause (usually
+  in one of our plugins: bump its version and pin together) and run the workflow with `only: <package>@<version>`.
+  An issue that says an install script needs a human means pnpm blocked a build script: review the package and add its
+  exact `name@version` to `allowBuilds` in `ohmydsh.json`.
+- **Keep a package at its pinned version:** open an issue titled `follow: <package> hold` and give it the labels `follow`
+  and `hold`. While it is open the package is never proposed. Close the issue to resume following. (Editing the pin in
+  `ohmydsh.json` alone is not enough: the next run would propose the newer version again.)
+- **Try one version without releasing:** Actions > Follow > Run workflow, `dry_run` on, `only` = `name@version`.
+- **Locally:** `node scripts/follow-upstream.mjs --list` shows the candidates; `node scripts/gate.mjs --candidates "name@version"`
+  runs the gate against them in a throwaway home (it edits the working tree: use a scratch checkout).
 
 ## Pull requests
 

@@ -3,6 +3,11 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
+## Unreleased
+
+- Follow upstream: a daily workflow (`follow.yml`) tests the newest DeepSeek Harness and community plugin versions against the whole set (install from tarballs, every pack, web boot, and `omd update` from the last release, on Linux and macOS) and releases what passes, by itself. What fails gets one `follow` issue per package; a `hold` issue keeps a package where it is. `release.yml` can also be started with a tag.
+- CLI (`omd`): `omd update` and `omd setup` move DeepSeek Harness together with the profile when the set pins another version. The new DSH is tried in a temporary folder first and switched last; the lock records the previous one, `omd rollback` restores both and `omd doctor` reports a mismatch. `--no-dsh-install` (and a DSH omd did not install, like the desktop app's) is never touched.
+
 ## 0.1.3
 
 - Agent browser (`@t3labs/ohmydsh-agent-browser` 0.2.8, replaces the community `dsh-agent-browser`): our build of dsh-agent-browser 0.2.7 with a small, draggable browser button. It no longer covers the send button on a phone, snaps to the left or right edge, stays above the on-screen keyboard and remembers its place per window size. The panel's session poll also stops while the tab is hidden and slows down while idle. The `browser` row id is unchanged, so settings carry over; `omd update` removes the old package. Credit and differences: `packages/agent-browser/UPSTREAM.md`; both changes are proposed upstream.

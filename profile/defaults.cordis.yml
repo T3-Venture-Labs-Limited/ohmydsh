@@ -15,6 +15,15 @@
 - id: dsh-pwa
   name: '@t3labs/ohmydsh-pwa'
   config:
+    name: ohmydsh
+    shortName: ohmydsh
     serviceWorker: true
     share:
       enabled: true
+
+# Brand: ohmydsh instead of the DeepSeek Harness logo and name; keep the "Built on DeepSeek Harness" credit.
+- id: ohmydsh-brand
+  name: '@t3labs/ohmydsh-brand'
+  config:
+    enabled: true
+    showAttribution: true

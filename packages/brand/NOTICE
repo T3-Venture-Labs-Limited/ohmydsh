@@ -1,0 +1,14 @@
+@t3labs/ohmydsh-brand
+Copyright (c) 2026 Superdao (deestax)
+
+Licensed under the MIT License (see LICENSE).
+
+The ohmydsh mark, wordmark and app icons (assets/) are the ohmydsh brand artwork from this repository (assets/ at the
+repository root). The lettering is drawn in the style of DeepSeek's own logo lettering; it is not DeepSeek's logo and
+this package does not ship any DeepSeek logo, mark or wordmark.
+
+ohmydsh is an independent, unofficial distribution built on DeepSeek Harness (https://github.com/deepseek-ai/deepseek-harness,
+MIT License, Copyright (c) 2026 DeepSeek). DeepSeek did not make it and does not endorse or support it. This plugin uses
+DeepSeek Harness's public extension points only (UI slots, structured index injection, exact web routes); no DeepSeek
+package is modified, copied or patched on disk. "DeepSeek" and "DeepSeek Harness" are names of their owners; they appear
+here only to say what ohmydsh is built on.

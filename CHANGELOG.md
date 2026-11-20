@@ -7,6 +7,7 @@ community plugins. Add a section here before tagging; the text under the version
 
 - Follow upstream: a daily workflow (`follow.yml`) tests the newest DeepSeek Harness and community plugin versions against the whole set (install from tarballs, every pack, web boot, and `omd update` from the last release, on Linux and macOS) and releases what passes, by itself. What fails gets one `follow` issue per package; a `hold` issue keeps a package where it is. `release.yml` can also be started with a tag.
 - CLI (`omd`): `omd update` and `omd setup` move DeepSeek Harness together with the profile when the set pins another version. The new DSH is tried in a temporary folder first and switched last; the lock records the previous one, `omd rollback` restores both and `omd doctor` reports a mismatch. `--no-dsh-install` (and a DSH omd did not install, like the desktop app's) is never touched.
+- Brand (`@t3labs/ohmydsh-brand` 0.1.0, new, on by default): DSH now shows ohmydsh instead of the DeepSeek Harness logo and name: the sidebar mark and wordmark (expanded and collapsed), the new-session mark, the tab title and favicon (light and dark), the loading screen and the installed-app icons. Settings → General says "Built on DeepSeek Harness" with a link to DeepSeek's page, so it stays clear what ohmydsh is. Turn it off with `enabled: false` in the `ohmydsh-brand` row. The phone-app name defaults to ohmydsh too (`dsh-pwa` row `name`/`shortName`).
 
 ## 0.1.3
 

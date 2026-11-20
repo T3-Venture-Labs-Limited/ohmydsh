@@ -1,0 +1,96 @@
+{
+  "name": "@t3labs/ohmydsh-brand",
+  "version": "0.1.0",
+  "description": "ohmydsh branding: replaces the DeepSeek Harness logo, wordmark, tab title, favicon and app icons with ohmydsh, and keeps a clear \"Built on DeepSeek Harness\" attribution.",
+  "license": "MIT",
+  "author": "Superdao (https://github.com/deestax)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/brand"
+  },
+  "bugs": {
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
+  },
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/brand#readme",
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.2-rc.1 <0.3.0-0"
+  },
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "locale",
+    "docs",
+    "assets",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
+    "artwork": "node scripts/gen-artwork.mjs --check",
+    "build": "pnpm run clean && node scripts/gen-artwork.mjs --check && tsdown && node scripts/check-artifacts.mjs && node tools/token-lint.mjs src lib",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src tests scripts tsdown.config.ts && node tools/token-lint.mjs src",
+    "test": "vitest run",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build",
+    "prepare": "pnpm run build"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-locale": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-sidebar": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.2-rc.1 <0.3.0-0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.3",
+    "@types/node": "26.2.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "^18.3.7",
+    "jsdom": "^29.1.1",
+    "oxlint": "1.76.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsdown": "0.22.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

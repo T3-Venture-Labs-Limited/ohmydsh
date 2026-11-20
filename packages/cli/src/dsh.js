@@ -60,9 +60,10 @@ export function stageDsh(ctx, version) {
   return { dir, env, cleanup }
 }
 
+// OMD_DSH_INSTALLER=npm forces npm for a first install (CI and the release gate, where mise must not be consulted).
 function installInPlace(ctx, install, version) {
   const spec = dshSpec(version)
-  if (install.kind === 'mise' || (install.kind === 'none' && which('mise', ctx.env))) return ctx.run('mise', ['use', '-g', `npm:${spec}`], { env: ctx.env })
+  if (install.kind === 'mise' || (install.kind === 'none' && ctx.env.OMD_DSH_INSTALLER !== 'npm' && which('mise', ctx.env))) return ctx.run('mise', ['use', '-g', `npm:${spec}`], { env: ctx.env })
   const args = ['install', '-g', '--no-audit', '--no-fund', ...(install.kind === 'npm' ? ['--prefix', install.prefix] : []), spec]
   return ctx.run('npm', args, { env: ctx.env })
 }

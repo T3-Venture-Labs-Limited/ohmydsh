@@ -12,7 +12,8 @@ name: Follow
 #             `gh workflow run release.yml -f tag=vX.Y.Z` publishes it; failing candidates get ONE `follow` issue each
 #             ("follow: <name> <version> does not pass"), closed again when that version or a newer one passes
 #
-# Never overlaps itself or a Release run. `dry_run` tests and reports but changes nothing (no commit, tag, release, issue).
+# Never overlaps itself or a Release run. `dry_run` tests and reports but changes nothing (no commit, tag, release, issue);
+# a run started from any branch other than main is always a dry run.
 # `only: name@version` tests that one version (ignoring holds and open issues).
 #
 # Needs no secrets beyond the automatic token. Issues need the `follow` label; the workflow creates it.
@@ -53,8 +54,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -92,7 +91,7 @@ jobs:
   restart-release:
     name: restart a failed release
     needs: plan
-    if: needs.plan.outputs.pending_tag != '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+    if: needs.plan.outputs.pending_tag != '' && github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -121,8 +120,6 @@ jobs:
       tested: ${{ steps.m.outputs.tested }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -162,11 +159,11 @@ jobs:
       issues: write
     env:
       GH_TOKEN: ${{ github.token }}
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      # Off main (a branch used to try this workflow) it is always a dry run: nothing is ever pushed from a branch.
+      DRY_RUN: ${{ github.ref != 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
           fetch-depth: 0
       - uses: ./.github/actions/setup
         with:

@@ -3,7 +3,7 @@
   "dsh": "0.2.2-rc.3",
   "node": ">=24",
   "profile": { "name": "omd", "defaults": "profile/defaults.cordis.yml", "official": [] },
-  "plugins": { "core": { "@t3labs/ohmydsh-pwa": "0.3.0" }, "packs": {} },
+  "plugins": { "core": { "@t3labs/ohmydsh-pwa": "0.3.1" }, "packs": {} },
   "sources": { "@t3labs/ohmydsh-pwa": { "workspace": "../../../../packages/pwa" } },
   "allowBuilds": []
 }

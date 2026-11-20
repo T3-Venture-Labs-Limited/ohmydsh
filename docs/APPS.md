@@ -63,8 +63,8 @@ The app does **not** touch an existing `~/.dsh`. To use an existing DSH home ins
 
 ### What it does
 
-- Starts `dsh omd` as a child process on **127.0.0.1:43080** (a fixed port, so a paired phone keeps working across restarts) and opens it in its window. The launch token never appears on screen.
-- One instance only. **Closing the window keeps DSH running** (agents keep working, the phone stays connected); the tray icon has **Open**, **Pair phone…**, **Restart DeepSeek Harness**, **Open the log** and **Quit** (which stops DSH cleanly).
+- Starts `dsh omd` (on the bundled Node) as a child process on **127.0.0.1:43080** (a fixed port, so a paired phone keeps working across restarts) and opens it in its window. The launch token never appears on screen.
+- One instance only. **Closing the window keeps DSH running** (agents keep working, the phone stays connected); the tray icon has **Open**, **Pair phone…**, **Restart DeepSeek Harness**, **Open the log**, **Check for updates…** and **Quit** (which stops DSH cleanly).
 - If DSH crashes it is restarted (back-off from 1 s up to 30 s; after 8 crashes in a row it stops and shows the log).
 - External links open in your browser.
 
@@ -72,29 +72,35 @@ The app does **not** touch an existing `~/.dsh`. To use an existing DSH home ins
 
 ### Updates
 
-The app updates itself from GitHub Releases through `electron-updater`:
+The app updates itself from GitHub Releases through `electron-updater`. It runs for days in the tray, so it does not only check at start: **15 seconds after start, then every 6 hours** (and right after the computer wakes from sleep when a check is overdue). **Tray → Check for updates…** (also in the Help menu) checks now and tells you the result.
 
 | OS | Behaviour while the builds are unsigned |
 |---|---|
 | Linux AppImage | Downloads in the background, installs when you quit. Works unsigned. |
-| Linux .deb | Not self-updating; install the new `.deb`. |
-| Windows | Downloads and installs on quit. An unsigned installer shows the SmartScreen warning again. |
-| macOS | **Cannot** apply an unsigned update. Download the new `.dmg`. Self-update starts working when we sign. |
+| Linux .deb | Not self-updating; the app tells you once per version that a newer release exists. Install the new `.deb`. |
+| Windows | Downloads in the background and installs on quit. An unsigned installer shows the SmartScreen warning again. |
+| macOS | **Cannot** apply an unsigned update. The app tells you once per version, with a link to the Releases page; download the new `.dmg`. Self-update starts working when we sign. |
 
-The DSH and plugin versions are separate: they follow `ohmydsh.json`. A new app version that pins a newer set re-installs the plugins on its first start. Turn the app's self-update off with `"autoUpdate": false` or `OHMYDSH_NO_UPDATE=1`.
+**An update never restarts anything.** The app only downloads; the new version is installed the next time you choose **Quit** in the tray and open ohmydsh again (closing the window does not quit). A running agent turn is therefore never interrupted. When a download finishes you get one notice ("ohmydsh 0.x is ready"); leaving the app running for weeks is fine.
+
+**AppImage started through a symlink** (for example `~/Applications/ohmydsh.AppImage -> ohmydsh-0.1.1-linux-x86_64.AppImage`, launched by a script): the AppImage runtime gives the app the *real* file in `$APPIMAGE`. electron-updater deletes that file and writes the new one next to it **under the new version's name** (`ohmydsh-0.1.4-linux-x86_64.AppImage`). The app then moves every symlink in the same folder that pointed at the old file onto the new one (relative links stay relative), so `ohmydsh.AppImage` and anything that calls it keeps working; the log says `updater: AppImage is now … moved 1 symlink(s)`. A symlink in another folder is not found automatically: list it in `OHMYDSH_APPIMAGE_LINKS` (colon-separated) in the launcher script, or point the launcher at the versioned file's folder with a glob. If the AppImage folder is not writable the update fails and the log says so: move the AppImage somewhere you can write, or update by hand. The old `.bak-…` copies you made yourself are never touched.
+
+The DSH and plugin versions are separate: they follow `ohmydsh.json`. A new app version that pins a newer set re-installs the plugins on its first start. Turn the app's self-update off with `"autoUpdate": false` or `OHMYDSH_NO_UPDATE=1` (then the tray item says so).
 
 > [!IMPORTANT]
-> **Which Node runs DSH.** On **Linux** the app ships the official Node.js binary (`resources/node/bin/node`, version pinned in `apps/desktop/package.json` as `ohmydsh.node`, SHA256 checked against nodejs.org's `SHASUMS256.txt` at build time) and runs DSH, `omd`, npm and the `node` launcher on it. Reason: Electron's binary loads the system GLib, while sharp's prebuilt libvips (DSH's image handling) carries its own GLib; with Electron as Node the first image job crashed DSH with SIGSEGV. On **macOS and Windows** nothing is bundled and DSH still runs on Electron's own Node (`ELECTRON_RUN_AS_NODE=1`), so no system Node is needed there either. Selection order (`src/node-runtime.js`, logged at every start): `OHMYDSH_NODE` (a path to a Node binary, if the file exists; an override for developers) > the bundled Node (if present and executable) > Electron as Node.
+> **Which Node runs DSH: the same official Node on every OS.** Every build ships the official Node.js binary in `resources/node` (version pinned in `apps/desktop/package.json` as `ohmydsh.node`, 24.22.3 today; SHA256 checked against nodejs.org's `SHASUMS256.txt` at build time) and runs DSH, `omd`, npm and the `node`/`dsh`/`omd` launchers on it: Linux x64 `resources/node/bin/node`, macOS `ohmydsh.app/Contents/Resources/node/bin/node` (the arm64 app carries the arm64 binary, the Intel app the x64 one), Windows x64 `resources\node\node.exe`. Only the executable and its licence are shipped. Selection order (`src/node-runtime.js`, logged at every start): `OHMYDSH_NODE` (a path to a Node binary, if the file exists; an override for developers) > the bundled Node > **Electron as Node, only as a fallback** for a build without the bundled Node.
 >
-> **Version constraints.** DSH needs Node >= 24.9 (its `engines`); the bundled Node is 24.x (the newest 24 LTS when pinned), and the smoke test loads DSH's native add-on and runs a sharp job on it. **Why the app still pins Electron 44.7.0:** where DSH runs on Electron-as-Node (macOS, Windows, the Linux fallback), its native add-on (`node-addon-require-builtin`) only runs under an exact list of Electron builds: 43.0.0, 44.0.0, 44.7.0 and 45.0.0-alpha.6 (it matches the V8 version); any other Electron fails with `unsupported Electron runtime fingerprint`. On Linux with the bundled Node that restriction no longer applies. When you bump DSH, Electron or Node, re-check the table (`strings` on the add-on shows it) and run the smoke test.
+> **Why not Electron as Node.** DSH's native add-on (`node-addon-require-builtin`) only loads under an exact list of Electron builds (43.0.0, 44.0.0, 44.7.0, 45.0.0-alpha.6: it matches the V8 version), so every DSH release would have needed the app's Electron to be re-pinned; and on Linux sharp's own GLib collides with the system GLib that Electron loads, which crashed DSH (SIGSEGV) on the first image job. A real Node has neither problem, so ohmydsh can follow new DSH releases without touching the Electron build. DSH needs Node >= 24.9; CI asserts that the first run really ran on the bundled Node (`OHMYDSH_REQUIRE_BUNDLED_NODE=1`) and runs a sharp **JPEG** job on it. The app still pins Electron 44.7.0, but only because of the fallback path; when you bump DSH, Electron or Node, run the smoke test.
 >
-> The Linux AppImage grows by about 45 MB for the Node binary (compressed).
+> The installers grow by the Node binary (about 45 MB compressed on Linux, similar on macOS and Windows).
+>
+> **macOS Gatekeeper and the bundled Node.** The Node binary sits inside `ohmydsh.app`, so removing the quarantine flag from the app (`xattr -dr com.apple.quarantine /Applications/ohmydsh.app`, or right-click → Open) covers it: the flag is inherited by everything in the bundle, and there is nothing separate to approve. The official Node binary is signed by the Node.js Foundation, but our app is ad-hoc/unsigned, so macOS treats the whole bundle as one unsigned download. CI verifies that each .app carries the Node of its own architecture and that the app runs DSH on it; what the runners cannot reproduce is a quarantined, downloaded .dmg opened by a person, so that step is documented rather than tested.
 
 ## Pairing a phone
 
 You need: the desktop app (or any DSH with the ohmydsh *Phone app* plugin, version 0.3.0 or newer) and the Android app, with the phone and computer on **the same Wi-Fi** or on **the same Tailscale network**.
 
-1. On the computer: tray icon → **Pair phone…** (or in DSH: *Settings → Phone app → Pair a phone*).
+1. On the computer: tray icon → **Pair phone…** or *File → Pair phone…* (or in DSH: *Settings → Phone app → Pair a phone*). The window opens Settings → Phone app; the address is `/?settings=phone`, never the sign-in token.
 2. A QR code appears, with a link underneath. It is valid for **10 minutes and works once**.
 3. On the phone, open **ohmydsh → Scan the QR code**. Check the address it shows, tap **Link**.
 4. The phone signs in and shows your DSH.
@@ -144,7 +150,7 @@ Next steps, in the order we would do them:
 - Desktop builds are unsigned; macOS cannot self-update them.
 - Android only; no iOS app (the PWA works on iOS over HTTPS).
 - No push while the Android app is closed (above).
-- Windows and macOS builds are produced by CI only; they were not run by the people who wrote this document. The Linux AppImage was built and smoke-tested from a clean state (below).
+- Windows and macOS builds are produced by CI only; the people who wrote this document did not run them by hand. CI runs the full headless first run on all three (below), but nobody has opened the macOS .dmg through Gatekeeper or the Windows installer through SmartScreen on a real desktop.
 - The first start needs a network and about 1.5 GB of disk.
 - Android release signing needs the repository secrets below; without them CI signs with a generated key and warns.
 
@@ -157,6 +163,7 @@ npm ci && node node_modules/electron/install.js
 npm run check                 # unit tests (no Electron needed)
 npm run dist:linux            # also dist:win (on Windows), dist:mac (on macOS)
 ELECTRON_RUN_AS_NODE=1 ./dist/linux-unpacked/ohmydsh dist/linux-unpacked/resources/app.asar/src/smoke.js   # first run + HTTP checks, no display needed
+./dist/linux-unpacked/ohmydsh --no-sandbox --headless-test   # the same inside a hidden window (needs a display or xvfb)
 
 # android (JDK 17+, Android SDK platform 35 and build-tools 35.0.0)
 cd apps/android
@@ -165,7 +172,12 @@ cd apps/android
 
 ### Smoke test
 
-`src/smoke.js` runs the shipped binary as Node, picks the same DSH runtime the app does (set `OHMYDSH_REQUIRE_BUNDLED_NODE=1` to fail unless it is the bundled Node), performs the real first run (installs DSH and the plugin set from the manifest), starts `dsh omd` through the same supervisor the app uses, and checks over HTTP: the token URL signs in (303 + HttpOnly cookie), the UI loads with the cookie and answers 401 without it, the phone-app plugin is active, pairing routes are protected, a sharp image job (build, resize and decode a 16x16 PNG with the sharp DSH loads, in a child started like DSH is: the regression test for the Linux crash), and a full pair → session → revoke → 401 round trip works. `OHMYDSH_MANIFEST` and `OHMYDSH_OMD_ARGS` let a test install a reduced set. On CI the same checks also run inside a real window under `xvfb` (`ohmydsh --headless-test`).
+Two entry points, both used by `apps.yml` after the build, on **all three OS runners** (Linux, Windows, macOS):
+
+- `ohmydsh --headless-test` runs the real app, from the unpacked build (`dist/linux-unpacked/ohmydsh`, `dist/mac-arm64/ohmydsh.app/Contents/MacOS/ohmydsh`, `dist/win-unpacked/ohmydsh.exe`), with a throwaway user-data folder and `OHMYDSH_REQUIRE_BUNDLED_NODE=1`: the real first run provisions DSH and a reduced manifest (`OHMYDSH_MANIFEST`, `OHMYDSH_OMD_ARGS=--dev`), starts `dsh omd` on the bundled Node, and checks: a sharp **JPEG** job under that Node, the token URL signs in (303 + HttpOnly cookie), the UI loads and answers 401 without the cookie, the phone-app plugin is active, pairing routes are protected, the full pair → session → revoke → 401 round trip, and, inside a real hidden `BrowserWindow`, that **Pair phone** ends on `/?settings=phone` without the token and opens Settings → Phone app (signed out and signed in). The result is printed and also written to `OHMYDSH_TEST_REPORT` (a Windows GUI exe has no console). Linux runs it under `xvfb`.
+- `src/smoke.js` (Linux only, `ELECTRON_RUN_AS_NODE=1 ohmydsh smoke.js`): the same checks without any window.
+
+`OHMYDSH_TEST_PORT` picks the port.
 
 ### CI secrets (Android)
 

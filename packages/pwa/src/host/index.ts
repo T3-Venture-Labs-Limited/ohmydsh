@@ -40,7 +40,7 @@ import { installAdmitGate, trackDeviceSockets, type UpgradeServer } from './revo
 export const name = '@t3labs/ohmydsh-pwa'
 export const inject = ['webServer', 'connection']
 
-const VERSION = '0.3.0'
+const VERSION = '0.3.1'
 const SHARE_TTL_MS = 7 * 24 * 3600 * 1000
 const MAX_JSON_BYTES = 8 * 1024
 

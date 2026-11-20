@@ -34,3 +34,12 @@ test('a real Node as the runtime: launchers do NOT set ELECTRON_RUN_AS_NODE, and
   assert.equal(env.ELECTRON_RUN_AS_NODE, undefined)
   fs.rmSync(dir, { recursive: true })
 })
+test('paths with spaces and special characters stay one argument (sh and cmd)', () => {
+  const dir = fs.mkdtempSync(path.join(process.env.TMPDIR ?? os.tmpdir(), 'omd-shim-'))
+  const sh = writeShims({ bin: dir, electron: '/Applications/My Apps/ohmydsh.app/Contents/Resources/node/bin/node', dshBin: '/Users/a b/$HOME/dsh.js', omdBin: '/o.js', platform: 'darwin', electronAsNode: false })
+  assert.equal(fs.readFileSync(sh[1], 'utf8'), '#!/bin/sh\nexec "/Applications/My Apps/ohmydsh.app/Contents/Resources/node/bin/node" "/Users/a b/\\$HOME/dsh.js" "$@"\n')
+  const win = writeShims({ bin: dir, electron: 'C:\\Users\\First Last\\AppData\\Local\\Programs\\ohmydsh\\resources\\node\\node.exe', dshBin: 'C:\\Users\\First Last\\AppData\\Roaming\\ohmydsh\\runtime\\dsh.js', omdBin: 'C:\\o 100%.js', platform: 'win32', electronAsNode: false })
+  assert.equal(fs.readFileSync(win[1], 'utf8'), '@echo off\r\n"C:\\Users\\First Last\\AppData\\Local\\Programs\\ohmydsh\\resources\\node\\node.exe" "C:\\Users\\First Last\\AppData\\Roaming\\ohmydsh\\runtime\\dsh.js" %*\r\n')
+  assert.match(fs.readFileSync(win[2], 'utf8'), /"C:\\o 100%%\.js" %\*/)
+  fs.rmSync(dir, { recursive: true })
+})

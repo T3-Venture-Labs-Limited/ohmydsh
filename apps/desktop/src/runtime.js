@@ -58,6 +58,10 @@ function run(file, args, { env, cwd, onLine, log, timeoutMs = 30 * 60 * 1000 }) 
   })
 }
 
+function tarExe(platform = process.platform, env = process.env) {
+  return platform === 'win32' ? path.win32.join(env.SystemRoot ?? env.windir ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
+}
+
 /** Unpack the bundled npm (a registry tarball: everything sits under package/) into <runtime>/npm, once per npm version. */
 async function unpackNpm(paths, env, log) {
   const stamp = path.join(paths.npmDir, '.tarball-size')
@@ -66,7 +70,8 @@ async function unpackNpm(paths, env, log) {
   fs.rmSync(paths.npmDir, { recursive: true, force: true })
   fs.mkdirSync(paths.npmDir, { recursive: true })
   // bsdtar (macOS, Windows 10+) and GNU tar (Linux) both read .tgz; --strip-components drops the leading package/.
-  await run('tar', ['-xzf', paths.npmTarball, '-C', paths.npmDir, '--strip-components=1'], { env, log })
+  // On Windows use System32\\tar.exe by its full path: a GNU tar earlier on PATH (Git for Windows) reads "C:\\x" as host "C".
+  await run(tarExe(), ['-xzf', paths.npmTarball, '-C', paths.npmDir, '--strip-components=1'], { env, log })
   fs.writeFileSync(stamp, size)
 }
 
@@ -122,4 +127,4 @@ async function provision({ paths, electron, electronAsNode = true, pnpmVersion, 
   return { changed: true, wanted }
 }
 
-module.exports = { provision, needs, wantedVersions, unpackNpm, ProvisionError, run }
+module.exports = { provision, needs, tarExe, wantedVersions, unpackNpm, ProvisionError, run }

@@ -27,10 +27,11 @@ publish:
 artifactName: ohmydsh-${version}-${os}-${arch}.${ext}
 linux:
   target: [AppImage, deb]
-  # The official Node.js binary (bundle.mjs downloads and checksums it): the app runs DSH on it, not on Electron, because
-  # sharp crashes under Electron-as-Node on Linux. macOS and Windows have no resources/node and keep Electron as Node.
+  # The official Node.js binary (bundle.mjs downloads and checksums it): the app runs DSH on it, not on Electron. Every OS
+  # ships one (see the win and mac sections): DSH's native add-on only loads under a few exact Electron builds, and sharp
+  # crashes under Electron-as-Node on Linux.
   extraResources:
-    - from: bundle/node
+    - from: bundle/node/linux-x64
       to: node
       filter: ["**/*"]
   executableName: ohmydsh
@@ -49,6 +50,10 @@ deb:
 win:
   target: [{ target: nsis, arch: [x64] }]
   icon: build/icon.ico
+  extraResources:
+    - from: bundle/node/win-x64
+      to: node
+      filter: ["**/*"]
 nsis:
   oneClick: false
   perMachine: false
@@ -61,5 +66,10 @@ mac:
   category: public.app-category.developer-tools
   identity: null
   hardenedRuntime: false
+  # One job builds both architectures: ${arch} is expanded per architecture, so the arm64 app carries the arm64 Node and the x64 app the x64 one.
+  extraResources:
+    - from: bundle/node/mac-${arch}
+      to: node
+      filter: ["**/*"]
 dmg:
   artifactName: ohmydsh-${version}-mac-${arch}.${ext}

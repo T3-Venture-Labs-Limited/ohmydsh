@@ -1,6 +1,6 @@
 {
   "name": "@t3labs/ohmydsh-pwa",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Install the normal DSH UI as an app (manifest, service worker, share target) and get Web Push notifications on your phone",
   "license": "MIT",
   "author": "Superdao (https://github.com/deestax)",

@@ -12,6 +12,11 @@ name: Apps (desktop + Android)
 
 on:
   workflow_call:
+    inputs:
+      release_tag:
+        description: 'Tag to build and attach to (release.yml passes it when it was started by hand or by the follow workflow, where github.ref is main)'
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       release_tag:
@@ -23,12 +28,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: apps-${{ github.ref }}
+  group: apps-${{ inputs.release_tag || github.ref }}
   cancel-in-progress: false
-
-env:
-  # Version shown in the apps: the tag without the leading v, else 0.0.0-dev.
-  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
 
 jobs:
   version:
@@ -42,7 +43,7 @@ jobs:
       - id: v
         shell: bash
         run: |
-          TAG="${{ github.event.inputs.release_tag }}"
+          TAG="${{ inputs.release_tag }}"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; fi
           VERSION="${TAG#v}"
           if [[ -z "$VERSION" ]]; then VERSION="0.0.0-dev"; fi
@@ -81,6 +82,8 @@ jobs:
       electron_config_cache: ${{ github.workspace }}/.cache/electron
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -100,12 +103,35 @@ jobs:
       - name: List artifacts
         shell: bash
         run: ls -la dist/*.AppImage dist/*.deb dist/*.exe dist/*.dmg dist/latest*.yml 2>/dev/null || true
+      - name: Which Node each build carries (it must be the official Node of its own OS and architecture)
+        shell: bash
+        run: |
+          case "${{ matrix.name }}" in
+            linux)   NODES="dist/linux-unpacked/resources/node/bin/node" ;;
+            windows) NODES="dist/win-unpacked/resources/node/node.exe" ;;
+            macos)   NODES="dist/mac-arm64/ohmydsh.app/Contents/Resources/node/bin/node dist/mac/ohmydsh.app/Contents/Resources/node/bin/node" ;;
+          esac
+          for N in $NODES; do
+            test -f "$N" || { echo "::error::$N is missing: this build does not carry its Node"; exit 1; }
+            ls -la "$N"; test -f "$(dirname "$N")/../LICENSE" -o -f "$(dirname "$N")/LICENSE" || { echo "::error::no Node LICENSE next to $N"; exit 1; }
+            if command -v file >/dev/null; then file "$N"; fi
+          done
+          if [ "${{ matrix.name }}" = macos ]; then
+            file dist/mac-arm64/ohmydsh.app/Contents/Resources/node/bin/node | grep -q arm64  || { echo "::error::the Apple Silicon app does not carry an arm64 Node"; exit 1; }
+            file dist/mac/ohmydsh.app/Contents/Resources/node/bin/node       | grep -q x86_64 || { echo "::error::the Intel app does not carry an x86_64 Node"; exit 1; }
+            dist/mac-arm64/ohmydsh.app/Contents/Resources/node/bin/node --version
+          elif [ "${{ matrix.name }}" = windows ]; then
+            dist/win-unpacked/resources/node/node.exe --version
+          else
+            dist/linux-unpacked/resources/node/bin/node --version
+          fi
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.15.0
       - name: Build the phone-app plugin the smoke profile links (pairing lives in packages/pwa)
-        if: matrix.name == 'linux'
         working-directory: .
         shell: bash
         run: |
-          npm install -g pnpm@12.15.0
           pnpm install --frozen-lockfile --filter @t3labs/ohmydsh-pwa...
           pnpm --filter @t3labs/ohmydsh-pwa run build
       - name: Unpack the AppImage
@@ -115,31 +141,51 @@ jobs:
           APPIMAGE=$(ls dist/*.AppImage | head -1)
           chmod +x "$APPIMAGE"
           "$APPIMAGE" --appimage-extract >/dev/null
-      - name: "Smoke test the Linux build (real first run - installs DSH, boots it, checks pairing end to end)"
+      - name: "Smoke test the Linux build as plain Node (real first run: installs DSH, boots it, checks pairing end to end)"
         if: matrix.name == 'linux'
         shell: bash
+        timeout-minutes: 25
         env:
           ELECTRON_RUN_AS_NODE: '1'
-          # smoke.js picks the DSH runtime exactly like the app (bundled Node on Linux), fails if that is not the bundled Node,
+          # smoke.js picks the DSH runtime exactly like the app (the bundled Node), fails if that is not the bundled Node,
           # and runs a sharp image job under it (the regression test for the Electron-as-Node SIGSEGV).
           OHMYDSH_REQUIRE_BUNDLED_NODE: '1'
           OHMYDSH_USER_DATA: ${{ runner.temp }}/ohmydsh-userdata
           OHMYDSH_MANIFEST: ${{ github.workspace }}/apps/desktop/tests/smoke/ohmydsh.json
           OHMYDSH_OMD_ARGS: --dev
         # ELECTRON_RUN_AS_NODE makes the binary behave as Node, which rejects Chromium flags such as --no-sandbox.
-        run: timeout 1500 ./squashfs-root/ohmydsh squashfs-root/resources/app.asar/src/smoke.js
-      - name: "Smoke test the window under xvfb (the same checks, inside a real BrowserWindow)"
+        run: ./squashfs-root/ohmydsh squashfs-root/resources/app.asar/src/smoke.js
+      - name: Install xvfb (Linux window test)
         if: matrix.name == 'linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgbm1 libasound2t64 >/dev/null
+      - name: "Smoke test the app itself (headless first run: DSH on the bundled Node, token sign-in, UI, sharp, pairing, Pair phone in the real window)"
         shell: bash
+        timeout-minutes: 30
         env:
-          OHMYDSH_USER_DATA: ${{ runner.temp }}/ohmydsh-userdata
+          # A fresh throwaway app-data folder, so this is the real first run: it provisions DSH and the reduced smoke manifest.
+          OHMYDSH_USER_DATA: ${{ runner.temp }}/ohmydsh-app-data
           OHMYDSH_MANIFEST: ${{ github.workspace }}/apps/desktop/tests/smoke/ohmydsh.json
           OHMYDSH_OMD_ARGS: --dev
           OHMYDSH_REQUIRE_BUNDLED_NODE: '1'
           OHMYDSH_TEST_PORT: '43183'
+          OHMYDSH_TEST_REPORT: ${{ runner.temp }}/ohmydsh-headless-report.txt
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgbm1 libasound2t64 >/dev/null
-          timeout 600 xvfb-run -a ./squashfs-root/ohmydsh --no-sandbox --headless-test
+          rm -f "$OHMYDSH_TEST_REPORT"
+          case "${{ matrix.name }}" in
+            linux)   xvfb-run -a ./squashfs-root/ohmydsh --no-sandbox --headless-test || STATUS=$? ;;
+            # macOS runners have a window server; the app opens no visible window in --headless-test.
+            macos)   dist/mac-arm64/ohmydsh.app/Contents/MacOS/ohmydsh --no-sandbox --headless-test || STATUS=$? ;;
+            # A GUI-subsystem exe has no console: the result is also written to OHMYDSH_TEST_REPORT.
+            windows) ./dist/win-unpacked/ohmydsh.exe --no-sandbox --headless-test || STATUS=$? ;;
+          esac
+          echo "app exit status: ${STATUS:-0}"
+          echo "----- report -----"; cat "$OHMYDSH_TEST_REPORT" || true
+          echo "----- app log (tokens are never written to it) -----"
+          find "$OHMYDSH_USER_DATA/logs" -name '*.log' -exec tail -n 60 {} \; 2>/dev/null || true
+          grep -q "HEADLESS-TEST OK" "$OHMYDSH_TEST_REPORT" && [ "${STATUS:-0}" = 0 ]
+      - name: Sizes
+        shell: bash
+        run: ls -l dist/*.AppImage dist/*.deb dist/*.exe dist/*.dmg 2>/dev/null | awk '{printf "%10.1f MB  %s\n", $5/1048576, $9}' || true
       - uses: actions/upload-artifact@v4
         with:
           name: ohmydsh-desktop-${{ matrix.name }}
@@ -162,6 +208,8 @@ jobs:
         working-directory: apps/android
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag || github.ref }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

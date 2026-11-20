@@ -57,4 +57,50 @@ describe('settings deep link', () => {
     shell()
     expect(await openPhoneSettings(deps({ sectionLabel: 'Nonexistent' }).d)).toBe(false)
   })
+  it('waits behind a blocking notice (first start) and clicks nothing until it is dismissed', async () => {
+    const s = shell()
+    const notice = document.createElement('div'); notice.setAttribute('role', 'dialog'); notice.setAttribute('aria-modal', 'true'); notice.setAttribute('aria-label', 'Preview Notice')
+    document.body.append(notice)
+    const { d } = deps(); let waited = 0
+    const done = openPhoneSettings({ ...d, sleep: async (ms) => { waited += ms; await d.sleep!(ms); if (waited >= 40_000) notice.remove() } })
+    expect(await done).toBe(true) // 40 s of notice is longer than the usual 10 s limit
+    expect(waited).toBeGreaterThanOrEqual(40_000)
+    expect(s.selected()).toBe('Phone app')
+  })
+  it('gives up when a notice stays for good (5 minutes) instead of waiting forever', async () => {
+    const notice = document.createElement('div'); notice.setAttribute('role', 'dialog'); notice.setAttribute('aria-modal', 'true'); document.body.append(notice)
+    expect(await openPhoneSettings(deps().d)).toBe(false)
+  })
+  it('retries a lost click: a first-start dialog that swallowed the menu click does not leave the link dead', async () => {
+    let swallowed = 0
+    document.body.innerHTML = '<button aria-label="Account menu" aria-haspopup="menu" aria-expanded="false">A</button>'
+    const menuButton = document.querySelector<HTMLButtonElement>('button')!
+    menuButton.addEventListener('click', () => {
+      if (swallowed < 2) { swallowed += 1; return } // the first two presses are lost
+      const menu = document.createElement('div'); menu.setAttribute('role', 'menu'); menu.innerHTML = '<div role="menuitem">Settings</div>'
+      document.body.append(menu)
+      menu.querySelector<HTMLElement>('[role=menuitem]')!.addEventListener('click', () => {
+        const dialog = document.createElement('div'); dialog.setAttribute('data-shortcut-modal', 'settings')
+        dialog.innerHTML = '<nav><button aria-current="true">Phone app</button></nav>'; document.body.append(dialog)
+      })
+    })
+    expect(await openPhoneSettings(deps().d)).toBe(true)
+    expect(swallowed).toBe(2)
+  })
+  it('finds the Settings entry when it shows its shortcut (macOS "Settings⌥⌘,", Windows "SettingsCtrl+,") but not other entries', async () => {
+    for (const label of ['Settings⌥⌘,', 'SettingsCtrl+,']) {
+      document.body.innerHTML = '<button aria-label="Account menu" aria-haspopup="menu" aria-expanded="false">A</button>'
+      document.querySelector('button')!.addEventListener('click', () => {
+        const menu = document.createElement('div'); menu.setAttribute('role', 'menu')
+        menu.innerHTML = `<div role="menuitem">Settings Advanced</div><div role="menuitem">${label}</div>`
+        document.body.append(menu)
+        menu.querySelectorAll<HTMLElement>('[role=menuitem]')[1]!.addEventListener('click', () => {
+          const dialog = document.createElement('div'); dialog.setAttribute('data-shortcut-modal', 'settings')
+          dialog.innerHTML = '<nav><button aria-current="true">Phone app</button></nav>'; document.body.append(dialog)
+        })
+      })
+      expect(await openPhoneSettings(deps().d), label).toBe(true)
+      document.body.innerHTML = ''
+    }
+  })
 })

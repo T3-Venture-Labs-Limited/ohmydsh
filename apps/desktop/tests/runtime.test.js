@@ -1,7 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { needs } = require('../src/runtime')
+const { needs, tarExe } = require('../src/runtime')
 
 const paths = { dshBin: '/r/dsh.js', pnpmExe: '/r/pnpm', dshHome: '/h' }
 const wanted = { dsh: '0.2.2-rc.3', pnpm: '12.15.0', manifestVersion: '0.1.0' }
@@ -21,4 +21,8 @@ test('a new manifest or a new DSH pin re-runs only what changed', () => {
 })
 test('a deleted binary is repaired', () => {
   assert.equal(needs(paths, wanted, { ...wanted }, (p) => p.replace(/\\/g, '/') !== '/r/dsh.js').runtime, true)
+})
+test('tar: System32 bsdtar by full path on Windows, plain tar elsewhere', () => {
+  assert.equal(tarExe('win32', { SystemRoot: 'C:\\Windows' }), 'C:\\Windows\\System32\\tar.exe')
+  assert.equal(tarExe('darwin', {}), 'tar'); assert.equal(tarExe('linux', {}), 'tar')
 })

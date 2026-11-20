@@ -32,6 +32,14 @@ test('falls back to Electron as Node when there is no bundled Node (macOS, Windo
 test('bundled Node location per platform', () => {
   assert.equal(bundledNodePath('/r', 'linux'), '/r/node/bin/node')
   assert.equal(bundledNodePath('C:\\r', 'win32'), 'C:\\r\\node\\node.exe')
+  // macOS: inside the .app bundle, Contents/Resources is process.resourcesPath
+  assert.equal(bundledNodePath('/Applications/ohmydsh.app/Contents/Resources', 'darwin'), '/Applications/ohmydsh.app/Contents/Resources/node/bin/node')
+})
+test('Windows and macOS pick the bundled Node too (Electron only as the fallback)', () => {
+  const win = chooseNodeRuntime({ resources: 'C:\\Users\\First Last\\AppData\\Local\\Programs\\ohmydsh\\resources', execPath: 'C:\\x\\ohmydsh.exe', platform: 'win32', env: {}, exists: () => false, executable: (f) => f.endsWith('node\\node.exe') })
+  assert.deepEqual([win.kind, win.electronAsNode], ['bundled', false]); assert.match(win.exe, /resources\\node\\node\.exe$/)
+  const mac = chooseNodeRuntime({ resources: '/Applications/ohmydsh.app/Contents/Resources', execPath: '/Applications/ohmydsh.app/Contents/MacOS/ohmydsh', platform: 'darwin', env: {}, exists: () => false, executable: (f) => f.endsWith('Resources/node/bin/node') })
+  assert.deepEqual([mac.kind, mac.exe], ['bundled', '/Applications/ohmydsh.app/Contents/Resources/node/bin/node'])
 })
 test('isExecutableFile: needs a regular file with the execute bit (real files)', { skip: process.platform === 'win32' }, () => {
   const dir = fs.mkdtempSync(path.join(process.env.TMPDIR ?? os.tmpdir(), 'omd-node-'))

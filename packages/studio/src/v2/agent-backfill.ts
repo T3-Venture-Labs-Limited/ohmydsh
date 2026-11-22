@@ -13,6 +13,7 @@ import type { StudioCore } from './core.js'
 export const BACKFILL_KEY = 'agent-backfill:v1'
 const MAX_SESSIONS = 2000
 const MAX_FILES_PER_DIR = 5000
+export const YIELD_MS = 25
 
 /** What the backfill needs from the host's session history. Optional: without it only the media folders are scanned. */
 export interface SessionHistory {
@@ -39,7 +40,9 @@ export async function runBackfill(core: StudioCore, capture: AgentCapture, optio
   const tally = emptyTally()
   let sessionsScanned: number | undefined
   let filesScanned = 0
-  const pause = (): Promise<void> => new Promise(resolve => setTimeout(resolve, options.yieldMs ?? 5))
+  // Reading one session decodes and freezes its whole log on the host's single thread (tens of ms to seconds). The loop therefore gives the
+  // event loop a turn after EVERY session, not only after one that held media, so the sidebar and the open chat keep being served.
+  const pause = (): Promise<void> => new Promise(resolve => setTimeout(resolve, options.yieldMs ?? YIELD_MS))
 
   // 1) Session history first: it carries the session, workspace, prompt and model, which a bare file does not.
   if (options.history !== undefined) {
@@ -49,7 +52,6 @@ export async function runBackfill(core: StudioCore, capture: AgentCapture, optio
         try {
           const log = await options.history.read(record.id)
           const calls = new Map<string, CallInfo>()
-          let any = false
           for (const event of log.events) {
             if (event.type === 'tool/call') {
               const d = event.data as { callId?: unknown; name?: unknown; arguments?: unknown } | undefined
@@ -61,14 +63,13 @@ export async function runBackfill(core: StudioCore, capture: AgentCapture, optio
               if (call === undefined || !isCollectable(call.name)) continue
               const media = extractMedia(message.content)
               if (media.images.length === 0 && media.videoPaths.length === 0) continue
-              any = true
               const cwd = log.cwd ?? record.cwd
               for (const outcome of await capture.collect(media, { ...call, sessionId: record.id, ...(cwd === undefined ? {} : { cwd }), ...(event.time === undefined ? {} : { time: event.time }) })) addOutcome(tally, outcome)
             }
           }
           sessionsScanned++
-          if (any) await pause()
         } catch { tally.failed++ /* one unreadable session must not stop the rest */ }
+        await pause()
       }
     } catch { /* history unavailable: the folders below still run */ }
   }

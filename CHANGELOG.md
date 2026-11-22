@@ -5,6 +5,8 @@ community plugins. Add a section here before tagging; the text under the version
 
 ## Unreleased
 
+- Start-up speed (skill-studio 0.1.2): opening a long conversation no longer sends one `proposals` request per finished turn (33 in the first three seconds of a 105-turn session); the approval cards share one request, reuse its answer for four seconds and refresh once per push notification.
+- Start-up speed (studio 0.1.2): the one-time import of existing chats into the gallery now gives the server a turn after every chat (it used to read all of them back to back, blocking it for about 7 s on 112 sessions) and starts a minute after boot instead of 20 s.
 - Docs (Linux): keep the AppImage as one unversioned file so updates replace it in place; how AppImageLauncher creates one menu entry per AppImage file and how to avoid duplicates; how to quit and restart the app from a script without crashing it (`SIGTERM` to the main process, never kill the AppImage runtime, never start it inside a `systemd-run` unit that ends).
 
 ## 0.1.6

@@ -155,6 +155,16 @@ describe('agent media backfill', () => {
     expect(core.db.queryAssets({}).total).toBe(0)
   })
 
+  it('gives the event loop a turn after every session, so a long history never blocks the host', async () => {
+    const ids = Array.from({ length: 12 }, (_, i) => ({ id: `s${String(i)}` }))
+    let ticks = 0; const timer = setInterval(() => { ticks++ }, 1)
+    const seenTicks: number[] = []
+    const history = { list: async () => ids, read: async () => { seenTicks.push(ticks); const end = Date.now() + 3; while (Date.now() < end) { /* a session that takes a few ms of synchronous decode */ } return { events: [] } } }
+    try { await runBackfill(core, capture, { home, history, yieldMs: 4 }) } finally { clearInterval(timer) }
+    // Timers fired between reads: no session ran back to back with the previous one.
+    for (let i = 1; i < seenTicks.length; i++) expect(seenTicks[i]!).toBeGreaterThan(seenTicks[i - 1]!)
+  })
+
   it('one unreadable session does not stop the rest', async () => {
     const bytes = new Uint8Array(await png([70, 80, 90])); attachments.set('sha256:k', bytes)
     const history = { list: async () => [{ id: 'bad' }, { id: 'good', cwd: workspace }], read: async (id: string) => { if (id === 'bad') throw new Error('corrupt'); return { cwd: workspace, events: [call('c', 'image_generate', {}), result('c', [imageBlock('sha256:k', bytes.length)])] } } }

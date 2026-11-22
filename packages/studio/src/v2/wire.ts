@@ -22,6 +22,9 @@ import { AgentCapture } from './agent-capture.js'
 import { BACKFILL_KEY, readBackfillMarker, runBackfill, type BackfillSummary, type SessionHistory } from './agent-backfill.js'
 import type { AgentMediaApi } from './routes/agent-media.js'
 
+/** The automatic first backfill waits this long after boot: it decodes every existing session on the host's single thread. */
+export const FIRST_BACKFILL_DELAY_MS = 60_000
+
 export const OPENROUTER_KEY_REF = 'OPENROUTER_API_KEY'
 export const REPLICATE_KEY_REF = 'REPLICATE_API_TOKEN'
 export const GOOGLE_KEY_REF = 'GEMINI_API_KEY'
@@ -133,12 +136,12 @@ export function wireV2(ctx: Context, options: WireOptions): StudioCore {
     backfill: () => (backfilling ??= Promise.resolve().then(() => runBackfill(core, capture, { ...(options.home === undefined ? {} : { home: options.home }), history: history() })).finally(() => { backfilling = undefined })),
     sessionTitle: async id => { try { return (await sessionQuery()?.readTitle?.(id))?.title } catch { return undefined } },
   }
-  // First start with this version: one automatic backfill, after the host has settled. The marker makes it run once; the gallery menu reruns it.
+  // First start with this version: one automatic backfill, a minute after boot so the sidebar and the first chat are not competing with it. The marker makes it run once; the gallery menu reruns it.
   const firstBackfill = setTimeout(() => {
     if (!captureEnabled() || readBackfillMarker(core) !== undefined || core.db.getSetting(BACKFILL_KEY) !== undefined) return
     // A timer callback must never throw: an uncaught exception here would take the whole host down.
     try { void agentApi.backfill().then(r => { ctx.logger.info(`dsh-studio: collected agent media from existing chats and folders (${String(r.imported)} new, ${String(r.alreadyThere)} already there, ${String(r.skipped)} skipped)`) }).catch((error: unknown) => { ctx.logger.warn(`dsh-studio: agent media backfill failed: ${error instanceof Error ? error.message.slice(0, 200) : 'unknown error'}`) }) } catch { /* never throw out of a timer */ }
-  }, 20_000)
+  }, FIRST_BACKFILL_DELAY_MS)
   firstBackfill.unref()
   ctx.effect(() => () => { clearTimeout(firstBackfill) }, 'dsh-studio: agent media first backfill')
 

@@ -3,6 +3,14 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
+## 0.1.5
+
+Automatic follow-up release. Everything below passed the full install, boot and upgrade test before it was released.
+
+- @changfenhuang/dsh-genui 0.16.0 -> 0.17.0 ([npm](https://www.npmjs.com/package/@changfenhuang/dsh-genui/v/0.17.0))
+- dsh-context 0.86.0 -> 0.87.0 ([npm](https://www.npmjs.com/package/dsh-context/v/0.87.0))
+- dsh-notify-me 1.21.6 -> 1.22.0 ([npm](https://www.npmjs.com/package/dsh-notify-me/v/1.22.0))
+
 ## 0.1.4
 
 - Wording: it now says ohmydsh wherever you use it, not "DSH"/"DeepSeek Harness". Phone app (`@t3labs/ohmydsh-pwa` 0.3.2): the sign-in and pairing pages, the offline page, notifications, the install description and the Settings copy use one product name from the plugin config (`name`/`shortName`, default ohmydsh; set `DeepSeek Harness`/`DSH` on stock DSH). Desktop: loading screen, tray ("Restart ohmydsh"), About box and error messages; Android: every screen and message. Settings copy of studio 0.1.1, triggers 0.1.1, composio 0.1.1, theme 0.1.2 and skill-studio 0.1.1. DeepSeek Harness is still named where it is the engine ("Built on DeepSeek Harness", the first-run download, technical docs).

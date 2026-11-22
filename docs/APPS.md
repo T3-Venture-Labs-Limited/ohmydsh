@@ -83,6 +83,25 @@ The app updates itself from GitHub Releases through `electron-updater`. It runs 
 
 **An update never restarts anything.** The app only downloads; the new version is installed the next time you choose **Quit** in the tray and open ohmydsh again (closing the window does not quit). A running agent turn is therefore never interrupted. When a download finishes you get one notice ("ohmydsh 0.x is ready"); leaving the app running for weeks is fine.
 
+**Linux AppImage: keep one file, under one name without a version.** Save the download once as, for example,
+`~/.local/share/ohmydsh/ohmydsh.AppImage` (`chmod +x` it) and point your launcher or `.desktop` entry at that path.
+With a name that has no version in it, the updater replaces that same file in place (an atomic `mv`; the running app keeps
+its old copy until you quit), so there is never more than one copy and nothing else has to change. Do not keep renamed
+backups next to it: download an older release from GitHub if you ever need to go back.
+
+**AppImageLauncher** (installed on many distros, including Omarchy) watches `~/Applications` and turns *every* AppImage
+file there into its own menu entry, renaming files it integrates (`…_<hash>.AppImage`). With versioned files, backups or
+an update downloaded next to the old file you get one "ohmydsh (0.1.x)" entry per file. Either keep the single
+`ohmydsh.AppImage` outside `~/Applications` and add `export APPIMAGELAUNCHER_DISABLE=1` to the launcher (no integration
+prompt, your own `.desktop` entry is the only one), or put exactly that one unversioned file in `~/Applications` and let
+AppImageLauncher integrate it once.
+
+**Quitting and restarting from a script.** Send `SIGTERM` to the app's main process (the `ohmydsh` process without a
+`--type=` argument); it stops DSH cleanly and exits. Never kill the AppImage runtime process (`pkill -f ohmydsh.AppImage`):
+it serves the app's files, so every other ohmydsh process then dies with `SIGBUS` and leaves a crash dump. And do not
+start the app from inside a `systemd-run` unit that ends: systemd stops everything in the unit when its main process
+exits, the app included; start it from the desktop session (`gtk-launch ohmydsh`, or your compositor's `exec`).
+
 **AppImage started through a symlink** (for example `~/Applications/ohmydsh.AppImage -> ohmydsh-0.1.1-linux-x86_64.AppImage`, launched by a script): the AppImage runtime gives the app the *real* file in `$APPIMAGE`. electron-updater deletes that file and writes the new one next to it **under the new version's name** (`ohmydsh-0.1.4-linux-x86_64.AppImage`). The app then moves every symlink in the same folder that pointed at the old file onto the new one (relative links stay relative), so `ohmydsh.AppImage` and anything that calls it keeps working; the log says `updater: AppImage is now … moved 1 symlink(s)`. A symlink in another folder is not found automatically: list it in `OHMYDSH_APPIMAGE_LINKS` (colon-separated) in the launcher script, or point the launcher at the versioned file's folder with a glob. If the AppImage folder is not writable the update fails and the log says so: move the AppImage somewhere you can write, or update by hand. The old `.bak-…` copies you made yourself are never touched.
 
 The DSH and plugin versions are separate: they follow `ohmydsh.json`. A new app version that pins a newer set re-installs the plugins on its first start. Turn the app's self-update off with `"autoUpdate": false` or `OHMYDSH_NO_UPDATE=1` (then the tray item says so).

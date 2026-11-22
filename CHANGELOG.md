@@ -3,6 +3,10 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
+## Unreleased
+
+- Docs (Linux): keep the AppImage as one unversioned file so updates replace it in place; how AppImageLauncher creates one menu entry per AppImage file and how to avoid duplicates; how to quit and restart the app from a script without crashing it (`SIGTERM` to the main process, never kill the AppImage runtime, never start it inside a `systemd-run` unit that ends).
+
 ## 0.1.6
 
 - Theme (`@t3labs/ohmydsh-theme` 0.1.3): an Endfield look built into the theme plugin: square corners, accent-filled controls, the hero wordmark and a glass composer, with cheap selectors and no per-frame layout work. Off by default; switch it on for every device with `look: endfield` in the `dsh-theme` row, or per browser in Settings > Theme. Credit: the look follows the community theme dsh-theme-endfield (see the theme's NOTICE).

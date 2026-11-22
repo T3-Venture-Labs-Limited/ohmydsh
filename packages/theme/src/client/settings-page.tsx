@@ -79,6 +79,26 @@ export default function SettingsPage({ t, controller }: { t: T; controller: Them
           )}
         </Card>
       </Section>
+      <Section title={t('sectionLook')}>
+        <Card>
+          <SettingsRow title={t('lookTitle')} description={t('lookDescription', { default: t(state.lookDefault === 'endfield' ? 'lookEndfield' : 'lookStock') })}>
+            <SegmentedControl
+              id="dsh-theme-look"
+              label={t('lookLabel')}
+              value={state.lookChoice}
+              onChange={(value) => { controller.setLook(value) }}
+              options={[
+                { value: 'default', label: t('lookFollowProfile') },
+                { value: 'stock', label: t('lookStock') },
+                { value: 'endfield', label: t('lookEndfield') },
+              ]}
+            />
+          </SettingsRow>
+          {state.look === 'endfield' && state.endfield && (
+            <SettingsRow title={t('lookPluginTitle')} description={t('lookPluginDescription')} />
+          )}
+        </Card>
+      </Section>
       {source !== 'stock' && (
         <Section title={t('sectionOptions')}>
           <Card>

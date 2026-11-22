@@ -35,6 +35,15 @@ export const locale = defineLocale('dsh-theme', {
   endfieldTitle: 'dsh-theme-endfield detected',
   endfieldDescription: 'Its square corners stay. Its colours and accent follow the palette above instead of its own yellow or cyan.',
   previewLabel: 'Colours currently applied',
+  sectionLook: 'Look',
+  lookTitle: 'Look',
+  lookDescription: 'Endfield: square corners, accent buttons and the ENDFIELD wordmark. Profile default: {default}. A choice here is for this browser only.',
+  lookLabel: 'Look',
+  lookFollowProfile: 'Profile default',
+  lookStock: 'Stock',
+  lookEndfield: 'Endfield',
+  lookPluginTitle: 'dsh-theme-endfield is installed',
+  lookPluginDescription: 'That plugin draws the Endfield look itself, so this lighter version stays off. Remove it to use this one.',
 })
 
 export type T = ReturnType<typeof locale.bind>

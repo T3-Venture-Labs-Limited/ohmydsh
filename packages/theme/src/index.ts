@@ -5,13 +5,17 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { OmarchyState } from './host/omarchy-state.ts'
-import { OMARCHY_ROUTE, serveSnapshot, withAdmission } from './host/routes.ts'
+import { LOOK_ROUTE, OMARCHY_ROUTE, serveLook, serveSnapshot, withAdmission } from './host/routes.ts'
 import { registerThemeRemote } from './host/push.ts'
 import type { Admission } from './host/routes.ts'
 
 export const name = '@t3labs/ohmydsh-theme'
 
-export function apply(ctx: Context): void {
+/** Profile config (dsh-theme row): `look: endfield` turns the Endfield look on for every device by default. */
+export interface Config { look?: 'stock' | 'endfield' }
+
+export function apply(ctx: Context, config: Config = {}): void {
+  const look = config?.look === 'endfield' ? 'endfield' : 'stock'
   const state = new OmarchyState()
   let admission: Admission | undefined
 
@@ -41,5 +45,6 @@ export function apply(ctx: Context): void {
     const server = (web as unknown as { webServer: { register(route: { kind: 'exact'; path: string; handler: (req: never, res: never) => void }): () => void } }).webServer
     const guard = (handler: Parameters<typeof withAdmission>[1]) => withAdmission(() => admission, handler) as (req: never, res: never) => void
     web.effect(() => server.register({ kind: 'exact', path: OMARCHY_ROUTE, handler: guard(serveSnapshot(state)) }), 'dsh-theme: snapshot route')
+    web.effect(() => server.register({ kind: 'exact', path: LOOK_ROUTE, handler: guard(serveLook(() => look)) }), 'dsh-theme: look route')
   })
 }

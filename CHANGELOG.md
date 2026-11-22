@@ -3,7 +3,7 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
-## Unreleased
+## 0.1.7
 
 - Start-up speed (skill-studio 0.1.2): opening a long conversation no longer sends one `proposals` request per finished turn (33 in the first three seconds of a 105-turn session); the approval cards share one request, reuse its answer for four seconds and refresh once per push notification.
 - Start-up speed (studio 0.1.2): the one-time import of existing chats into the gallery now gives the server a turn after every chat (it used to read all of them back to back, blocking it for about 7 s on 112 sessions) and starts a minute after boot instead of 20 s.

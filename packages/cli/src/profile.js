@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { composeCheck, describeCompose, isProfileRunning } from './health.js'
 import { diffLock, makeLock, readLock, writeLock } from './lock.js'
 import { readBlock, rewriteBlock, rewriteWorkspaceYaml } from './managed.js'
-import { registryPins, resolveDesired } from './manifest.js'
+import { resolveDesired, releaseAgeExemptions } from './manifest.js'
 import { mergeHosts, tailnetHosts, trustedHostsRow } from './tailnet.js'
 import { OmdError } from './util.js'
 
@@ -112,7 +112,7 @@ export async function syncProfile(ctx, opts) {
     writeFileSync(patchFile, rewriteBlock(read(patchFile, PATCH_DEFAULT), managedYaml, 'list'))
     if (!existsSync(join(stageDir, 'cordis.yml'))) writeFileSync(join(stageDir, 'cordis.yml'), '# dsh profile root. Edit cordis.patch.yml, not this file.\n[]\n')
     const wsFile = join(stageDir, 'pnpm-workspace.yaml')
-    const ws = rewriteWorkspaceYaml(read(wsFile, WORKSPACE_DEFAULT), { allowBuilds: manifest.allowBuilds, releaseAgeExclude: registryPins(manifest, desired) })
+    const ws = rewriteWorkspaceYaml(read(wsFile, WORKSPACE_DEFAULT), { allowBuilds: manifest.allowBuilds, releaseAgeExclude: releaseAgeExemptions(manifest, desired, lock) })
     writeFileSync(wsFile, ws.text)
     for (const w of ws.warnings) log.warn(w)
 

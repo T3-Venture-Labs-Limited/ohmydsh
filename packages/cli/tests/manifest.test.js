@@ -89,3 +89,11 @@ test('registryPins lists only plugins resolved from the registry', () => {
   const { plugins } = resolveDesired(lm, { source: '/x/ohmydsh.json' })
   assert.deepEqual(registryPins(lm, plugins), ['dsh-a@1.0.0'])
 })
+
+test('release-age exemptions keep what omd installed last time (two releases within 24 h)', async () => {
+  const { releaseAgeExemptions } = await import('../src/manifest.js')
+  const desired = new Map([['a', { version: '1.0.1', spec: '1.0.1' }], ['ours', { version: '0.2.0', spec: 'link:/x' }]])
+  const lock = { plugins: { a: { version: '1.0.0', spec: '1.0.0' }, theme: { version: '0.1.3', spec: '0.1.3' }, dev: { version: '0.1.0', spec: 'link:/y' } } }
+  assert.deepEqual(releaseAgeExemptions({}, desired, lock), ['a@1.0.0', 'a@1.0.1', 'theme@0.1.3'])
+  assert.deepEqual(releaseAgeExemptions({}, desired, null), ['a@1.0.1'])
+})

@@ -132,3 +132,13 @@ export function specFor(manifest, name, version, { dev, source }) {
 export function registryPins(manifest, plugins) {
   return [...plugins].filter(([, p]) => p.spec === p.version).map(([name, p]) => `${name}@${p.version}`)
 }
+
+/**
+ * Release-age exemptions for an install: the registry pins of the new set, plus the registry pins omd installed last time
+ * (from the previous lock). pnpm re-checks every entry of the existing lockfile against minimumReleaseAge, so a version omd
+ * itself installed a few hours ago would otherwise block the update (seen when two releases land within 24 h).
+ */
+export function releaseAgeExemptions(manifest, desired, previousLock) {
+  const prev = Object.entries(previousLock?.plugins ?? {}).filter(([, p]) => p && p.spec === p.version).map(([name, p]) => `${name}@${p.version}`)
+  return [...new Set([...registryPins(manifest, desired), ...prev])].sort()
+}

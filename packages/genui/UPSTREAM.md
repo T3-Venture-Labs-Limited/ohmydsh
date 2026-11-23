@@ -9,7 +9,7 @@ below. ohmydsh normally installs community plugins from npm unmodified; GenUI is
 |---|---|
 | Upstream | https://github.com/omdsh-dev/dsh-genui |
 | Upstream base | `v0.17.0`, commit `a5c4232` ("release: prepare GenUI 0.17.0") |
-| Our branch | https://github.com/deestax/dsh-genui/tree/feat/social-post-previews, head `fa94bca` (local; not pushed yet) |
+| Our branch | https://github.com/deestax/dsh-genui/tree/feat/social-post-previews, head `fa94bca` (pushed; review fixes for omdsh-dev/dsh-genui#470) |
 | Upstream PR | omdsh-dev/dsh-genui#470 (social post previews), open |
 | Version here | `0.17.2` = upstream 0.17.0 + the three commits below. |
 

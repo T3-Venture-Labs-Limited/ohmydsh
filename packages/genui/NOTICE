@@ -9,5 +9,8 @@ copies of the code, is in the LICENSE file of this package and applies to the wh
 Third-party material bundled by upstream (OpenAI Apps SDK UI icons, Simple Icons, KaTeX, MapLibre and others) keeps
 its own licence; see THIRD_PARTY_NOTICES.md.
 
+The x-post character counter bundles Twitter's official twitter-text parser 3.1.0 (Apache License 2.0,
+Copyright 2011 Twitter, Inc.) and its MIT-licensed dependencies; see THIRD_PARTY_NOTICES.md.
+
 The x-post and linkedin-post social post previews were written for this package and offered upstream as
 omdsh-dev/dsh-genui#470.

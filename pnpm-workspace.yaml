@@ -15,6 +15,7 @@ allowBuilds:
   '@google/genai': false
   protobufjs: false
   node-addon-require-builtin: false
+  core-js: false
 
 # DSH rc builds are newer than pnpm's minimum release age.
 minimumReleaseAgeExclude:

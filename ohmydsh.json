@@ -19,7 +19,7 @@
       "dsh-context": "0.87.1",
       "dsh-model-logos": "0.8.0",
       "dsh-better-sidebar": "0.32.1",
-      "@t3labs/ohmydsh-genui": "0.17.1",
+      "@t3labs/ohmydsh-genui": "0.17.2",
       "dsh-marktext": "0.1.13",
       "@orderg-x/dsh-video-preview": "0.5.7",
       "@zseven-w/dsh-openpencil": "0.1.0-rc.16",

@@ -9,9 +9,9 @@ below. ohmydsh normally installs community plugins from npm unmodified; GenUI is
 |---|---|
 | Upstream | https://github.com/omdsh-dev/dsh-genui |
 | Upstream base | `v0.17.0`, commit `a5c4232` ("release: prepare GenUI 0.17.0") |
-| Our branch | https://github.com/deestax/dsh-genui/tree/feat/social-post-previews, head `ae66d4c` |
+| Our branch | https://github.com/deestax/dsh-genui/tree/feat/social-post-previews, head `9d9114f` (local; not pushed yet) |
 | Upstream PR | omdsh-dev/dsh-genui#470 (social post previews), open |
-| Version here | `0.17.1` = upstream 0.17.0 + the commit below. |
+| Version here | `0.17.2` = upstream 0.17.0 + the two commits below. |
 
 ## Changes against upstream 0.17.0
 
@@ -22,6 +22,16 @@ below. ohmydsh normally installs community plugins from npm unmodified; GenUI is
      three lines; blank lines spend a line), expands locally, shows the visible character count, desktop/mobile switch.
    - New `src/client/blocks/social-post.tsx`, `social-post.module.css`, `src/client/social-text.ts`; schema, guard,
      limits, i18n, dsh-go compiler and SKILL.md entries; tests in `tests/genui-social-post.spec.tsx`.
+2. `9d9114f` fix(x-post): count with the official `twitter-text` parser; label the LinkedIn fold as an estimate
+   (review on #470: 278 characters + `1️⃣` reported 283 instead of 280).
+   - X counting and URL detection use `twitter-text` 3.1.0 (`parseTweet`, default v3 config, emoji parsing on;
+     `extractUrlsWithIndices` for highlighting and the t.co display). Renderer, standalone export and the dsh-go
+     projection share one `xCharStatus`. The counter shows `weightedLength/limit`, fills by `permillage` and exposes
+     `valid`.
+   - `twitter-text` (Apache-2.0) is a runtime dependency and is bundled into `lib/index.js`, `lib/client.js` and the
+     standalone runtime with its core-js 2 polyfill imports resolved to an empty module (`tsdown.config.ts`); notices
+     in `THIRD_PARTY_NOTICES.md`.
+   - The LinkedIn fold note, the native projection and SKILL.md say the fold is an estimate.
 
 ## Differences in packaging (no behaviour change)
 

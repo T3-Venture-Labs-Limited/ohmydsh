@@ -1,7 +1,7 @@
 {
   "name": "@t3labs/ohmydsh-genui",
   "description": "GenUI for DeepSeek Harness, ohmydsh build: interactive UI components rendered inline in assistant replies via the ```dsh-ui fence, plus x-post and linkedin-post social post previews. A modified version of @changfenhuang/dsh-genui 0.17.0.",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "icon": "./assets/genui-icon.svg",
   "type": "module",
   "main": "lib/index.js",
@@ -81,7 +81,8 @@
   "dependencies": {
     "katex": "0.16.47",
     "mdast-util-from-markdown": "2.0.3",
-    "react": "^18.3.1"
+    "react": "^18.3.1",
+    "twitter-text": "3.1.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
@@ -172,6 +173,7 @@
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "@types/three": "^0.185.4",
+    "@types/twitter-text": "3.1.10",
     "anser": "2.3.5",
     "clsx": "2.1.1",
     "diff": "9.0.0",

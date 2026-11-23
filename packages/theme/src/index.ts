@@ -8,14 +8,21 @@ import { OmarchyState } from './host/omarchy-state.ts'
 import { LOOK_ROUTE, OMARCHY_ROUTE, serveLook, serveSnapshot, withAdmission } from './host/routes.ts'
 import { registerThemeRemote } from './host/push.ts'
 import type { Admission } from './host/routes.ts'
+import { glassDefaultOf } from './shared/glass.ts'
+import type { GlassDefault } from './shared/glass.ts'
 
 export const name = '@t3labs/ohmydsh-theme'
 
-/** Profile config (dsh-theme row): `look: endfield` turns the Endfield look on for every device by default. */
-export interface Config { look?: 'stock' | 'endfield' }
+/**
+ * Profile config (dsh-theme row): `look: endfield` turns the Endfield look on for every device by default;
+ * `glass: auto | off | subtle | standard | strong` sets how see-through the composer, sidebar and right panel are
+ * (default auto: standard with the Endfield look, off otherwise). A browser can override both in Settings > Theme.
+ */
+export interface Config { look?: 'stock' | 'endfield'; glass?: GlassDefault }
 
 export function apply(ctx: Context, config: Config = {}): void {
   const look = config?.look === 'endfield' ? 'endfield' : 'stock'
+  const glass = glassDefaultOf(config?.glass)
   const state = new OmarchyState()
   let admission: Admission | undefined
 
@@ -45,6 +52,6 @@ export function apply(ctx: Context, config: Config = {}): void {
     const server = (web as unknown as { webServer: { register(route: { kind: 'exact'; path: string; handler: (req: never, res: never) => void }): () => void } }).webServer
     const guard = (handler: Parameters<typeof withAdmission>[1]) => withAdmission(() => admission, handler) as (req: never, res: never) => void
     web.effect(() => server.register({ kind: 'exact', path: OMARCHY_ROUTE, handler: guard(serveSnapshot(state)) }), 'dsh-theme: snapshot route')
-    web.effect(() => server.register({ kind: 'exact', path: LOOK_ROUTE, handler: guard(serveLook(() => look)) }), 'dsh-theme: look route')
+    web.effect(() => server.register({ kind: 'exact', path: LOOK_ROUTE, handler: guard(serveLook(() => ({ look, glass }))) }), 'dsh-theme: look route')
   })
 }

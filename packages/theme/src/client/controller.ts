@@ -19,6 +19,10 @@
 // The profile sets the default for every device (`look: endfield` on the dsh-theme row, served at LOOK_URL); a browser
 // can override it in Settings > Theme. With colours on Stock the look brings Endfield's own paper/ink palette. While the
 // real dsh-theme-endfield plugin is on the page the look stays off (that plugin draws it).
+//
+// Glass (src/shared/glass.ts + glass-css.ts): off | subtle | standard | strong, independent of the look and of the colours.
+// Same delivery as the look: the profile's `glass:` (auto | tier) comes from the Host, a browser can override it in Settings >
+// Theme. `auto` is standard with the Endfield look and off otherwise. One stylesheet, mounted only while a tier is on.
 import { isHex } from '../shared/color.ts'
 import { PALETTE_KEYS } from '../shared/omarchy.ts'
 import type { Colors, Mode, OmarchyPalette } from '../shared/omarchy.ts'
@@ -27,6 +31,9 @@ import { withEndfield } from '../shared/endfield.ts'
 import { endfieldOwnLayer, endfieldPalette, isLook, withEndfieldLook } from '../shared/endfield-look.ts'
 import type { Look } from '../shared/endfield-look.ts'
 import { endfieldLookCss } from './endfield-look-css.ts'
+import { glassCss } from './glass-css.ts'
+import { isGlass, isGlassDefault, resolveGlass } from '../shared/glass.ts'
+import type { Glass, GlassChoice, GlassDefault } from '../shared/glass.ts'
 import type { EndfieldFace } from './endfield-dom.ts'
 import type { LookFace } from './look-dom.ts'
 import type { TokenOptions } from '../shared/tokens.ts'
@@ -48,6 +55,8 @@ const KEY_SEMANTIC = 'dsh-theme.semantic'
 const KEY_LOOK = 'dsh-theme.look'
 /** Last profile default seen, so a reload applies the look before the Host answers. */
 const KEY_LOOK_DEFAULT = 'dsh-theme.lookDefault'
+const KEY_GLASS = 'dsh-theme.glass'
+const KEY_GLASS_DEFAULT = 'dsh-theme.glassDefault'
 
 export type LookChoice = Look | 'default'
 
@@ -80,6 +89,12 @@ export interface ControllerState {
   lookDefault: Look
   /** The look in effect: lookChoice, or lookDefault when it is 'default'. */
   look: Look
+  /** This browser's glass choice; 'default' follows the profile. */
+  glassChoice: GlassChoice
+  /** The profile's default glass (dsh-theme row config); 'auto' = standard with the Endfield look, otherwise off. */
+  glassDefault: GlassDefault
+  /** The glass tier in effect. */
+  glass: Glass
 }
 
 /** The slice of ctx.theme used here (matches ThemeRuntime). */
@@ -98,6 +113,8 @@ export interface ControllerDeps {
   endfield?: EndfieldFace | undefined
   /** Mounts the Endfield look stylesheet; omit in tests and on pages without a document. */
   look?: LookFace | undefined
+  /** Mounts the glass stylesheet; omit in tests and on pages without a document. */
+  glass?: LookFace | undefined
   storage?: Pick<Storage, 'getItem' | 'setItem'> | undefined
   /** Open the live stream (items are wire snapshots); it must end when the signal aborts. Omit to fall back to snapshot fetches. */
   open?: ((signal: AbortSignal) => AsyncIterable<unknown>) | undefined
@@ -134,12 +151,18 @@ export class ThemeController {
     const lookChoice: LookChoice = isLook(storedLook) ? storedLook : 'default'
     const cachedDefault = read(deps.storage, KEY_LOOK_DEFAULT)
     const lookDefault: Look = isLook(cachedDefault) ? cachedDefault : 'stock'
+    const storedGlass = read(deps.storage, KEY_GLASS)
+    const glassChoice: GlassChoice = isGlass(storedGlass) ? storedGlass : 'default'
+    const cachedGlass = read(deps.storage, KEY_GLASS_DEFAULT)
+    const glassDefault: GlassDefault = isGlassDefault(cachedGlass) ? cachedGlass : 'auto'
     this.state = {
       choice,
       semanticColors: read(deps.storage, KEY_SEMANTIC) === 'omarchy' ? 'omarchy' : 'dsh',
       status: 'idle', omarchy: undefined, endfield: false, scheme: deps.theme.getTheme().active?.colorScheme, applied: undefined,
       lookChoice, lookDefault, look: lookChoice === 'default' ? lookDefault : lookChoice,
+      glassChoice, glassDefault, glass: 'off',
     }
+    this.state.glass = this.effectiveGlass()
   }
 
   /** Bundled palettes, handed to the (lazy) settings page so it never imports the data itself. */
@@ -150,6 +173,7 @@ export class ThemeController {
   getSnapshot = (): ControllerState => this.state
   private set(patch: Partial<ControllerState>): void {
     this.state = { ...this.state, ...patch }
+    this.state.glass = this.effectiveGlass()
     for (const l of [...this.listeners]) l()
   }
 
@@ -167,13 +191,13 @@ export class ThemeController {
     }
     const doc = this.deps.doc
     if (doc !== undefined) {
-      const resync = (): void => { if (doc.visibilityState !== 'hidden') { void this.refetch(); void this.fetchLookDefault() } }
+      const resync = (): void => { if (doc.visibilityState !== 'hidden') { void this.refetch(); void this.fetchProfileDefaults() } }
       doc.addEventListener('visibilitychange', resync)
       this.offs.push(() => { doc.removeEventListener('visibilitychange', resync) })
     }
     this.connect()
     this.sync()
-    void this.fetchLookDefault()
+    void this.fetchProfileDefaults()
     return () => { this.dispose() }
   }
 
@@ -182,6 +206,7 @@ export class ThemeController {
     this.disposed = true
     this.closeStream()
     this.disengage()
+    this.deps.glass?.apply(undefined)
     for (const off of this.offs.splice(0)) off()
     this.listeners.clear()
   }
@@ -209,12 +234,33 @@ export class ThemeController {
     this.sync()
   }
 
+  /** This browser's glass: 'default' follows the profile, a tier overrides it here only. */
+  setGlass(choice: GlassChoice): void {
+    if (choice !== 'default' && !isGlass(choice)) return
+    write(this.deps.storage, KEY_GLASS, choice)
+    this.set({ glassChoice: choice })
+    this.syncGlass()
+  }
+
   // ---- internals ----
   private sync(): void {
     if (this.disposed) return
     const palette = this.resolve()
-    if (palette === undefined) { this.disengage(); this.set({ applied: undefined }); return }
-    this.engage(palette)
+    if (palette === undefined) { this.disengage(); this.set({ applied: undefined }) } else this.engage(palette)
+    this.syncGlass()
+  }
+
+  private effectiveGlass(): Glass {
+    return resolveGlass(this.state.glassChoice, this.state.glassDefault, this.lookOn())
+  }
+
+  /** Mount the glass stylesheet for the tier in effect (or remove it). Idempotent and cheap: it only compares text. */
+  private syncGlass(): void {
+    if (this.disposed) return
+    const tier = this.state.glass
+    // Rendered mode: the palette's, or Appearance when no palette is applied (Stock colours).
+    const mode = this.state.applied?.mode ?? this.state.scheme ?? 'dark'
+    this.deps.glass?.apply(tier === 'off' ? undefined : glassCss({ tier, mode, endfield: this.lookOn() }))
   }
 
   /** Open or close the Host stream to match the current choice. Never called from sync(), so a failed fetch cannot loop. */
@@ -260,20 +306,32 @@ export class ThemeController {
     return this.state.look === 'endfield' && !this.state.endfield
   }
 
-  /** Read the profile's default look. A failed read keeps the cached value (the look never flickers off offline). */
-  private async fetchLookDefault(): Promise<void> {
+  /** Read the profile's defaults (look, glass). A failed read keeps the cached values (nothing flickers off offline). */
+  private async fetchProfileDefaults(): Promise<void> {
     if (this.disposed) return
     const f = this.deps.fetchImpl ?? (typeof fetch === 'undefined' ? undefined : fetch.bind(globalThis))
     if (f === undefined) return
-    let next: unknown
+    let body: { look?: unknown; glass?: unknown } | undefined
     try {
       const response = await f(LOOK_URL, { credentials: 'same-origin', cache: 'no-store' })
       if (!response.ok) return
-      next = (parse(await response.text()) as { look?: unknown } | undefined)?.look
+      body = parse(await response.text()) as typeof body
     } catch { return }
-    if (this.disposed || !isLook(next) || next === this.state.lookDefault) return
-    write(this.deps.storage, KEY_LOOK_DEFAULT, next)
-    this.set({ lookDefault: next, look: this.state.lookChoice === 'default' ? next : this.state.lookChoice })
+    if (this.disposed || typeof body !== 'object' || body === null) return
+    const patch: Partial<ControllerState> = {}
+    const look = body.look
+    if (isLook(look) && look !== this.state.lookDefault) {
+      write(this.deps.storage, KEY_LOOK_DEFAULT, look)
+      patch.lookDefault = look
+      patch.look = this.state.lookChoice === 'default' ? look : this.state.lookChoice
+    }
+    const glass = body.glass
+    if (isGlassDefault(glass) && glass !== this.state.glassDefault) {
+      write(this.deps.storage, KEY_GLASS_DEFAULT, glass)
+      patch.glassDefault = glass
+    }
+    if (Object.keys(patch).length === 0) return
+    this.set(patch)
     this.sync()
   }
 
@@ -284,6 +342,7 @@ export class ThemeController {
       this.set({ scheme })
       // Stock colours + Endfield look: the palette is Endfield's own light or dark one, so it follows Appearance.
       if (this.state.choice === 'stock' && this.lookOn()) { this.sync(); return }
+      this.syncGlass() // Stock colours: the glass highlights follow Appearance
     }
     if (!this.state.endfield || this.ours === undefined || this.disposed || scheme === undefined) return
     const tokens = snapshot.active?.tokens

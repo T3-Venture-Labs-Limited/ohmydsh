@@ -5,6 +5,7 @@ community plugins. Add a section here before tagging; the text under the version
 
 ## Unreleased
 
+- Theme (`@t3labs/ohmydsh-theme` 0.1.4): a Glass setting is back, and now works with any look and any colours. Settings > Theme > Look > Glass picks Off, Subtle, Standard or Strong for this browser, or set `glass: auto | off | subtle | standard | strong` on the `dsh-theme` row for every device. The composer, the sidebar and the open right panel become see-through (the open panel also blurs what is behind it; the composer never blurs, so the send-button tooltip stays put), in the colours of your Omarchy theme or palette. The default `auto` changes nothing: Standard with the Endfield look, Off with the Stock look. Honours reduce-transparency. Credit: the tiers follow the community theme dsh-theme-endfield (see the theme's NOTICE).
 - GenUI can preview social posts before they are published (temporary patch until upstream releases [omdsh-dev/dsh-genui#470](https://github.com/omdsh-dev/dsh-genui/pull/470)). `x-post` shows an X post or a whole thread the way X does, one card per post joined by the thread line, each with X's character counter (links count as 23, emoji and CJK as 2; amber near 280, red past it). `linkedin-post` shows a LinkedIn feed post cut at "…see more" (about 210 characters on desktop, 140 on mobile, or 3 lines, whichever comes first), says how many characters show above the fold, expands in place and switches between desktop and mobile. Both follow the light or dark theme; line breaks are kept exactly as typed.
 
 ## 0.1.9

@@ -26,7 +26,6 @@ export function endfieldPalette(mode: 'light' | 'dark'): OmarchyPalette {
 }
 
 const A = '--dsw-alias-'
-const WHITE = '#ffffff' // artwork:ok glass highlights are white light on any palette
 
 export function endfieldLookLayer(palette: OmarchyPalette, options: TokenOptions): Layer {
   const out = endfieldLayer(palette, options)
@@ -50,9 +49,6 @@ export function endfieldLookLayer(palette: OmarchyPalette, options: TokenOptions
   set('--edge-glow', dark ? '0.05' : '0.08')
   set('--edge-caret', dark ? c.accent : label)
   set('--edge-link-hover', accentText)
-  set('--edge-glass-alpha', dark ? '0.76' : '0.8')
-  set('--edge-glass-edge', alpha(WHITE, dark ? 0.18 : 0.65))
-  set('--edge-glass-sheen', alpha(WHITE, dark ? 0.07 : 0.35))
   // Selected / hovered sidebar rows and other "selected" items: a solid accent in dark palettes, a wash in light ones.
   set('--edge-row-fill', dark ? c.accent : wash(0.22))
   set('--edge-row-ink', dark ? onAccent : label)

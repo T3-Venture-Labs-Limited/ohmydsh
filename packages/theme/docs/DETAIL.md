@@ -14,6 +14,11 @@ DSH takes its colours from the theme your Omarchy desktop is using, and re-colou
 
 The page shows which Omarchy theme is being followed and swatches of the colours in use.
 
+## Look and glass
+
+- **Look** (Stock or Endfield) is a separate setting. **Glass** (Off, Subtle, Standard, Strong) makes the composer, the sidebar and the open right panel see-through, with a real blur on the open panel. It works with any look and any colours. Pick it in Settings → Theme → Look → Glass for this browser, or set `glass:` on the `dsh-theme` row for every device. *Profile default* means: Standard with the Endfield look, Off with the Stock look.
+- Glass honours *reduce transparency* (opaque, no blur) and falls back to an almost opaque fill where the browser cannot blur.
+
 ## Good to know
 
 - **Status colours stay DSH's** (errors, warnings, success) by default, because some Omarchy themes assign those colour keys to other hues. Turn on *Use Omarchy status colours* to follow Omarchy there too.

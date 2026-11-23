@@ -1,4 +1,4 @@
-// DOM side of the Endfield look: one <style> element in <head>, present only while the look is on.
+// DOM side of the Endfield look and of glass: one <style> element each in <head>, present only while that feature is on.
 
 export const LOOK_ATTR = 'data-dsh-theme-look'
 
@@ -7,7 +7,8 @@ export interface LookFace {
   apply(css: string | undefined): void
 }
 
-export function createLookFace(doc: Pick<Document, 'head' | 'createElement'> | undefined = typeof document === 'undefined' ? undefined : document): LookFace {
+/** `name` is the attribute value that tells the two stylesheets apart ('endfield' | 'glass'). */
+export function createLookFace(doc: Pick<Document, 'head' | 'createElement'> | undefined = typeof document === 'undefined' ? undefined : document, name = 'endfield'): LookFace {
   let el: HTMLStyleElement | undefined
   return {
     apply(css) {
@@ -15,7 +16,7 @@ export function createLookFace(doc: Pick<Document, 'head' | 'createElement'> | u
       if (css === undefined) { el?.remove(); el = undefined; return }
       if (el === undefined) {
         el = doc.createElement('style')
-        el.setAttribute(LOOK_ATTR, 'endfield')
+        el.setAttribute(LOOK_ATTR, name)
       }
       if (el.textContent !== css) el.textContent = css
       if (el.parentNode !== doc.head) doc.head.appendChild(el)

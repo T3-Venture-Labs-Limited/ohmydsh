@@ -35,6 +35,7 @@ export function apply(ctx: Context): void {
     doc: typeof document === 'undefined' ? undefined : document,
     endfield: typeof document === 'undefined' ? undefined : createEndfieldFace(document),
     look: typeof document === 'undefined' ? undefined : createLookFace(document),
+    glass: typeof document === 'undefined' ? undefined : createLookFace(document, 'glass'),
   })
   // The single revert path: layer, stream and listeners.
   ctx.effect(() => controller.start(), 'dsh-theme: follow/palette layer')

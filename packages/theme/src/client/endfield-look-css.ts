@@ -1,7 +1,7 @@
 // The Endfield look: the stylesheet half (tokens: src/shared/endfield-look.ts). A port of the parts of
-// dsh-theme-endfield (MIT, github:ymh0000123/dsh-theme-endfield, see NOTICE) that show with its default settings plus
-// `glass: standard`. It is mounted only while the look is on, so no rule needs a `body.x` / `body[data-ds-dark-theme]`
-// prefix, and dark/light differences come from the token layer (or the DARK/LIGHT parts below, chosen by palette mode).
+// dsh-theme-endfield (MIT, github:ymh0000123/dsh-theme-endfield, see NOTICE) that show with its default settings. Glass
+// (the translucent composer, sidebar and right panel) is its own setting now: src/client/glass-css.ts. This sheet is mounted
+// only while the look is on, so no rule needs a `body.x` / `body[data-ds-dark-theme]` prefix, and dark/light differences come from the token layer (or the DARK/LIGHT parts below, chosen by palette mode).
 //
 // Cost rules, enforced by tests/endfield-look.spec.ts. They are why typing stays as fast as with no theme at all:
 //   - no `:has()`                     (re-checked on DOM changes; a streaming reply changes the DOM every frame)
@@ -48,20 +48,6 @@ a:hover { text-decoration-color: var(--edge-accent); color: var(--edge-link-hove
   color: var(--dsw-alias-label-primary); opacity: var(--edge-wm-alpha);
 }
 [class*="_heroGlow"] ellipse { fill: var(--edge-accent) !important; fill-opacity: var(--edge-glow) !important }
-
-/* Glass (Endfield's "standard" tier, without the backdrop blur: a translucent fill and a static sheen). */
-[data-composer-card], [data-sidebar-right-panel="push"][data-sidebar-right-open] {
-  --dsw-elevation-stroke-color: var(--edge-glass-edge);
-  background-color: rgb(var(--edge-glass-fill) / var(--edge-glass-alpha)) !important;
-  background-image: linear-gradient(145deg, var(--edge-glass-sheen), transparent 58%), radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--edge-accent) 10%, transparent), transparent 75%) !important;
-}
-[data-slot="sidebar"] > div {
-  background-image: linear-gradient(145deg, var(--edge-glass-sheen), transparent 58%), radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--edge-accent) 8%, transparent), transparent 75%);
-  box-shadow: inset -1px 0 0 var(--edge-glass-edge);
-}
-@media (prefers-reduced-transparency: reduce) {
-  [data-composer-card], [data-sidebar-right-panel="push"][data-sidebar-right-open] { background-color: rgb(var(--edge-glass-fill)) !important }
-}
 
 /* Solid accent controls. */
 [class$="_newSession"] { ${ink('var(--edge-on-accent)')}; background: var(--edge-accent) !important; border-color: var(--edge-accent) !important }

@@ -2,9 +2,13 @@
 import { useSyncExternalStore } from 'react'
 import { Card, Page, SegmentedControl, Section, Select, SettingsRow, Switch } from '../kit/index.ts'
 import type { ThemeController } from './controller.ts'
+import type { GlassChoice } from '../shared/glass.ts'
 import type { T } from './locale.ts'
 
 type Source = 'stock' | 'omarchy' | 'palette'
+
+/** Dictionary key naming each profile default. */
+const GLASS_KEYS = { auto: 'glassAuto', off: 'glassOff', subtle: 'glassSubtle', standard: 'glassStandard', strong: 'glassStrong' } as const
 
 const SWATCHES = ['background', 'lighter_background', 'foreground', 'accent', 'red', 'green', 'blue', 'magenta'] as const
 
@@ -91,6 +95,22 @@ export default function SettingsPage({ t, controller }: { t: T; controller: Them
                 { value: 'default', label: t('lookFollowProfile') },
                 { value: 'stock', label: t('lookStock') },
                 { value: 'endfield', label: t('lookEndfield') },
+              ]}
+            />
+          </SettingsRow>
+          <SettingsRow title={t('glassTitle')} description={t('glassDescription', { default: t(GLASS_KEYS[state.glassDefault]) })}>
+            <Select
+              id="dsh-theme-glass"
+              label={t('glassLabel')}
+              hideLabel
+              value={state.glassChoice}
+              onChange={(value) => { controller.setGlass(value as GlassChoice) }}
+              options={[
+                { value: 'default', label: t('glassFollowProfile') },
+                { value: 'off', label: t('glassOff') },
+                { value: 'subtle', label: t('glassSubtle') },
+                { value: 'standard', label: t('glassStandard') },
+                { value: 'strong', label: t('glassStrong') },
               ]}
             />
           </SettingsRow>

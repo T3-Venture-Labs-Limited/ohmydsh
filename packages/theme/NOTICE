@@ -36,8 +36,19 @@ src/artwork/endfield-own-tokens.ts)
 --------------------------------------------------------------------------------------------------------------
 A lighter port of the visible design of dsh-theme-endfield (https://github.com/ymh0000123/dsh-theme-endfield),
 MIT License, Copyright (c) 2026 ymh0000123: square corners, the solid-accent controls, the hero wordmark, the
-"standard" glass composer and sidebar sheen, table and badge styling, and Endfield's paper/ink palettes. The rules
+translucent composer and sidebar sheen, table and badge styling, and Endfield's paper/ink palettes. The rules
 were rewritten (cheaper selectors, no runtime layout reads), and the token values used when colours are on Stock were
 measured from a page running that plugin. The MIT permission notice is identical to the one in this repository's
 LICENSE file and applies to those portions as well. "Arknights: Endfield" and its wordmark belong to their owners;
 the wordmark text is drawn only while the Endfield look is switched on.
+
+Glass (src/artwork/glass-tiers.ts, src/client/glass-css.ts, src/shared/glass.ts)
+-------------------------------------------------------------------------------
+The glass setting (off / subtle / standard / strong) and its tier values come from dsh-theme-endfield
+(https://github.com/ymh0000123/dsh-theme-endfield), MIT License, Copyright (c) 2026 ymh0000123: the fill opacities
+(0.68 / 0.80 / 0.90 light, 0.64 / 0.76 / 0.88 dark), the backdrop blur radii (8 / 14 / 22 px), the white edge and sheen
+alphas (0.65 / 0.35 light, 0.18 / 0.07 dark), the Endfield paper and ink fill colours, the surfaces it is applied to
+(composer card without a backdrop filter, the open right panel with one, the sidebar's sheen and edge) and the
+@supports and prefers-reduced-transparency fallbacks. The values were read from a page running that plugin; the
+stylesheet is new (token-derived fills, one small sheet mounted only while glass is on). The MIT permission notice is
+identical to the one in this repository's LICENSE file and applies to those portions as well.

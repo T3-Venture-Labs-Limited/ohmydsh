@@ -45,15 +45,18 @@ for (const row of rows) {
   if (x.status !== 0) { problems.push(`${row.pkg.name}: cannot unpack ${row.file}`); continue }
   const base = join(dest, 'package')
   const need = ['package.json', 'README.md']
-  // The Parallel fork keeps its upstream layout: no icon or locale (it contributes a provider, not UI).
+  // The Parallel fork keeps its upstream layout: no icon or locale (it contributes a provider, not UI). GenUI keeps its
+  // upstream layout too: icon under assets/, i18n compiled into the bundle, and src/ published on purpose (its `./embed`
+  // and `./assets/*` exports point at TypeScript sources for hosts that bundle the renderer themselves).
   if (row.dir !== 'cli') need.push('cordis.patch.yml', 'LICENSE')
-  if (!['cli', 'web-search-parallel'].includes(row.dir)) need.push('icon.svg', 'locale/en.json')
+  if (!['cli', 'web-search-parallel', 'genui'].includes(row.dir)) need.push('icon.svg', 'locale/en.json')
+  if (row.dir === 'genui') need.push('assets/genui-icon.svg', 'NOTICE', 'UPSTREAM.md')
   for (const n of need) if (!existsSync(join(base, n))) problems.push(`${row.pkg.name}: tarball lacks ${n}`)
   if (!['cli', 'browser-takeover'].includes(row.dir) && !existsSync(join(base, 'lib'))) problems.push(`${row.pkg.name}: tarball lacks lib/`)
   if (existsSync(join(base, 'NOTICE')) === false && row.dir !== 'cli' && row.dir !== 'browser-takeover') problems.push(`${row.pkg.name}: tarball lacks NOTICE`)
   for (const f of row.files) {
     if (/(^|\/)(tests?|src|\.tmp|node_modules|\.env[^/]*)(\/|$)/.test(f) && !/^src\//.test(f) || /\.(pem|key)$/.test(f)) problems.push(`${row.pkg.name}: tarball contains ${f}`)
-    if (/^src\//.test(f) && row.dir !== 'cli') problems.push(`${row.pkg.name}: tarball contains source ${f}`)
+    if (/^src\//.test(f) && !['cli', 'genui'].includes(row.dir)) problems.push(`${row.pkg.name}: tarball contains source ${f}`)
     if (/^package\/(tests|scripts|tools)\//.test(`package/${f}`)) problems.push(`${row.pkg.name}: tarball contains ${f}`)
     const abs = join(base, f)
     if (!existsSync(abs) || /\.(png|jpe?g|webp|gif|ico|woff2?|ttf|whl|node|zip|gz)$/i.test(f)) continue

@@ -37,7 +37,8 @@
       "@t3labs/ohmydsh-skill-studio": "0.1.2",
       "@t3labs/ohmydsh-notebook": "0.1.0",
       "@t3labs/ohmydsh-triggers": "0.1.1",
-      "@t3labs/ohmydsh-automation-models": "0.1.0"
+      "@t3labs/ohmydsh-automation-models": "0.1.0",
+      "@t3labs/ohmydsh-keys": "0.1.0"
     },
     "packs": {
       "composio": {
@@ -110,6 +111,9 @@
     },
     "@t3labs/ohmydsh-automation-models": {
       "workspace": "packages/automation-models"
+    },
+    "@t3labs/ohmydsh-keys": {
+      "workspace": "packages/keys"
     },
     "@t3labs/ohmydsh-agent-browser": {
       "workspace": "packages/agent-browser"

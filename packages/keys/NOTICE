@@ -1,0 +1,10 @@
+@t3labs/ohmydsh-keys
+Copyright (c) 2026 Superdao (deestax)
+
+Licensed under the MIT License (see LICENSE).
+
+ohmydsh is an independent, unofficial distribution built on DeepSeek Harness (https://github.com/deepseek-ai/deepseek-harness,
+MIT License, Copyright (c) 2026 DeepSeek). DeepSeek did not make it and does not endorse or support it. This plugin uses
+DeepSeek Harness's public extension points only (the shortcut service, the page's index injection) and the rendered DOM of
+the approval and question cards; no DeepSeek package is modified, copied or patched on disk. "DeepSeek" and "DeepSeek Harness"
+are names of their owners; they appear here only to say what ohmydsh is built on.

@@ -3,6 +3,15 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
+## 0.1.8
+
+Automatic follow-up release. Everything below passed the full install, boot and upgrade test before it was released.
+
+- @zseven-w/dsh-openpencil 0.1.0-rc.15 -> 0.1.0-rc.16 ([npm](https://www.npmjs.com/package/@zseven-w/dsh-openpencil/v/0.1.0-rc.16))
+- dsh-composer-history 0.8.17 -> 0.8.19 ([npm](https://www.npmjs.com/package/dsh-composer-history/v/0.8.19))
+- dsh-context 0.87.0 -> 0.87.1 ([npm](https://www.npmjs.com/package/dsh-context/v/0.87.1))
+- dsh-output-styles 0.8.3 -> 0.8.5 ([npm](https://www.npmjs.com/package/dsh-output-styles/v/0.8.5))
+
 ## 0.1.7
 
 - CLI (`omd` 0.1.7): `omd update` no longer stops with `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` when the profile already holds a version omd installed less than 24 hours earlier (two releases within a day): the versions recorded in the previous lock stay exempt from pnpm's minimum release age.

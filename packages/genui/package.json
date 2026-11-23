@@ -1,0 +1,312 @@
+{
+  "name": "@t3labs/ohmydsh-genui",
+  "description": "GenUI for DeepSeek Harness, ohmydsh build: interactive UI components rendered inline in assistant replies via the ```dsh-ui fence, plus x-post and linkedin-post social post previews. A modified version of @changfenhuang/dsh-genui 0.17.0.",
+  "version": "0.17.1",
+  "icon": "./assets/genui-icon.svg",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/plugin/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/plugin/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json",
+    "./icon": "./assets/genui-icon.svg",
+    "./embed": "./src/client/embed.ts",
+    "./assets/mermaid": "./src/client/asset-mermaid.ts",
+    "./assets/three": "./src/client/asset-three.ts",
+    "./assets/echarts-core": "./src/client/asset-echarts-core.ts",
+    "./assets/echarts": "./src/client/asset-echarts.ts",
+    "./assets/standalone": "./lib/assets/standalone-runtime.js",
+    "./skill": "./SKILL.md",
+    "./assets/maplibre": "./lib/assets/maplibre.js"
+  },
+  "files": [
+    "assets/genui-icon.svg",
+    "assets/genui-logo.svg",
+    "lib/index.js",
+    "lib/client.js",
+    "lib/assets/mermaid.js",
+    "lib/assets/three.js",
+    "lib/types/plugin/index.d.ts",
+    "lib/types/client/index.d.ts",
+    "SKILL.md",
+    "docs/copy-preview.md",
+    "docs/gallery.md",
+    "docs/dsh-go.md",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "demo-prompts.md",
+    "cordis.patch.yml",
+    "lib",
+    "src",
+    "tsconfig.json",
+    "tsdown.config.ts",
+    "lib/assets/echarts-core.js",
+    "lib/assets/echarts-full.js",
+    "ICON-NAMES.md",
+    "THIRD_PARTY_NOTICES.md",
+    "lib/assets/maplibre.js",
+    "docs/map.md",
+    "LICENSE",
+    "NOTICE",
+    "UPSTREAM.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/T3-Venture-Labs-Limited/ohmydsh.git",
+    "directory": "packages/genui"
+  },
+  "homepage": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/tree/main/packages/genui#readme",
+  "bugs": {
+    "url": "https://github.com/T3-Venture-Labs-Limited/ohmydsh/issues"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "generative-ui",
+    "plugin",
+    "ui"
+  ],
+  "dependencies": {
+    "katex": "0.16.47",
+    "mdast-util-from-markdown": "2.0.3",
+    "react": "^18.3.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-agent-loop": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-api-session-controller": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-store": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-chat": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-input-trigger": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-renderer": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-session": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-tool": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-llm": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-session": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-skill": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-system-prompt": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-util-values": ">=0.2.2-rc.1 <0.3.0-0",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/cordis-plugin-include": "1.1.0",
+    "@deepseek-ai/cordis-plugin-loader": "1.1.0",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-agent-default-model": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-agent-loop": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-api-gateway": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-api-session-controller": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-atomic-write": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-attachment": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-brand": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-connection": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-store": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-chat": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-input-trigger": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-session": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-tool": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-credentials": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-deque": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-file-reference": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-home-paths": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-jobs": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-native-command": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-sandbox": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-sandbox-policy": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-scope": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-session-persistence": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-session-projection": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-session-projection-cache": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-session-query": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-session-title": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-settings": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-skill": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-storage": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-storage-domain": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-subagent": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-timeout": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-tool-todo": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-typert-registry": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-user-approval": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-util-code-language": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-util-crypto": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-util-time": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-util-values": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-util-workspace-path": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-web": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-workspace": "0.2.2-rc.5",
+    "@floating-ui/react": "^0.27.20",
+    "@shikijs/langs": "4.5.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.0.0",
+    "@types/katex": "0.16.8",
+    "@types/node": "^22.19.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@types/three": "^0.185.4",
+    "anser": "2.3.5",
+    "clsx": "2.1.1",
+    "diff": "9.0.0",
+    "echarts": "^5.6.0",
+    "echarts-wordcloud": "2.1.0",
+    "immer": "11.1.21",
+    "jsdom": "^25.0.0",
+    "lightningcss": "^1.25.0",
+    "maplibre-gl": "6.16.0",
+    "mdast-util-gfm": "3.1.0",
+    "mdast-util-math": "3.0.0",
+    "mermaid": "11.16.0",
+    "micromark-extension-gfm": "3.0.0",
+    "micromark-extension-math": "3.1.0",
+    "react-dom": "^18.3.1",
+    "semver": "^7.8.5",
+    "shiki": "4.5.0",
+    "simple-icons": "16.35.0",
+    "three": "^0.180.0",
+    "tsdown": "^0.22.2",
+    "tsx": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0",
+    "yaml": "^2.4.2",
+    "zustand": "5.0.15"
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.json && tsdown",
+    "test": "vitest run",
+    "check": "pnpm run lint:tokens && node scripts/clean.mjs && tsc -p tsconfig.json && vitest run && tsdown && node scripts/check-standalone.mjs && node scripts/check-map-assets.mjs",
+    "check:host-api": "node scripts/check-host-api.mjs",
+    "prepack": "node scripts/prepack.mjs",
+    "lint:tokens": "node tools/token-lint.mjs src --tokens-only --extra-tokens tools/dsw-genui-extra.txt",
+    "prepare": "pnpm run build"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.2-rc.1 <0.3.0-0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-api-session-controller": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-store": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-chat": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-conversation": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-input-trigger": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-renderer": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-session": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-slots": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-tool": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-skill": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-system-prompt": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-util-values": {
+      "optional": true
+    }
+  },
+  "dshGo": {
+    "v": 1,
+    "title": {
+      "zh": "GenUI",
+      "en": "GenUI"
+    },
+    "icon": "chart",
+    "contributes": {
+      "composer.actions": [
+        {
+          "id": "open-genui",
+          "label": {
+            "zh": "GenUI",
+            "en": "GenUI"
+          },
+          "icon": "chart",
+          "effect": {
+            "type": "open",
+            "page": "panel:genui"
+          }
+        }
+      ],
+      "panels": [
+        {
+          "id": "genui",
+          "title": {
+            "zh": "GenUI",
+            "en": "GenUI"
+          },
+          "icon": "chart",
+          "placement": [
+            "session.tab",
+            "chat.panel"
+          ]
+        }
+      ]
+    }
+  }
+}

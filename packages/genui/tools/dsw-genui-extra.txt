@@ -1,0 +1,4 @@
+# Host tokens GenUI reads with a fallback (var(--token, fallback)) and defines itself in the standalone export theme.
+# They exist in some DSH themes but not in kit's dsw-defined.txt.
+--dsw-alias-markdown-hr
+--dsw-alias-fill-hover

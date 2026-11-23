@@ -1,0 +1,13 @@
+@t3labs/ohmydsh-genui
+Copyright (c) 2026 T3 Venture Labs Limited for the modifications listed in UPSTREAM.md, licensed under the MIT License.
+
+This package is a modified copy of dsh-genui 0.17.0 by changfenhuang and the omdsh-dev contributors
+(https://github.com/omdsh-dev/dsh-genui), published on npm as "@changfenhuang/dsh-genui". Almost all of the code is
+theirs. It is licensed under the MIT License, Copyright (c) 2026 dsh-external; that licence text, which must stay with
+copies of the code, is in the LICENSE file of this package and applies to the whole package.
+
+Third-party material bundled by upstream (OpenAI Apps SDK UI icons, Simple Icons, KaTeX, MapLibre and others) keeps
+its own licence; see THIRD_PARTY_NOTICES.md.
+
+The x-post and linkedin-post social post previews were written for this package and offered upstream as
+omdsh-dev/dsh-genui#470.

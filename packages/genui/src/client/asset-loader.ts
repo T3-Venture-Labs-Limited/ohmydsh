@@ -1,0 +1,82 @@
+/**
+ * Asset-bundle loader: fetches one of the plugin's lazy engine bundles
+ * (`lib/assets/mermaid.js` / `lib/assets/three.js`) by script injection and
+ * hands back the engine surface the bundle registered on
+ * `window.__GenuiAssets__`.
+ *
+ * The bundles are served by the plugin's OWN node-half HTTP route
+ * (`/plugins/@t3labs/ohmydsh-genui/assets/*`), registered through the host
+ * webserver service — no host source change needed, and the longest-prefix
+ * rule lets this route win over the generic `/plugins` bundle route. Each
+ * file is loaded at most once per page (promise memoized); a rejection is
+ * final for the page (the node's fallback UI takes over).
+ *
+ * The rev query rides the boot graph: the plugin's own row in
+ * `window.__DSH_BOOT__` carries the client bundle rev, so a plugin rebuild
+ * busts the asset cache together with the main bundle. Absent graph = no
+ * query and the route answers `no-cache` (still revalidated by ETag); with a
+ * rev the URL names one build, so the route marks it immutable.
+ * @module @changfenhuang/dsh-genui/client/asset-loader
+ */
+
+import { createMermaidRenderDocument, loadAssetScript } from './asset-script.ts'
+
+/** The plugin's entry id — mirrors the loader entry name (package name). */
+const PLUGIN_ID = '@t3labs/ohmydsh-genui'
+
+/** Assets directory served by the node-half route. */
+const ASSET_DIR = `/plugins/${PLUGIN_ID}/assets`
+let embeddedAssetBase: string | undefined
+
+/** Set once before rendering when the host bundles engines locally. */
+export function setGenuiAssetBase(baseURL: string): void {
+  embeddedAssetBase = new URL(baseURL, document.baseURI).href.replace(/\/?$/, '/')
+}
+
+/** Boot graph shape read from `window.__DSH_BOOT__` (subset, defensive). */
+interface BootGraphLike {
+  entries?: Array<{ id?: string; rev?: string }>
+}
+
+/** The global the asset bundles register their engines on. */
+interface AssetGlobal {
+  __GenuiAssets__?: Record<string, unknown>
+}
+
+/** Resolve an engine API registered by an inline standalone bundle. */
+function preloadedAsset(name: string): unknown {
+  const key = name.replace(/-(\w)/g, (_match, char: string) => char.toUpperCase())
+  return (window as unknown as AssetGlobal).__GenuiAssets__?.[key]
+}
+
+/** Resolve an asset URL, appending the bundle rev for cache busting when the
+ * boot graph exposes it. */
+export function assetUrl(file: string): string {
+  if (embeddedAssetBase !== undefined) return new URL(file, embeddedAssetBase).href
+  const graph = (window as unknown as { __DSH_BOOT__?: BootGraphLike }).__DSH_BOOT__
+  const rev = graph?.entries?.find(entry => entry.id === PLUGIN_ID)?.rev
+  return `${ASSET_DIR}/${file}${rev === undefined ? '' : `?rev=${rev}`}`
+}
+
+const pending = new Map<string, Promise<Record<string, unknown>>>()
+
+/**
+ * Load one asset bundle and return the engines it registered. Memoized per
+ * file: repeated requests (several mermaid nodes, re-renders) share one
+ * script load; a failed load stays failed for the page (the component shows
+ * its fallback).
+ * @param name - 'mermaid', 'three', 'echarts-core', 'echarts-full', or 'icons'.
+ * @returns the registered engine surface.
+ */
+export function loadGenuiAsset<T>(name: 'mermaid' | 'three' | 'echarts-core' | 'echarts-full' | 'icons' | 'maplibre'): Promise<T> {
+  const preloaded = preloadedAsset(name)
+  if (preloaded !== undefined) return Promise.resolve(preloaded as T)
+  const file = `${name}.js`
+  const existing = pending.get(file)
+  if (existing !== undefined) return existing as Promise<T>
+  const owner = name === 'mermaid' ? createMermaidRenderDocument() : document
+  const key = name.replace(/-(\w)/g, (_match, char: string) => char.toUpperCase())
+  const task = loadAssetScript(owner, assetUrl(file), file, key) as Promise<T>
+  pending.set(file, task as Promise<Record<string, unknown>>)
+  return task
+}

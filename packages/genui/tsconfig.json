@@ -1,0 +1,46 @@
+{
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "lib": [
+      "ES2024",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "node"
+    ],
+    "declaration": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "rootDir": "src",
+    "outDir": "lib",
+    "emitDeclarationOnly": true,
+    "declarationDir": "lib/types",
+    "paths": {
+      "@deepseek-ai/dsh-web": [
+        "./node_modules/@deepseek-ai/dsh-web/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-web/types": [
+        "./node_modules/@deepseek-ai/dsh-web/lib/types/types.d.ts"
+      ],
+      "@deepseek-ai/dsh-web/remote": [
+        "./node_modules/@deepseek-ai/dsh-web/lib/typert.remote-client.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "src"
+  ]
+}

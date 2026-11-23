@@ -74,3 +74,27 @@ test('workspace yaml: our block carries allowBuilds and release-age pins; user k
   assert.equal(mine.warnings.length, 1)
   assert.ok(mine.text.includes('allowBuilds:\n  esbuild: true'))
 })
+
+test('rewriteWorkspaceYaml writes patchedDependencies into the block and reports which keys it wrote', () => {
+  const base = { allowBuilds: [], releaseAgeExclude: [] }
+  const patchedDependencies = { '@kenz1117/dsh-engram@0.13.15': 'patches/ohmydsh/@kenz1117__dsh-engram@0.13.15.patch' }
+  const r = rewriteWorkspaceYaml('packages:\n  - .\nnodeLinker: hoisted\n', { ...base, patchedDependencies })
+  assert.match(r.text, /patchedDependencies:\n {2}'@kenz1117\/dsh-engram@0\.13\.15': 'patches\/ohmydsh\/@kenz1117__dsh-engram@0\.13\.15\.patch'/)
+  assert.deepEqual(r.patched, ['@kenz1117/dsh-engram@0.13.15'])
+  assert.deepEqual(r.warnings, [])
+  assert.ok(r.text.includes('nodeLinker: hoisted'))
+  // dropping the patch removes the key again, and the rest of the file is untouched
+  const dropped = rewriteWorkspaceYaml(r.text, { ...base })
+  assert.ok(!dropped.text.includes('patchedDependencies'))
+  assert.deepEqual(dropped.patched, [])
+  assert.ok(dropped.text.endsWith('packages:\n  - .\nnodeLinker: hoisted\n'))
+})
+
+test('rewriteWorkspaceYaml leaves a patchedDependencies the user wrote alone and says so', () => {
+  const user = 'packages:\n  - .\npatchedDependencies:\n  mine@1.0.0: patches/mine.patch\n'
+  const r = rewriteWorkspaceYaml(user, { allowBuilds: [], releaseAgeExclude: [], patchedDependencies: { 'dsh-a@1.0.0': 'patches/ohmydsh/dsh-a@1.0.0.patch' } })
+  assert.deepEqual(r.patched, [])
+  assert.match(r.warnings.join('\n'), /already has its own patchedDependencies/)
+  assert.ok(r.text.includes('mine@1.0.0: patches/mine.patch'))
+  assert.ok(!r.text.includes('dsh-a@1.0.0'))
+})

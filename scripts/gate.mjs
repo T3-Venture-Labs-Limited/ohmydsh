@@ -20,12 +20,14 @@
 // and roll forward. Every child process gets a throwaway HOME and DSH_HOME, so the machine's own DSH is never touched.
 //
 // Result file (default <work>/gate-result.json): { ok, steps: [{ name, ok, seconds }], failed: { step, class, tail } }
-// class "needs-human": pnpm refused an install script nobody approved (never approved automatically).
+// class "needs-human": pnpm refused an install script nobody approved (never approved automatically), or a candidate moves
+// a package ohmydsh.json carries a patch for (reason "patched": a human re-checks the upstream issue first).
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describeCompose, dumpedBundles, parseProblems, parseUnapplied } from '../packages/cli/src/health.js'
+import { patchConflicts } from './follow-lib/follow.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
@@ -76,7 +78,7 @@ function sh(cmd, a, { env = process.env, cwd = root, log, timeoutMs = 20 * 60_00
 }
 
 class StepError extends Error {
-  constructor(message, text = '') { super(message); this.text = text }
+  constructor(message, text = '', reason = undefined) { super(message); this.text = text; this.reason = reason }
 }
 function must(r, what) {
   if (r.status !== 0) throw new StepError(`${what} failed (exit ${r.status})`, r.text)
@@ -102,6 +104,12 @@ function checkDoctor(env, label) {
   if (r.status !== 0) throw new StepError(`omd doctor reports problems (${label})`, r.text)
   const list = omd(env, ['list'], { log: `${current}-list-${label}` })
   if (list.status !== 0) throw new StepError(`omd list failed (${label})`, list.text)
+  // Every patch of the manifest is in effect: recorded in the lock, shown by list, and (doctor) in pnpm's lockfile.
+  const lock = JSON.parse(readFileSync(join(env.DSH_HOME, 'profiles/omd/ohmydsh.lock.json'), 'utf8'))
+  for (const key of Object.keys(manifest.patches ?? {})) {
+    if (!(key in (lock.patches ?? {}))) throw new StepError(`the patch for ${key} is not recorded in the profile lock (${label})`, list.text)
+    if (!list.stdout.includes(`patched: ${key}`)) throw new StepError(`omd list does not mention the patch for ${key} (${label})`, list.text)
+  }
 }
 
 let ports = 0
@@ -137,6 +145,8 @@ const add = (name, fn, { skip = false } = {}) => steps.push({ name, fn, skip })
 
 add('pin the candidates', () => {
   if (candidates.length === 0) return
+  const conflicts = patchConflicts(manifest, candidates)
+  if (conflicts.length > 0) throw new StepError(conflicts.map((c) => c.message).join(' '), '', 'patched')
   const r = must(sh('node', ['scripts/follow-upstream.mjs', '--apply', ...candidates]), 'pinning the candidates')
   must(sh('node', ['scripts/follow-upstream.mjs', '--release-notes', ...candidates]), 'writing the release notes')
   void r
@@ -236,8 +246,8 @@ for (const s of steps) {
     results.push({ name: s.name, ok: true, seconds: Math.round((Date.now() - t0) / 1000) })
   } catch (e) {
     const text = e.text ?? ''
-    const needsHuman = IGNORED_BUILDS.test(text) || IGNORED_BUILDS.test(e.message)
-    failed = { step: s.name, class: needsHuman ? 'needs-human' : 'failure', message: e.message, tail: text.trim().split('\n').slice(-40).join('\n') }
+    const needsHuman = IGNORED_BUILDS.test(text) || IGNORED_BUILDS.test(e.message) || e.reason !== undefined
+    failed = { step: s.name, class: needsHuman ? 'needs-human' : 'failure', ...(e.reason === undefined ? {} : { reason: e.reason }), message: e.message, tail: text.trim().split('\n').slice(-40).join('\n') }
     results.push({ name: s.name, ok: false, seconds: Math.round((Date.now() - t0) / 1000) })
     process.stdout.write(`!! ${s.name}: ${e.message}\n${failed.tail}\n`)
     break
@@ -245,6 +255,6 @@ for (const s of steps) {
 }
 const out = { ok: failed === null, dsh: manifest.dsh, version: manifest.version, previous: previous ?? null, steps: results, failed }
 writeFileSync(resultFile, `${JSON.stringify(out, null, 2)}\n`)
-process.stdout.write(`\n${out.ok ? 'GATE PASSED' : `GATE FAILED at "${failed.step}"${failed.class === 'needs-human' ? ' (needs a human: an install script must be reviewed)' : ''}`}  (result: ${resultFile})\n`)
+process.stdout.write(`\n${out.ok ? 'GATE PASSED' : `GATE FAILED at "${failed.step}"${failed.class === 'needs-human' ? ` (needs a human: ${failed.reason === 'patched' ? 'a patched package moved' : 'an install script must be reviewed'})` : ''}`}  (result: ${resultFile})\n`)
 for (const r of results) process.stdout.write(`   ${r.ok ? (r.skipped ? 'skip' : 'ok  ') : 'FAIL'} ${String(r.seconds).padStart(4)}s  ${r.name}\n`)
 process.exit(out.ok ? 0 : 1)

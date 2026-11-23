@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { composeCheck, describeCompose, dshVersion, installedVersion, isProfileRunning } from './health.js'
 import { dshSpec, planDsh, stageDsh, switchDsh, warnSkipped } from './dsh.js'
 import { classifyDeps, diffLock, lockedDsh, readLock } from './lock.js'
-import { defaultManifestSource, loadManifest, packNames, resolveDesired } from './manifest.js'
-import { describeLock, prevName, profileDir, rollbackSwap, syncProfile } from './profile.js'
+import { defaultManifestSource, loadManifest, packNames, patchFileName, resolveDesired } from './manifest.js'
+import { describeLock, patchApplied, PATCH_DIR, prevName, profileDir, rollbackSwap, syncProfile } from './profile.js'
 import { mergeHosts, tailnetHosts } from './tailnet.js'
 import { OmdError, c, which } from './util.js'
 
@@ -175,10 +175,16 @@ export async function list(ctx) {
   const w = Math.max(...rows.map((r) => r.name.length), 6)
   for (const r of rows) ctx.log.raw(`${r.mark === '*' ? '*' : ' '} ${r.name.padEnd(w)}  ${r.version.padEnd(12)} ${c.dim(r.origin)}`)
   if (user.length > 0) ctx.log.raw(c.dim('* added by you; omd update and rollback leave these alone'))
+  for (const line of describePatches(lock)) ctx.log.raw(line)
   if (lock) {
     const avail = Object.keys(lock.manifest ? {} : {})
     void avail
   }
+}
+
+/** "patched: name@version, <note>, see <issue>" for every community package omd carries a temporary fix for. */
+export function describePatches(lock) {
+  return Object.entries(lock?.patches ?? {}).map(([key, p]) => `patched: ${key}${p.note ? `, ${p.note}` : ''}${p.issue ? `, see ${p.issue}` : ''}`)
 }
 
 const PACK_ENV = {
@@ -221,6 +227,16 @@ export async function doctor(ctx, { quietHeader = false } = {}) {
       const check = composeCheck(ctx, { profile: name, plugins: Object.keys(lock?.plugins ?? {}), managedYaml: patchText })
       if (check.ok) log.ok('profile composes cleanly; every patch row applied')
       else for (const m of describeCompose(check)) problems.push(m)
+    }
+    for (const [key, p] of Object.entries(lock?.patches ?? {})) {
+      const name = key.slice(0, key.lastIndexOf('@'))
+      const version = key.slice(key.lastIndexOf('@') + 1)
+      const bad = []
+      if (installedVersion(dir, name) !== version) bad.push(`${name} is installed at ${installedVersion(dir, name) ?? '(missing)'}, not ${version}`)
+      if (!existsSync(join(dir, PATCH_DIR, patchFileName(key)))) bad.push(`the patch file ${PATCH_DIR}/${patchFileName(key)} is missing`)
+      if (!patchApplied(dir, key)) bad.push('pnpm-lock.yaml does not record the patch')
+      if (bad.length > 0) problems.push(`patched ${key} is not in effect: ${bad.join('; ')} (run \`omd setup\`)`)
+      else log.info(`patched: ${key}${p.note ? `, ${p.note}` : ''}${p.issue ? `, see ${p.issue}` : ''}`)
     }
     if (existsSync(join(dir, 'package.json'))) {
       const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))

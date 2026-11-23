@@ -25,5 +25,5 @@ const merged = { ...mergeResults(runs), version: runs.find((r) => r.result.versi
 merged.tested = runs.every(({ result }) => result.passed.length === merged.passed.length && result.passed.every((s) => merged.passed.includes(s)))
 mkdirSync(dirname(out), { recursive: true })
 writeFileSync(out, `${JSON.stringify(merged, null, 2)}\n`)
-const md = ['### Follow result', '', `Operating systems: ${merged.oses.join(', ')}`, '', `Released: ${merged.passed.length === 0 ? 'nothing' : merged.passed.map((s) => `\`${s}\``).join(', ')}`, '', ...merged.failed.map((f) => `- FAIL \`${f.spec}\`${f.os ? ` (${f.os})` : ''}: ${f.step ?? '?'}${f.class === 'needs-human' ? ' (an install script needs a human review)' : ''}`)].join('\n')
+const md = ['### Follow result', '', `Operating systems: ${merged.oses.join(', ')}`, '', `Released: ${merged.passed.length === 0 ? 'nothing' : merged.passed.map((s) => `\`${s}\``).join(', ')}`, '', ...merged.failed.map((f) => `- FAIL \`${f.spec}\`${f.os ? ` (${f.os})` : ''}: ${f.step ?? '?'}${f.class === 'needs-human' ? (f.reason === 'patched' ? ' (a patched package moved: a human re-checks the patch)' : ' (an install script needs a human review)') : ''}`)].join('\n')
 process.stdout.write(`${md}\n`)

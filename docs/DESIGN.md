@@ -44,9 +44,21 @@ The single source of truth. A release of ohmydsh is a new version of this file.
       "omarchy":  { "@t3labs/ohmydsh-theme": "0.1.0", "@t3labs/ohmydsh-hud": "0.1.0" }
     }
   },
-  "allowBuilds": ["agent-browser@0.43.0"]  // install scripts we have reviewed
+  "allowBuilds": ["agent-browser@0.43.0"],  // install scripts we have reviewed
+  "patches": {                              // temporary fixes for one exact community version, see below
+    "@kenz1117/dsh-engram@0.13.15": { "file": "profile/patches/dsh-engram@0.13.15.patch", "note": "…", "issue": "https://github.com/…/issues/64" }
+  }
 }
 ```
+
+### Patched community packages
+
+A community plugin we pin sometimes has a bug we cannot wait for upstream to fix. `patches` carries a fix for **one exact `name@version`** until upstream ships its own; the entry names the upstream issue to follow, and the patch is removed again by deleting the entry (and the file) once a fixed version is pinned.
+
+- **Making a patch:** in a scratch project run `pnpm patch name@version`, edit, `pnpm patch-commit`, and copy the generated file to `profile/patches/<name>@<version>.patch` (never hand-write it: pnpm hashes it and expects its exact format). `scripts/check-manifest.mjs` fails unless every patch key is the version pinned right now, has an `issue` URL and a `note`, and its file exists and is a git diff.
+- **Installing it:** `omd setup`/`omd update` copy each patch that applies into `<profile>/patches/ohmydsh/` (the folder is rebuilt every time, so a dropped patch disappears) and write pnpm's `patchedDependencies` into the managed block of the profile's `pnpm-workspace.yaml`. pnpm fails the whole install with `ERR_PNPM_UNUSED_PATCH` for a patch it does not use, so omd writes only patches whose `name@version` is in the set being installed at exactly that version from the registry or a tarball: never for another pinned version, a pack that is off, or a `--dev` link. A `patchedDependencies` the user wrote outside the block wins (omd warns and applies nothing). The lock records `patches`; `omd list` prints `patched: <name>@<version>, <note>, see <issue>`; `omd doctor` checks the file, the installed version and that pnpm's lockfile carries the `patch_hash`.
+- **Following upstream:** a candidate that moves a patched package to another version is not released by the follow workflow (the patch would silently stop applying). `follow-run.mjs` does not run the gate for it; it is reported as `needs-human` with reason `patched`, and the usual `follow: <name> <version> does not pass` issue explains it. A human re-checks the upstream issue, then drops the patch or regenerates it for the new version and pins the new version by hand. `gate.mjs` refuses such a candidate too.
+- **Current patches:** `@kenz1117/dsh-engram@0.13.15`: its closing-time consolidation (archive stale memories, merge near duplicates) ran at every start and re-embedded every memory on the host thread, blocking the UI for 10 to 25 s ([kenz1117/dsh-engram#64](https://github.com/kenz1117/dsh-engram/issues/64)). The patch runs the first pass 10 minutes after start instead (`OMD_ENGRAM_CONSOLIDATION_DELAY_MS` overrides the delay); the 24 h interval is unchanged, both timers are cleared when the plugin is disposed, and the first one is `unref`'d. Nothing else depends on the start-up run: the decay pass at start is separate and stays, and the panel's "consolidate" button calls the same function directly.
 
 ## The profile: three layers
 

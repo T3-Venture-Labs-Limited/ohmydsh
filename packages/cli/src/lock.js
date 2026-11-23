@@ -14,7 +14,7 @@ export function writeLock(profileDir, lock) {
   writeFileSync(join(profileDir, LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`)
 }
 
-export function makeLock({ manifest, source, dev, packs, plugins, official, trustedHosts = [], dsh, now = new Date() }) {
+export function makeLock({ manifest, source, dev, packs, plugins, official, trustedHosts = [], patches = [], dsh, now = new Date() }) {
   return {
     lockVersion: 1,
     manifest: { version: manifest.version, dsh: manifest.dsh, source },
@@ -26,6 +26,8 @@ export function makeLock({ manifest, source, dev, packs, plugins, official, trus
     packs: [...packs].sort(),
     official: [...official],
     trustedHosts: [...trustedHosts],
+    // Patched community packages: name@version -> why and where to follow up (what `omd list` and `omd doctor` show).
+    patches: Object.fromEntries(patches.map((p) => [p.key, { ...(p.note === undefined ? {} : { note: p.note }), ...(p.issue === undefined ? {} : { issue: p.issue }) }])),
     plugins: Object.fromEntries([...plugins].map(([name, p]) => [name, { version: p.version, spec: p.spec, origin: [...p.origin] }])),
   }
 }

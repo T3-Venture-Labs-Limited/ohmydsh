@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { defaultManifestSource, parseManifest, registryPins, resolveDesired, specFor } from '../src/manifest.js'
+import { applicablePatches, defaultManifestSource, parseManifest, patchFileName, registryPins, resolveDesired, specFor } from '../src/manifest.js'
 import { baseManifest, tmp } from './helpers.js'
 
 test('parses a valid manifest and fills defaults', () => {
@@ -96,4 +96,45 @@ test('release-age exemptions keep what omd installed last time (two releases wit
   const lock = { plugins: { a: { version: '1.0.0', spec: '1.0.0' }, theme: { version: '0.1.3', spec: '0.1.3' }, dev: { version: '0.1.0', spec: 'link:/y' } } }
   assert.deepEqual(releaseAgeExemptions({}, desired, lock), ['a@1.0.0', 'a@1.0.1', 'theme@0.1.3'])
   assert.deepEqual(releaseAgeExemptions({}, desired, null), ['a@1.0.1'])
+})
+
+const withPatches = (patches) => parseManifest(JSON.stringify({ ...baseManifest(), patches }))
+
+test('patches: a string or an object with file/note/issue, normalized to the object form', () => {
+  const m = withPatches({ 'dsh-a@1.0.0': 'profile/patches/a.patch', '@ohmydsh/x@2.0.0-rc.1': { file: 'p/x.patch', note: 'does x', issue: 'https://github.com/o/r/issues/1' } })
+  assert.deepEqual(m.patches['dsh-a@1.0.0'], { file: 'profile/patches/a.patch' })
+  assert.deepEqual(m.patches['@ohmydsh/x@2.0.0-rc.1'], { file: 'p/x.patch', note: 'does x', issue: 'https://github.com/o/r/issues/1' })
+  assert.deepEqual(parseManifest(JSON.stringify(baseManifest())).patches, {}, 'no patches is the default')
+})
+
+test('patches: only exact name@version keys, a file, an https issue; every problem listed', () => {
+  assert.throws(() => withPatches({ 'dsh-a': 'a.patch', 'dsh-a@^1.0.0': 'a.patch', 'dsh-a@1.0.0': '', 'dsh-c@2.0.0': { file: 'c.patch', issue: 'http://x/1' } }), (e) => /patches\.dsh-a: the key must be name@exact-version/.test(e.message) && /patches\.dsh-a@\^1\.0\.0/.test(e.message) && /patches\.dsh-a@1\.0\.0: needs a patch file/.test(e.message) && /patches\.dsh-c@2\.0\.0\.issue must be an https URL/.test(e.message))
+  assert.throws(() => withPatches(['x']), /patches must be an object/)
+})
+
+test('applicablePatches: only a plugin in the set at exactly the patched version (pnpm fails on an unused patch)', () => {
+  const m = withPatches({ 'dsh-a@1.0.0': 'a.patch', 'dsh-c@2.0.0': 'c.patch', 'dsh-a@0.9.0': 'old.patch', 'dsh-gone@1.0.0': 'g.patch' })
+  const core = resolveDesired(m, { packs: [], source: '/x/ohmydsh.json' }).plugins
+  assert.deepEqual(applicablePatches(m, core).map((p) => p.key), ['dsh-a@1.0.0'], 'dsh-c is in a pack that is off, dsh-a@0.9.0 and dsh-gone are not the pinned ones')
+  const withPack = resolveDesired(m, { packs: ['extra'], source: '/x/ohmydsh.json' }).plugins
+  assert.deepEqual(applicablePatches(m, withPack).map((p) => p.key), ['dsh-a@1.0.0', 'dsh-c@2.0.0'])
+  // another pinned version of the patched plugin: nothing applies, so nothing may be written for pnpm
+  const moved = parseManifest(JSON.stringify({ ...baseManifest(), plugins: { core: { 'dsh-a': '1.0.1' }, packs: {} }, sources: {}, patches: { 'dsh-a@1.0.0': 'a.patch' } }))
+  assert.deepEqual(applicablePatches(moved, resolveDesired(moved, { source: '/x/ohmydsh.json' }).plugins), [])
+})
+
+test('applicablePatches skips a linked plugin (--dev), the patch would be unused', () => {
+  const m = parseManifest(JSON.stringify({ ...baseManifest(), patches: { '@ohmydsh/b@0.1.0': 'b.patch' } }))
+  const dir = tmp()
+  mkdirSync(join(dir, 'packages/b'), { recursive: true })
+  writeFileSync(join(dir, 'packages/b/package.json'), '{}')
+  const dev = resolveDesired(m, { dev: true, source: join(dir, 'ohmydsh.json') }).plugins
+  assert.equal(dev.get('@ohmydsh/b').spec.startsWith('link:'), true)
+  assert.deepEqual(applicablePatches(m, dev), [])
+  assert.deepEqual(applicablePatches(m, resolveDesired(m, { source: join(dir, 'ohmydsh.json') }).plugins).map((p) => p.key), ['@ohmydsh/b@0.1.0'])
+})
+
+test('patchFileName comes from the key: scoped names are flattened, nothing from the manifest path', () => {
+  assert.equal(patchFileName('@kenz1117/dsh-engram@0.13.15'), '@kenz1117__dsh-engram@0.13.15.patch')
+  assert.equal(patchFileName('dsh-a@1.0.0'), 'dsh-a@1.0.0.patch')
 })

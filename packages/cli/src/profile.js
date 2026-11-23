@@ -1,10 +1,10 @@
 // The omd profile on disk: staging copy -> install -> health check -> swap, with omd-prev kept for rollback.
-import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { composeCheck, describeCompose, isProfileRunning } from './health.js'
 import { diffLock, makeLock, readLock, writeLock } from './lock.js'
 import { readBlock, rewriteBlock, rewriteWorkspaceYaml } from './managed.js'
-import { resolveDesired, releaseAgeExemptions } from './manifest.js'
+import { applicablePatches, patchFileName, releaseAgeExemptions, resolveDesired } from './manifest.js'
 import { mergeHosts, tailnetHosts, trustedHostsRow } from './tailnet.js'
 import { OmdError } from './util.js'
 
@@ -74,6 +74,33 @@ function read(file, fallback) {
   return existsSync(file) ? readFileSync(file, 'utf8') : fallback
 }
 
+/** Where omd keeps the patch files of patched community packages inside a profile (rebuilt on every sync). */
+export const PATCH_DIR = 'patches/ohmydsh'
+
+/** Does the profile's pnpm lockfile say the installed `name@version` carries a patch? (pnpm writes `(patch_hash=...)`.) */
+export function patchApplied(profileDirectory, key) {
+  const lockfile = join(profileDirectory, 'pnpm-lock.yaml')
+  if (!existsSync(lockfile)) return false
+  return readFileSync(lockfile, 'utf8').includes(`${key}(patch_hash=`)
+}
+
+/** Replace patches/ohmydsh in `dir` with exactly these patches (an empty list removes it, and `patches/` if that is empty). */
+async function writePatchFiles(dir, patches, readRelative) {
+  const ours = join(dir, PATCH_DIR)
+  rmSync(ours, { recursive: true, force: true })
+  if (patches.length > 0) {
+    mkdirSync(ours, { recursive: true })
+    for (const p of patches) {
+      let text
+      try { text = await readRelative(p.file) } catch (e) { throw new OmdError(`the patch for ${p.key} (${p.file}) could not be read: ${e.message}`) }
+      if (!/^diff --git /m.test(text)) throw new OmdError(`the patch for ${p.key} (${p.file}) is not a git diff`)
+      writeFileSync(join(ours, patchFileName(p.key)), text)
+    }
+  }
+  const parent = join(dir, 'patches')
+  if (existsSync(parent) && readdirSync(parent).length === 0) rmSync(parent, { recursive: true, force: true })
+}
+
 const PATCH_DEFAULT = '# Your patch layer for this dsh profile, applied after every bundle layer.\n[]\n'
 const WORKSPACE_DEFAULT = 'packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n'
 
@@ -92,11 +119,12 @@ export async function syncProfile(ctx, opts) {
   const packs = [...new Set(opts.packs)].sort()
   const { plugins: desired } = resolveDesired(manifest, { packs, dev: opts.dev, source: loaded.source })
   const diff = diffLock(lock, desired)
+  const patches = applicablePatches(manifest, desired)
   const official = manifest.profile.official
   // Hosts saved earlier stay, so a run while Tailscale is down never drops them. A dry run starts no processes.
   const trustedHosts = mergeHosts(lock?.trustedHosts, opts.dryRun ? [] : tailnetHosts(ctx), opts.trustedHosts)
   const managedYaml = await managedPatchYaml(loaded, packs, trustedHosts)
-  const plan = { diff, packs, desired, official, managedYaml, trustedHosts, live: existsSync(liveDir), lock }
+  const plan = { diff, packs, desired, official, patches, managedYaml, trustedHosts, live: existsSync(liveDir), lock }
   if (opts.dryRun) return { ...plan, applied: false }
 
   const log = ctx.log
@@ -112,15 +140,24 @@ export async function syncProfile(ctx, opts) {
     writeFileSync(patchFile, rewriteBlock(read(patchFile, PATCH_DEFAULT), managedYaml, 'list'))
     if (!existsSync(join(stageDir, 'cordis.yml'))) writeFileSync(join(stageDir, 'cordis.yml'), '# dsh profile root. Edit cordis.patch.yml, not this file.\n[]\n')
     const wsFile = join(stageDir, 'pnpm-workspace.yaml')
-    const ws = rewriteWorkspaceYaml(read(wsFile, WORKSPACE_DEFAULT), { allowBuilds: manifest.allowBuilds, releaseAgeExclude: releaseAgeExemptions(manifest, desired, lock) })
+    const patchedDependencies = Object.fromEntries(patches.map((p) => [p.key, `${PATCH_DIR}/${patchFileName(p.key)}`]))
+    const ws = rewriteWorkspaceYaml(read(wsFile, WORKSPACE_DEFAULT), { allowBuilds: manifest.allowBuilds, releaseAgeExclude: releaseAgeExemptions(manifest, desired, lock), patchedDependencies })
     writeFileSync(wsFile, ws.text)
     for (const w of ws.warnings) log.warn(w)
+    const appliedPatches = patches.filter((p) => ws.patched.includes(p.key))
+    await writePatchFiles(stageDir, appliedPatches, loaded.readRelative)
+    plan.patches = appliedPatches
 
     log.step('installing plugins (pnpm, may take a minute)')
     // The staging profile's package.json is rewritten above, so its lockfile is expected to change; pnpm defaults to
     // --frozen-lockfile under CI=true, which would refuse exactly this.
     const inst = ctx.run('dsh', ['plugin', '--profile', stagingName(name), 'install', '--no-frozen-lockfile'], { env: ctx.env })
     if (inst.error || inst.status !== 0) throw new OmdError(`plugin install failed:\n${(inst.error?.message ?? `${inst.stdout}\n${inst.stderr}`).trim().split('\n').slice(-25).join('\n')}`)
+
+    for (const p of appliedPatches) {
+      if (patchApplied(stageDir, p.key)) log.ok(`patched ${p.key}${p.note ? `: ${p.note}` : ''}`)
+      else log.warn(`pnpm did not record the patch for ${p.key} in the lockfile; \`omd doctor\` will report it`)
+    }
 
     log.step('checking that DSH starts with the new set')
     const check = composeCheck(ctx, { profile: stagingName(name), plugins: [...desired.keys()], managedYaml })
@@ -132,7 +169,7 @@ export async function syncProfile(ctx, opts) {
       log.ok(`web boot check passed (${boot.url})`)
     }
 
-    const newLock = makeLock({ manifest, source: loaded.source, dev: opts.dev, packs, plugins: desired, official, trustedHosts, dsh: opts.dsh })
+    const newLock = makeLock({ manifest, source: loaded.source, dev: opts.dev, packs, plugins: desired, official, trustedHosts, patches: appliedPatches, dsh: opts.dsh })
     writeLock(stageDir, newLock)
     const running = (ctx.isRunning ?? isProfileRunning)(liveDir)
     if (existsSync(liveDir) && running === true && !opts.force) {

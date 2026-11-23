@@ -41,7 +41,7 @@ export const CSS = `
   opacity: 0.7;
 }
 [data-ohmydsh-key]::before { margin-right: 6px; }
-[data-ohmydsh-key-end]::after { margin-left: auto; }
+[data-ohmydsh-key-end]::after { margin-left: auto; align-self: center; }
 @media (max-width: 599.98px) {
   [data-ohmydsh-keys-hint]::after { display: none; }
 }

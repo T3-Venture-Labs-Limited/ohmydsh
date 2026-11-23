@@ -226,7 +226,7 @@ export function createController(deps: ControllerDeps): Controller {
   function scan(): void {
     pendingScan = false
     const found = new Set(doc.querySelectorAll<HTMLElement>(CARD_SELECTOR))
-    for (const card of [...tracked.keys()]) if (!found.has(card as HTMLElement) || !card.isConnected) untrack(card)
+    for (const card of tracked.keys()) if (!found.has(card as HTMLElement) || !card.isConnected) untrack(card)
     for (const card of found) if (!tracked.has(card)) track(card)
     for (const entry of tracked.values()) {
       if (!entry.handled && shown(entry.card)) onAppear(entry)
@@ -385,7 +385,7 @@ export function createController(deps: ControllerDeps): Controller {
         doc.removeEventListener('focusout', onFocusout, true)
         doc.removeEventListener('visibilitychange', scheduleScan)
         view?.removeEventListener('focus', scheduleScan)
-        for (const card of [...tracked.keys()]) { clearCard(card); untrack(card) }
+        for (const card of tracked.keys()) { clearCard(card); untrack(card) }
         held.clear()
       }
     },

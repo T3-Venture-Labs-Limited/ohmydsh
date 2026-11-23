@@ -19,7 +19,7 @@
       "dsh-context": "0.87.1",
       "dsh-model-logos": "0.8.0",
       "dsh-better-sidebar": "0.32.1",
-      "@changfenhuang/dsh-genui": "0.17.0",
+      "@t3labs/ohmydsh-genui": "0.17.1",
       "dsh-marktext": "0.1.13",
       "@orderg-x/dsh-video-preview": "0.5.7",
       "@zseven-w/dsh-openpencil": "0.1.0-rc.16",
@@ -128,6 +128,9 @@
     },
     "@t3labs/ohmydsh-hud": {
       "workspace": "packages/hud"
+    },
+    "@t3labs/ohmydsh-genui": {
+      "workspace": "packages/genui"
     }
   },
   "patches": {
@@ -135,11 +138,6 @@
       "file": "profile/patches/dsh-engram@0.13.15.patch",
       "note": "the memory plugin's start-up pass is delayed by 10 minutes",
       "issue": "https://github.com/kenz1117/dsh-engram/issues/64"
-    },
-    "@changfenhuang/dsh-genui@0.17.0": {
-      "file": "profile/patches/dsh-genui@0.17.0.patch",
-      "note": "adds the x-post and linkedin-post social post previews to GenUI",
-      "issue": "https://github.com/omdsh-dev/dsh-genui/pull/470"
     }
   },
   "allowBuilds": [

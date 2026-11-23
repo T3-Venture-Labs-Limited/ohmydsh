@@ -15,7 +15,7 @@ Status: plan, agreed 2026-11-17. Milestone 1 is built: monorepo skeleton, import
 |---|---|---|
 | Where do our plugins live? | **One monorepo** (`packages/*`), history imported from the existing `deestax/dsh-*` repos, which are then archived with a pointer here. | Shared kit becomes a real package instead of copied code; one CI, one release; cross-plugin changes are one pull request. |
 | Submodules? | **No.** | Every change would need two commits in two repos, detached-HEAD mistakes are easy, and users don't need source checkouts at all. |
-| Community plugins? | **Pinned from npm, never vendored or forked.** Fixes go upstream as PRs. | They keep their authors and licences; we don't inherit their maintenance. |
+| Community plugins? | **Pinned from npm, never vendored or forked.** Fixes go upstream as PRs. One deliberate exception: GenUI (see below). | They keep their authors and licences; we don't inherit their maintenance. |
 | How do users get our plugins? | **npm under the `@t3labs` organisation** (e.g. `@t3labs/ohmydsh-studio`). | DSH's plugin manager can then check versions and update them itself; registry installs avoid build scripts. A `--manifest` pointing at packed tarballs stays as an escape hatch (CI uses it). |
 | Where does it install? | **Its own DSH profile, `omd`.** | Never touches the user's `web` profile; can be made the default later with one command. |
 | What's on by default? | **Core set on; account- or desktop-specific plugins as opt-in packs.** | A new user gets something that works without any accounts beyond a model. |
@@ -59,7 +59,6 @@ A community plugin we pin sometimes has a bug we cannot wait for upstream to fix
 - **Installing it:** `omd setup`/`omd update` copy each patch that applies into `<profile>/patches/ohmydsh/` (the folder is rebuilt every time, so a dropped patch disappears) and write pnpm's `patchedDependencies` into the managed block of the profile's `pnpm-workspace.yaml`. pnpm fails the whole install with `ERR_PNPM_UNUSED_PATCH` for a patch it does not use, so omd writes only patches whose `name@version` is in the set being installed at exactly that version from the registry or a tarball: never for another pinned version, a pack that is off, or a `--dev` link. A `patchedDependencies` the user wrote outside the block wins (omd warns and applies nothing). The lock records `patches`; `omd list` prints `patched: <name>@<version>, <note>, see <issue>`; `omd doctor` checks the file, the installed version and that pnpm's lockfile carries the `patch_hash`.
 - **Following upstream:** a candidate that moves a patched package to another version is not released by the follow workflow (the patch would silently stop applying). `follow-run.mjs` does not run the gate for it; it is reported as `needs-human` with reason `patched`, and the usual `follow: <name> <version> does not pass` issue explains it. A human re-checks the upstream issue, then drops the patch or regenerates it for the new version and pins the new version by hand. `gate.mjs` refuses such a candidate too.
 - **Current patches:** `@kenz1117/dsh-engram@0.13.15`: its closing-time consolidation (archive stale memories, merge near duplicates) ran at every start and re-embedded every memory on the host thread, blocking the UI for 10 to 25 s ([kenz1117/dsh-engram#64](https://github.com/kenz1117/dsh-engram/issues/64)). The patch runs the first pass 10 minutes after start instead (`OMD_ENGRAM_CONSOLIDATION_DELAY_MS` overrides the delay); the 24 h interval is unchanged, both timers are cleared when the plugin is disposed, and the first one is `unref`'d. Nothing else depends on the start-up run: the decay pass at start is separate and stays, and the panel's "consolidate" button calls the same function directly.
-  `@changfenhuang/dsh-genui@0.17.0`: adds two GenUI components, `x-post` (an X post or thread, one card per post joined by the thread line, with X's weighted character counter per post) and `linkedin-post` (a LinkedIn feed post folded at "…see more", about 210 characters on desktop or 140 on mobile or 3 lines, expandable in place), so social drafts can be reviewed in chat before they are published ([omdsh-dev/dsh-genui#470](https://github.com/omdsh-dev/dsh-genui/pull/470), branch `feat/social-post-previews` on `deestax/dsh-genui`). This one is a feature rather than a fix; it is carried as a patch until upstream releases it. Regenerating it: build that branch (rebased on the pinned tag), copy the changed `lib/`, `src/`, `SKILL.md` and `CHANGELOG.md` files into a `pnpm patch` edit dir of the pinned version, `pnpm patch-commit`. The built bundles are minified, so the patch is large (about 2.9 MB); the readable change is the PR. While it is in place the follow workflow does not move GenUI on its own.
 
 ## The profile: three layers
 
@@ -157,11 +156,30 @@ only the row's `name:` (the package it loads) is new.
 | `packages/theme` | `dsh-theme` | `@t3labs/ohmydsh-theme` | `dsh-theme` |
 | `packages/hud` | `dsh-hud` | `@t3labs/ohmydsh-hud` | `dsh-hud` |
 | `packages/web-search-parallel` | `@parallel-web/dsh-web-search-parallel` | `@t3labs/ohmydsh-web-search-parallel` (our fork; keeps Parallel's LICENSE, adds a NOTICE) | `web-search-parallel` |
+| `packages/genui` | `@changfenhuang/dsh-genui` (community, modified build) | `@t3labs/ohmydsh-genui` (keeps upstream's LICENSE and THIRD_PARTY_NOTICES, adds a NOTICE and UPSTREAM.md) | `genui` |
 
 Hard-coded HTTP paths are API paths, not package names, and did not change: `/plugins/dsh-studio/...` (Studio) and
 `/dsh-notebook/...` (Notebook). Everything DSH derives from the package name (the client bundle id and the
 `/plugins/<package>/client.js` URL, the remote-stream package id, the settings slot key) was changed together with the
 package.
+
+### The GenUI exception
+
+GenUI (`packages/genui`, `@t3labs/ohmydsh-genui`) is the one community plugin that ohmydsh carries as its own
+implementation instead of pinning it from npm. This was a deliberate owner decision (November 2026), overriding the
+"never forked" rule above for this plugin only: GenUI is the surface the agent uses for every structured answer, we
+want features on our own schedule (the `x-post` and `linkedin-post` social post previews first), and a pnpm patch of
+its minified bundles was too large to review. The rules for it:
+
+- It is a modified copy of `@changfenhuang/dsh-genui` (MIT, by changfenhuang and the omdsh-dev contributors). Upstream's
+  `LICENSE` and `THIRD_PARTY_NOTICES.md` stay in the package; its `NOTICE` credits them and `UPSTREAM.md` lists the base
+  commit, every change and every packaging difference.
+- The `genui` row id and the plugin's cordis `name` export (`@changfenhuang/dsh-genui`) are unchanged, so existing
+  settings keep working. Things DSH derives from the package name (the client module id, the boot-graph entry, the
+  `/plugins/<package>/assets` route) use `@t3labs/ohmydsh-genui`.
+- Changes still go upstream as pull requests ([`docs/UPSTREAM.md`](UPSTREAM.md)). When upstream catches up we rebase on
+  its newer tag; if upstream ever contains everything we need, ohmydsh can go back to pinning the npm package.
+- The follow workflow does not track it (it is a `sources` entry like our other packages).
 
 ### Decisions made while building
 

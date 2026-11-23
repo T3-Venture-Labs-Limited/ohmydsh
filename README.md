@@ -102,10 +102,11 @@ Everything below is installed and enabled by default unless marked *optional*.
 | Area | Plugins |
 |---|---|
 | Models and memory | `dsh-plugin-subscriptions` (use your ChatGPT, Claude, Grok, Copilot or Google subscription), `@kenz1117/dsh-engram` (long-term memory), `dsh-context`, `dsh-model-logos` |
-| Workspace | `dsh-better-sidebar`, `@changfenhuang/dsh-genui`, `dsh-marktext`, `@orderg-x/dsh-video-preview`, `@zseven-w/dsh-openpencil`, `dsh-output-styles` |
+| Workspace | `dsh-better-sidebar`, `dsh-marktext`, `@orderg-x/dsh-video-preview`, `@zseven-w/dsh-openpencil`, `dsh-output-styles` |
 | Keyboard | `dsh-composer-history`, `@hellokidder/dsh-hotkey` |
 | Automation | `dsh-sentinel`, `dsh-notify-me` |
 | Browser | `@t3labs/ohmydsh-agent-browser` (our build of `dsh-agent-browser` with a small draggable browser button; see `packages/agent-browser/UPSTREAM.md`) |
+| Generative UI | `@t3labs/ohmydsh-genui` (our build of `@changfenhuang/dsh-genui` with X and LinkedIn post previews; see `packages/genui/UPSTREAM.md`) |
 
 Every community plugin is used as published and credited to its authors. Where we needed a fix, we sent it upstream first.
 

@@ -26,6 +26,9 @@ Packages and their licences
                                      contributors, https://github.com/shantanugoel/dsh-agent-browser; see its LICENSE, NOTICE and UPSTREAM.md)
   packages/web-search-parallel MIT   @t3labs/ohmydsh-web-search-parallel (a fork of @parallel-web/dsh-web-search-parallel, (c) 2026 Parallel;
                                      its upstream history is kept in this repository)
+  packages/genui               MIT   @t3labs/ohmydsh-genui (a modified build of dsh-genui 0.17.0 by changfenhuang and the omdsh-dev
+                                     contributors, MIT, (c) 2026 dsh-external, https://github.com/omdsh-dev/dsh-genui; see its LICENSE,
+                                     NOTICE, THIRD_PARTY_NOTICES.md and UPSTREAM.md)
 
 Apps
 ----
@@ -42,7 +45,8 @@ MIT License, Copyright (c) 2026 DeepSeek, through packages/kit. The exact wordin
 
 Community plugins
 -----------------
-The plugins that ohmydsh installs from npm (listed in ohmydsh.json) are not part of this repository and are not modified.
+The plugins that ohmydsh installs from npm (listed in ohmydsh.json) are not part of this repository and are not modified
+(GenUI is the exception: ohmydsh ships its own modified build in packages/genui, see above).
 Each is used as published, under its own licence, and credited to its authors:
 https://www.npmjs.com/ (search each package name in ohmydsh.json).
 

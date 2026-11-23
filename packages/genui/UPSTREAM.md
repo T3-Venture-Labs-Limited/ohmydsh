@@ -9,9 +9,9 @@ below. ohmydsh normally installs community plugins from npm unmodified; GenUI is
 |---|---|
 | Upstream | https://github.com/omdsh-dev/dsh-genui |
 | Upstream base | `v0.17.0`, commit `a5c4232` ("release: prepare GenUI 0.17.0") |
-| Our branch | https://github.com/deestax/dsh-genui/tree/feat/social-post-previews, head `9d9114f` (local; not pushed yet) |
+| Our branch | https://github.com/deestax/dsh-genui/tree/feat/social-post-previews, head `fa94bca` (local; not pushed yet) |
 | Upstream PR | omdsh-dev/dsh-genui#470 (social post previews), open |
-| Version here | `0.17.2` = upstream 0.17.0 + the two commits below. |
+| Version here | `0.17.2` = upstream 0.17.0 + the three commits below. |
 
 ## Changes against upstream 0.17.0
 
@@ -28,10 +28,15 @@ below. ohmydsh normally installs community plugins from npm unmodified; GenUI is
      `extractUrlsWithIndices` for highlighting and the t.co display). Renderer, standalone export and the dsh-go
      projection share one `xCharStatus`. The counter shows `weightedLength/limit`, fills by `permillage` and exposes
      `valid`.
-   - `twitter-text` (Apache-2.0) is a runtime dependency and is bundled into `lib/index.js`, `lib/client.js` and the
-     standalone runtime with its core-js 2 polyfill imports resolved to an empty module (`tsdown.config.ts`); notices
-     in `THIRD_PARTY_NOTICES.md`.
+   - `twitter-text` (Apache-2.0) is bundled into `lib/index.js`, `lib/client.js` and the standalone runtime with its
+     core-js 2 polyfill imports resolved to an empty module (`tsdown.config.ts`); notices in `THIRD_PARTY_NOTICES.md`.
    - The LinkedIn fold note, the native projection and SKILL.md say the fold is an estimate.
+3. `fa94bca` fix(x-post): ship twitter-text bundled only; surface posts X would reject; document the emoji-data limit.
+   - `twitter-text` is a dev dependency only (bundled; nothing imports it at runtime), so installing the package no
+     longer pulls core-js 2.
+   - Posts X would reject inside the limit (U+FFFE, U+FEFF, bidi overrides) turn red with "X would reject this post"
+     and count in the thread footer; an empty post stays neutral.
+   - Emoji detection follows twitter-text 3.1.0's emoji data: some newer emoji count more (`❤️‍🔥` = 5).
 
 ## Differences in packaging (no behaviour change)
 

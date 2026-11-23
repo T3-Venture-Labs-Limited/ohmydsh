@@ -79,6 +79,10 @@ for (const row of rows) {
 }
 local.profile.defaults = join(root, manifest.profile.defaults)
 for (const info of Object.values(local.packInfo)) if (info.rows) info.rows = join(root, info.rows)
+for (const [key, v] of Object.entries(local.patches ?? {})) {
+  const p = typeof v === 'string' ? { file: v } : v
+  local.patches[key] = { ...p, file: join(root, p.file) }
+}
 writeFileSync(join(out, 'ohmydsh.json'), `${JSON.stringify(local, null, 2)}\n`)
 
 console.log('')

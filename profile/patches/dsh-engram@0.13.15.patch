@@ -1,0 +1,29 @@
+diff --git a/lib/index.js b/lib/index.js
+index c7340d71e692441ffc04021054d50b6125ba8809..4669d857c32b503899f5c1f27679672873b3bf3d 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -21171,12 +21171,23 @@ async function apply(ctx, config = {}) {
+ 			console.warn(message("core.warnConsolidationFailed"), error);
+ 		}
+ 	};
+-	runConsolidateOnce();
++	// ohmydsh patch (kenz1117/dsh-engram#64): the first pass ran at start and blocked the host thread for 10-25 s, so it
++	// now runs 10 minutes after start (OMD_ENGRAM_CONSOLIDATION_DELAY_MS overrides the delay, in milliseconds).
++	const consolidationDelayMs = (() => {
++		const raw = process.env.OMD_ENGRAM_CONSOLIDATION_DELAY_MS;
++		const value = raw === undefined || raw.trim() === "" ? NaN : Number(raw);
++		return Number.isFinite(value) && value >= 0 ? value : 6e5;
++	})();
+ 	ctx.effect(() => {
++		const firstRun = setTimeout(() => {
++			runConsolidateOnce();
++		}, consolidationDelayMs);
++		firstRun.unref?.();
+ 		const timer = setInterval(() => {
+ 			runConsolidateOnce();
+ 		}, 864e5);
+ 		return () => {
++			clearTimeout(firstRun);
+ 			clearInterval(timer);
+ 		};
+ 	}, "dsh-engram: consolidation timer");

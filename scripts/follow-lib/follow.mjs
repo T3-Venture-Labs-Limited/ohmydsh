@@ -79,6 +79,38 @@ export async function findCandidates(manifest, { fetchPackument, hold = [], skip
   return { candidates, held, skipped, errors }
 }
 
+/**
+ * Candidates that move a package we carry a patch for (ohmydsh.json `patches`, keyed name@exact-version). The patch would
+ * silently stop applying to the new version, so such a candidate is never released by itself: a human re-checks the
+ * upstream issue and drops or regenerates the patch. Returns one entry per conflicting spec.
+ * @returns {Array<{ spec: string, name: string, version: string, patchKey: string, patchedVersion: string, note?: string, issue?: string, message: string }>}
+ */
+export function patchConflicts(manifest, specs) {
+  const out = []
+  for (const spec of specs) {
+    const { name, version } = splitSpec(spec)
+    for (const [patchKey, p] of Object.entries(manifest.patches ?? {})) {
+      const at = patchKey.lastIndexOf('@')
+      const patchedVersion = patchKey.slice(at + 1)
+      if (patchKey.slice(0, at) !== name || patchedVersion === version) continue
+      const issue = typeof p === 'object' ? p.issue : undefined
+      const note = typeof p === 'object' ? p.note : undefined
+      out.push({ spec, name, version, patchKey, patchedVersion, note, issue, message: `patched package has a new version: ${name} ${patchedVersion} -> ${version}. ohmydsh carries a temporary patch for ${patchKey}${note ? ` (${note})` : ''}; re-check ${issue ?? 'the upstream issue'} and drop or regenerate the patch (ohmydsh.json "patches", profile/patches/), then pin the new version by hand.` })
+    }
+  }
+  return out
+}
+
+/**
+ * Split candidates into those the gate may test and those a human must look at first (they move a patched package).
+ * `blocked` entries are in the shape of a failed follow-run result: class "needs-human", reason "patched".
+ */
+export function screenPatched(manifest, specs) {
+  const conflicts = patchConflicts(manifest, specs)
+  const blocked = conflicts.map((c) => ({ spec: c.spec, name: c.name, version: c.version, step: 'patched package', class: 'needs-human', reason: 'patched', message: c.message, tail: c.message }))
+  return { testable: specs.filter((s) => !conflicts.some((c) => c.spec === s)), blocked }
+}
+
 export function splitSpec(spec) {
   const i = spec.lastIndexOf('@')
   if (i <= 0) throw new Error(`expected name@version, got "${spec}"`)
@@ -243,8 +275,10 @@ export function mergeResults(runs) {
 
 const FENCE = '```'
 export function issueBody(f, { runUrl, pin } = {}) {
-  const kind = f.class === 'needs-human'
-    ? `**A human has to look at this.** pnpm blocked an install script of this version (a new native dependency or a changed one). ohmydsh never approves install scripts by itself. Review the package, then add it to \`allowBuilds\` in \`ohmydsh.json\` (exact \`name@version\`) and, if it is new, to the allow list in \`pnpm-workspace.yaml\`.`
+  const kind = f.class === 'needs-human' && f.reason === 'patched'
+    ? `**A human has to look at this.** ${f.message ?? 'The package carries an ohmydsh patch that does not apply to this version.'} Until then the patch silently stops applying to a newer version, so ohmydsh does not move the pin on its own.`
+    : f.class === 'needs-human'
+      ? `**A human has to look at this.** pnpm blocked an install script of this version (a new native dependency or a changed one). ohmydsh never approves install scripts by itself. Review the package, then add it to \`allowBuilds\` in \`ohmydsh.json\` (exact \`name@version\`) and, if it is new, to the allow list in \`pnpm-workspace.yaml\`.`
     : f.class === 'combination' ? 'Every candidate passes alone, but not together, so none of them was released.'
       : 'The full gate failed with this version pinned.'
   return [

@@ -36,6 +36,7 @@ export function validateManifest(m) {
   }
   if (m.profile?.official !== undefined && !(Array.isArray(m.profile.official) && m.profile.official.every((s) => typeof s === 'string'))) errs.push('profile.official must be a list of bundle names')
   if (m.allowBuilds !== undefined && !(Array.isArray(m.allowBuilds) && m.allowBuilds.every((s) => typeof s === 'string' && BUILD.test(s)))) errs.push('allowBuilds must be a list of name@exact-version')
+  const patches = normalizePatches(m.patches, errs)
   if (errs.length > 0) throw new OmdError(`invalid manifest:\n  - ${errs.join('\n  - ')}`)
   return {
     ...m,
@@ -45,7 +46,27 @@ export function validateManifest(m) {
     packInfo: m.packInfo ?? {},
     sources,
     allowBuilds: m.allowBuilds ?? [],
+    patches,
   }
+}
+
+/**
+ * `patches`: name@exact-version -> a patch file next to the manifest (a string), or { file, note?, issue? }.
+ * Returns the object form for every entry; problems go to `errs`.
+ */
+function normalizePatches(raw, errs) {
+  const out = {}
+  if (raw === undefined) return out
+  if (!isObj(raw)) { errs.push('patches must be an object of name@exact-version -> patch file'); return out }
+  for (const [key, v] of Object.entries(raw)) {
+    if (!BUILD.test(key)) { errs.push(`patches.${key}: the key must be name@exact-version (a patch is only ever applied to that one version)`); continue }
+    const e = typeof v === 'string' ? { file: v } : v
+    if (!isObj(e) || typeof e.file !== 'string' || e.file === '') { errs.push(`patches.${key}: needs a patch file path (a string, or an object with "file")`); continue }
+    if (e.note !== undefined && typeof e.note !== 'string') { errs.push(`patches.${key}.note must be a string`); continue }
+    if (e.issue !== undefined && (typeof e.issue !== 'string' || !/^https:\/\//.test(e.issue))) { errs.push(`patches.${key}.issue must be an https URL`); continue }
+    out[key] = { file: e.file, ...(e.note === undefined ? {} : { note: e.note }), ...(e.issue === undefined ? {} : { issue: e.issue }) }
+  }
+  return out
 }
 
 export function parseManifest(text) {
@@ -142,3 +163,25 @@ export function releaseAgeExemptions(manifest, desired, previousLock) {
   const prev = Object.entries(previousLock?.plugins ?? {}).filter(([, p]) => p && p.spec === p.version).map(([name, p]) => `${name}@${p.version}`)
   return [...new Set([...registryPins(manifest, desired), ...prev])].sort()
 }
+
+/**
+ * The manifest's patches that apply to this install: only a plugin that is in the set at EXACTLY the patched version and
+ * comes from the registry (or a tarball). pnpm fails the whole install with ERR_PNPM_UNUSED_PATCH for a patch it does not
+ * use, so a patch for another version, a plugin that is not installed (pack not enabled) or a `link:` is left out.
+ * @returns {Array<{ key: string, name: string, version: string, file: string, note?: string, issue?: string }>}
+ */
+export function applicablePatches(manifest, desired) {
+  const out = []
+  for (const [key, p] of Object.entries(manifest.patches ?? {})) {
+    const i = key.lastIndexOf('@')
+    const name = key.slice(0, i)
+    const version = key.slice(i + 1)
+    const d = desired.get(name)
+    if (!d || d.version !== version || d.spec.startsWith('link:')) continue
+    out.push({ key, name, version, ...p })
+  }
+  return out.sort((a, b) => a.key.localeCompare(b.key))
+}
+
+/** The file name a patch gets inside the profile: derived from the key, never from the path in the manifest. */
+export const patchFileName = (key) => `${key.replace(/\//g, '__')}.patch`

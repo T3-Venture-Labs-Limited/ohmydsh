@@ -94,10 +94,11 @@ function topLevelKeys(text) {
 
 /**
  * The profile's pnpm-workspace.yaml gets one managed block with reviewed install scripts and minimum-release-age
- * exclusions. A key the user already set outside the block is left alone (and reported).
- * @returns {{ text: string, warnings: string[] }}
+ * exclusions and, for a pinned community package we carry a fix for, `patchedDependencies` (name@version -> patch file
+ * relative to the profile). A key the user already set outside the block is left alone (and reported).
+ * @returns {{ text: string, warnings: string[], patched: string[] }}  patched: the name@version keys that were written
  */
-export function rewriteWorkspaceYaml(text, { allowBuilds, releaseAgeExclude }) {
+export function rewriteWorkspaceYaml(text, { allowBuilds, releaseAgeExclude, patchedDependencies = {} }) {
   const outside = removeBlock(text, 'map')
   const keys = topLevelKeys(outside)
   const warnings = []
@@ -110,5 +111,14 @@ export function rewriteWorkspaceYaml(text, { allowBuilds, releaseAgeExclude }) {
     if (keys.has('minimumReleaseAgeExclude')) warnings.push('pnpm-workspace.yaml already has its own minimumReleaseAgeExclude')
     else parts.push(`minimumReleaseAgeExclude:\n${releaseAgeExclude.map((n) => `  - '${n}'`).join('\n')}`)
   }
-  return { text: rewriteBlock(text, parts.join('\n'), 'map'), warnings }
+  let patched = []
+  const keysToPatch = Object.keys(patchedDependencies)
+  if (keysToPatch.length > 0) {
+    if (keys.has('patchedDependencies')) warnings.push('pnpm-workspace.yaml already has its own patchedDependencies, so the ohmydsh patch(es) were not applied: ' + keysToPatch.join(', '))
+    else {
+      parts.push(`patchedDependencies:\n${keysToPatch.map((k) => `  '${k}': '${patchedDependencies[k]}'`).join('\n')}`)
+      patched = keysToPatch
+    }
+  }
+  return { text: rewriteBlock(text, parts.join('\n'), 'map'), warnings, patched }
 }

@@ -3,6 +3,11 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
+## 0.1.9
+
+- Faster start: the memory plugin's start-up pass is delayed by 10 minutes (temporary patch until upstream fixes [kenz1117/dsh-engram#64](https://github.com/kenz1117/dsh-engram/issues/64)). It used to re-read every memory when DSH started and kept the sidebar waiting for 10 to 25 seconds; with 125 memories the sidebar now appears after 1.6 s instead of 8.3 s. The pass still runs once, ten minutes after start, and then every 24 hours.
+- CLI: `omd` can carry a patch for one exact version of a community plugin (`patches` in `ohmydsh.json`). `omd setup` and `omd update` install it into the profile, drop it again when the manifest does, and `omd list` and `omd doctor` show `patched: <plugin>@<version>, see <upstream issue>`.
+
 ## 0.1.8
 
 Automatic follow-up release. Everything below passed the full install, boot and upgrade test before it was released.

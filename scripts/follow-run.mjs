@@ -8,13 +8,14 @@
 //        [--gate-args "--skip-checks"]
 //
 // Result: { passed: ["name@ver"], failed: [{ spec, name, version, step, class, message, tail }], runs: [...], version }
-// A failed entry with class "needs-human" means an install script nobody approved; "combination" means every candidate
+// A failed entry with class "needs-human" means an install script nobody approved, or (reason "patched") a new version
+// of a package ohmydsh.json carries a patch for, which a human must look at first (it is not even run through the gate); "combination" means every candidate
 // passes alone but not together (nothing is released then).
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DSH, splitSpec } from './follow-lib/follow.mjs'
+import { DSH, screenPatched, splitSpec } from './follow-lib/follow.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
@@ -48,25 +49,30 @@ function gate(label, set) {
   return res
 }
 
-const entry = (spec, res, extra = {}) => ({ spec, ...splitSpec(spec), step: res.failed?.step, class: res.failed?.class ?? 'failure', message: res.failed?.message, tail: res.failed?.tail, ...extra })
+const entry = (spec, res, extra = {}) => ({ spec, ...splitSpec(spec), step: res.failed?.step, class: res.failed?.class ?? 'failure', ...(res.failed?.reason ? { reason: res.failed.reason } : {}), message: res.failed?.message, tail: res.failed?.tail, ...extra })
 
 let passed = []
 const failed = []
-const all = gate('all', specs)
-if (all.ok) passed = [...specs]
-else if (specs.length === 1) failed.push(entry(specs[0], all))
-else {
-  const order = [...specs.filter((s) => splitSpec(s).name === DSH), ...specs.filter((s) => splitSpec(s).name !== DSH)]
-  for (const s of order) {
-    const r = gate(s, [s])
-    if (r.ok) passed.push(s)
-    else failed.push(entry(s, r))
-  }
-  if (passed.length > 1) {
-    const combo = gate('passing-together', passed)
-    if (!combo.ok) {
-      failed.push({ spec: passed.join(' '), name: 'combination', version: '', step: combo.failed?.step, class: 'combination', message: `${passed.join(', ')} each pass alone but not together`, tail: combo.failed?.tail })
-      passed = []
+// A candidate that moves a patched package is not tested: the patch would stop applying to it, so a human decides.
+const { testable, blocked } = screenPatched(JSON.parse(readFileSync(join(root, 'ohmydsh.json'), 'utf8')), specs)
+failed.push(...blocked)
+if (testable.length > 0) {
+  const all = gate('all', testable)
+  if (all.ok) passed = [...testable]
+  else if (testable.length === 1) failed.push(entry(testable[0], all))
+  else {
+    const order = [...testable.filter((s) => splitSpec(s).name === DSH), ...testable.filter((s) => splitSpec(s).name !== DSH)]
+    for (const s of order) {
+      const r = gate(s, [s])
+      if (r.ok) passed.push(s)
+      else failed.push(entry(s, r))
+    }
+    if (passed.length > 1) {
+      const combo = gate('passing-together', passed)
+      if (!combo.ok) {
+        failed.push({ spec: passed.join(' '), name: 'combination', version: '', step: combo.failed?.step, class: 'combination', message: `${passed.join(', ')} each pass alone but not together`, tail: combo.failed?.tail })
+        passed = []
+      }
     }
   }
 }

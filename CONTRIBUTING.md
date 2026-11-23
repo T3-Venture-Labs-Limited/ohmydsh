@@ -22,7 +22,7 @@ stores, caches and temp dirs inside `.tmp/` (git-ignored).
 
 ```text
 packages/<name>/     one plugin (or the CLI) per folder, each with its own package.json and `check` script
-profile/             default patch rows for the omd profile (defaults.cordis.yml, packs/*.cordis.yml)
+profile/             default patch rows for the omd profile (defaults.cordis.yml, packs/*.cordis.yml) and patches/ (temporary fixes for pinned community packages)
 ohmydsh.json         the manifest: DSH version + exact version of every plugin and pack
 scripts/             repo tooling (private-strings audit, manifest check, dev-env)
 CHANGELOG.md         release notes (the section of the tagged version becomes the GitHub Release)

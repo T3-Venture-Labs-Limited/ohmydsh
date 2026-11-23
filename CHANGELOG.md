@@ -3,6 +3,10 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
+## Unreleased
+
+- GenUI can preview social posts before they are published (temporary patch until upstream releases [omdsh-dev/dsh-genui#470](https://github.com/omdsh-dev/dsh-genui/pull/470)). `x-post` shows an X post or a whole thread the way X does, one card per post joined by the thread line, each with X's character counter (links count as 23, emoji and CJK as 2; amber near 280, red past it). `linkedin-post` shows a LinkedIn feed post cut at "…see more" (about 210 characters on desktop, 140 on mobile, or 3 lines, whichever comes first), says how many characters show above the fold, expands in place and switches between desktop and mobile. Both follow the light or dark theme; line breaks are kept exactly as typed.
+
 ## 0.1.9
 
 - Faster start: the memory plugin's start-up pass is delayed by 10 minutes (temporary patch until upstream fixes [kenz1117/dsh-engram#64](https://github.com/kenz1117/dsh-engram/issues/64)). It used to re-read every memory when DSH started and kept the sidebar waiting for 10 to 25 seconds; with 125 memories the sidebar now appears after 1.6 s instead of 8.3 s. The pass still runs once, ten minutes after start, and then every 24 hours.

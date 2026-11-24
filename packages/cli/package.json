@@ -1,6 +1,6 @@
 {
   "name": "@t3labs/ohmydsh",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "omd: install, update and roll back the ohmydsh setup for DeepSeek Harness",
   "license": "MIT",
   "author": "T3 Venture Labs (https://github.com/T3-Venture-Labs-Limited)",

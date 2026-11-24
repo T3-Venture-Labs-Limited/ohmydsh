@@ -3,9 +3,15 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
-## Unreleased
+## 0.1.10
 
 - GenUI can preview social posts before they are published (temporary patch until upstream releases [omdsh-dev/dsh-genui#470](https://github.com/omdsh-dev/dsh-genui/pull/470)). `x-post` shows an X post or a whole thread the way X does, one card per post joined by the thread line, each with X's character counter (links count as 23, emoji and CJK as 2; amber near 280, red past it). `linkedin-post` shows a LinkedIn feed post cut at "…see more" (about 210 characters on desktop, 140 on mobile, or 3 lines, whichever comes first), says how many characters show above the fold, expands in place and switches between desktop and mobile. Both follow the light or dark theme; line breaks are kept exactly as typed.
+
+### Followed upstream
+
+- dsh-marktext 0.1.13 -> 0.1.14 ([npm](https://www.npmjs.com/package/dsh-marktext/v/0.1.14))
+- dsh-notify-me 1.22.0 -> 1.24.0 ([npm](https://www.npmjs.com/package/dsh-notify-me/v/1.24.0))
+- dsh-plugin-subscriptions 0.9.14 -> 0.9.15 ([npm](https://www.npmjs.com/package/dsh-plugin-subscriptions/v/0.9.15))
 
 ## 0.1.9
 

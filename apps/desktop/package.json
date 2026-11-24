@@ -1,6 +1,6 @@
 {
   "name": "@ohmydsh/desktop",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "private": true,
   "description": "ohmydsh desktop app: DeepSeek Harness with the ohmydsh plugin set, in its own window",
   "author": "T3 Venture Labs <https://github.com/T3-Venture-Labs-Limited>",

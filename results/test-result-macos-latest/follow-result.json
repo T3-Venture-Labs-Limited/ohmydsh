@@ -1,32 +1,19 @@
 {
   "passed": [
-    "dsh-marktext@0.1.14",
-    "dsh-notify-me@1.24.0",
-    "dsh-plugin-subscriptions@0.9.15"
+    "dsh-better-sidebar@0.33.0",
+    "dsh-notify-me@1.25.0"
   ],
-  "failed": [
-    {
-      "spec": "@kenz1117/dsh-engram@0.13.17",
-      "name": "@kenz1117/dsh-engram",
-      "version": "0.13.17",
-      "step": "patched package",
-      "class": "needs-human",
-      "reason": "patched",
-      "message": "patched package has a new version: @kenz1117/dsh-engram 0.13.15 -> 0.13.17. ohmydsh carries a temporary patch for @kenz1117/dsh-engram@0.13.15 (the memory plugin's start-up pass is delayed by 10 minutes); re-check https://github.com/kenz1117/dsh-engram/issues/64 and drop or regenerate the patch (ohmydsh.json \"patches\", profile/patches/), then pin the new version by hand.",
-      "tail": "patched package has a new version: @kenz1117/dsh-engram 0.13.15 -> 0.13.17. ohmydsh carries a temporary patch for @kenz1117/dsh-engram@0.13.15 (the memory plugin's start-up pass is delayed by 10 minutes); re-check https://github.com/kenz1117/dsh-engram/issues/64 and drop or regenerate the patch (ohmydsh.json \"patches\", profile/patches/), then pin the new version by hand."
-    }
-  ],
+  "failed": [],
   "runs": [
     {
       "label": "all",
       "set": [
-        "dsh-marktext@0.1.14",
-        "dsh-notify-me@1.24.0",
-        "dsh-plugin-subscriptions@0.9.15"
+        "dsh-better-sidebar@0.33.0",
+        "dsh-notify-me@1.25.0"
       ],
       "ok": true,
       "step": null
     }
   ],
-  "version": "0.1.10"
+  "version": "0.1.11"
 }

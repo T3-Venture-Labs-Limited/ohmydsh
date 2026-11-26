@@ -1,10 +1,10 @@
 {
   "passed": [
-    "dsh-better-sidebar@0.33.0",
-    "dsh-notify-me@1.25.0"
+    "dsh-context@0.87.2",
+    "dsh-notify-me@1.27.1"
   ],
   "failed": [],
-  "version": "0.1.11",
+  "version": "0.1.12",
   "oses": [
     "macos-latest",
     "ubuntu-latest"

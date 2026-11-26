@@ -1,5 +1,5 @@
 {
-  "version": "0.1.11",
+  "version": "0.1.12",
   "dsh": "0.2.2-rc.5",
   "node": ">=24",
   "profile": {
@@ -16,7 +16,7 @@
     "core": {
       "dsh-plugin-subscriptions": "0.9.15",
       "@kenz1117/dsh-engram": "0.13.15",
-      "dsh-context": "0.87.1",
+      "dsh-context": "0.87.2",
       "dsh-model-logos": "0.8.0",
       "dsh-better-sidebar": "0.33.0",
       "@changfenhuang/dsh-genui": "0.17.0",
@@ -27,7 +27,7 @@
       "dsh-composer-history": "0.8.19",
       "@hellokidder/dsh-hotkey": "0.0.3",
       "dsh-sentinel": "0.15.0",
-      "dsh-notify-me": "1.25.0",
+      "dsh-notify-me": "1.27.1",
       "@t3labs/ohmydsh-agent-browser": "0.2.8",
       "@t3labs/ohmydsh-studio": "0.1.2",
       "@t3labs/ohmydsh-pwa": "0.3.2",

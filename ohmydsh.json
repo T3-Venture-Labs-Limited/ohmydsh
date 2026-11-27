@@ -1,5 +1,5 @@
 {
-  "version": "0.1.12",
+  "version": "0.1.13",
   "dsh": "0.2.2-rc.5",
   "node": ">=24",
   "profile": {
@@ -27,7 +27,7 @@
       "dsh-composer-history": "0.8.19",
       "@hellokidder/dsh-hotkey": "0.0.3",
       "dsh-sentinel": "0.15.0",
-      "dsh-notify-me": "1.27.1",
+      "dsh-notify-me": "1.28.2",
       "@t3labs/ohmydsh-agent-browser": "0.2.8",
       "@t3labs/ohmydsh-studio": "0.1.2",
       "@t3labs/ohmydsh-pwa": "0.3.2",

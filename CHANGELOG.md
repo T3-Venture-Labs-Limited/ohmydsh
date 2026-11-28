@@ -3,6 +3,12 @@
 Each release is one version of [`ohmydsh.json`](ohmydsh.json): the tested set of DeepSeek Harness, our plugins and the
 community plugins. Add a section here before tagging; the text under the version heading becomes the GitHub Release notes.
 
+## 0.1.14
+
+Automatic follow-up release. Everything below passed the full install, boot and upgrade test before it was released.
+
+- dsh-context 0.87.2 -> 0.88.0 ([npm](https://www.npmjs.com/package/dsh-context/v/0.88.0))
+
 ## 0.1.13
 
 Automatic follow-up release. Everything below passed the full install, boot and upgrade test before it was released.
